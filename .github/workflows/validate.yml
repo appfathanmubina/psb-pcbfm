@@ -2,14 +2,13 @@ name: Validate PSB PWA
 on:
   push:
   pull_request:
-permissions:
-  contents: read
 jobs:
   structure:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - run: |
+      - name: Check required files
+        run: |
           test -f frontend/index.html
           test -f frontend/styles.css
           test -f frontend/app.js

@@ -2,4 +2,4 @@ frontend/**
 docs/**
 .github/**
 README.md
-.clasp.json
+apps-script/Index.legacy.html
