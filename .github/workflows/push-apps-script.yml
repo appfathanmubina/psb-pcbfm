@@ -42,6 +42,20 @@ jobs:
           test -f apps-script/SetupDatabase.gs
           test -f apps-script/Bridge.gs
           node --check frontend/app.js
+      - name: Reconcile remote manifest before push
+        env:
+          SCRIPT_ID: ${{ secrets.APPS_SCRIPT_ID }}
+        run: |
+          mkdir -p /tmp/psb-clasp
+          printf '{"scriptId":"%s","rootDir":"/tmp/psb-clasp"}\n' "$SCRIPT_ID" > /tmp/psb-clasp/.clasp.json
+          cd /tmp/psb-clasp
+          clasp pull --force
+          cmp -s "$GITHUB_WORKSPACE/appsscript.json" appsscript.json || { echo "Manifest DIFF: push blocked."; diff -u "$GITHUB_WORKSPACE/appsscript.json" appsscript.json || true; exit 1; }
+      - name: Dry-run source status
+        working-directory: apps-script
+        run: |
+          echo "=== clasp status: files that will be written ==="
+          clasp show-file-status --json
       - name: Push source only
         working-directory: apps-script
         run: clasp push --force
