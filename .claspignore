@@ -1,0 +1,5 @@
+frontend/**
+docs/**
+.github/**
+README.md
+.clasp.json
