@@ -30,7 +30,7 @@ jobs:
           test -n "$SCRIPT_ID"
           mkdir -p /tmp/psb-clasp
           printf '{"scriptId":"%s","rootDir":"/tmp/psb-clasp"}\n' "$SCRIPT_ID" > /tmp/psb-clasp/.clasp.json
-      - name: Pull remote manifest only
+      - name: Pull remote project into disposable directory
         working-directory: /tmp/psb-clasp
         run: |
           clasp pull --force
@@ -42,3 +42,8 @@ jobs:
           echo "=== Remote Apps Script manifest ==="
           cat /tmp/psb-clasp/appsscript.json
           cmp -s appsscript.json /tmp/psb-clasp/appsscript.json && echo "Manifest MATCH" || { echo "Manifest DIFF: review before push."; diff -u appsscript.json /tmp/psb-clasp/appsscript.json || true; exit 1; }
+      - name: Dry-run source status
+        working-directory: apps-script
+        run: |
+          echo "=== clasp status: files that would be written by push ==="
+          clasp show-file-status --json
