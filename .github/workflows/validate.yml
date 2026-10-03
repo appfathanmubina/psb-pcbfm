@@ -1,0 +1,18 @@
+name: Validate PSB PWA
+on:
+  push:
+  pull_request:
+jobs:
+  structure:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check required files
+        run: |
+          test -f frontend/index.html
+          test -f frontend/styles.css
+          test -f frontend/app.js
+          test -f frontend/manifest.webmanifest
+          test -f frontend/sw.js
+          test -f apps-script/Code.gs
+          test -f apps-script/SetupDatabase.gs

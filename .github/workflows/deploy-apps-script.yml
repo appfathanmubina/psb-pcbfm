@@ -1,0 +1,51 @@
+name: Deploy Existing Apps Script Deployment
+
+on:
+  workflow_dispatch:
+    inputs:
+      deployment_id:
+        description: Existing Apps Script deployment ID to update
+        required: true
+        type: string
+      confirm_deploy:
+        description: Type DEPLOY to authorize deployment update
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    if: ${{ inputs.confirm_deploy == 'DEPLOY' }}
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Install clasp
+        run: npm install --global @google/clasp
+      - name: Configure clasp credentials
+        env:
+          CLASPRC_JSON: ${{ secrets.CLASPRC_JSON }}
+        run: |
+          test -n "$CLASPRC_JSON"
+          printf '%s' "$CLASPRC_JSON" > "$HOME/.clasprc.json"
+      - name: Configure Apps Script project
+        env:
+          SCRIPT_ID: ${{ secrets.APPS_SCRIPT_ID }}
+        run: |
+          test -n "$SCRIPT_ID"
+          printf '{"scriptId":"%s","rootDir":"apps-script"}\n' "$SCRIPT_ID" > apps-script/.clasp.json
+      - name: Validate source
+        run: |
+          test -f apps-script/Code.gs
+          test -f apps-script/Index.html
+          test -f apps-script/SetupDatabase.gs
+      - name: Update existing deployment only
+        working-directory: apps-script
+        env:
+          DEPLOYMENT_ID: ${{ inputs.deployment_id }}
+        run: clasp deploy --deploymentId "$DEPLOYMENT_ID" --description "GitHub Actions ${GITHUB_SHA}"
