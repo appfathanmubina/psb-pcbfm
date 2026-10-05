@@ -1,5 +1,5 @@
-const CACHE='psb-pwa-shell-v1';
-const ASSETS=['./','./index.html','./styles.css','./app.js','./manifest.webmanifest'];
+const CACHE='psb-pwa-shell-v32-3-7';
+const ASSETS=['./','./index.html','./styles.css','./app.js','./api-bridge.js','./manifest.webmanifest'];
 self.addEventListener('install',event=>event.waitUntil(caches.open(CACHE).then(c=>c.addAll(ASSETS)).then(()=>self.skipWaiting())));
 self.addEventListener('activate',event=>event.waitUntil(self.clients.claim()));
 self.addEventListener('fetch',event=>{
