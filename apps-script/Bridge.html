@@ -1,0 +1,28 @@
+<!DOCTYPE html><html lang="id"><head><base target="_top"><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>PSB Fathan Mubina API Bridge</title><style>html,body{margin:0;width:100%;height:100%;background:transparent}#status{position:fixed;left:-9999px}</style></head><body><div id="status">PSB API Bridge</div><script>
+(function(){
+'use strict';
+const SOURCE='psb-fm-api-bridge', PWA_SOURCE='psb-fm-pwa', VERSION='32.3.7';
+let allowedOrigins=[], ready=false;
+const topWindow=()=>{try{return window.top||window.parent}catch(e){return window.parent}};
+const send=(origin,payload)=>{if(!origin||origin==='*')return;try{topWindow().postMessage(Object.assign({source:SOURCE},payload),origin)}catch(e){}};
+const allowed=o=>allowedOrigins.indexOf(o)>=0;
+const announce=()=>{if(!allowedOrigins.length)return;ready=true;allowedOrigins.forEach(o=>send(o,{type:'ready',bridgeVersion:VERSION}))};
+google.script.run.withSuccessHandler(cfg=>{
+  allowedOrigins=Array.isArray(cfg&&cfg.allowedOrigins)?cfg.allowedOrigins.map(String).map(x=>x.trim()).filter(Boolean):[];
+  announce();
+}).withFailureHandler(()=>{allowedOrigins=[]}).getPwaBridgeConfig();
+window.addEventListener('message',event=>{
+  if(!allowed(event.origin))return;
+  const d=event.data||{};
+  if(d.source!==PWA_SOURCE)return;
+  if(d.type==='ping'){send(event.origin,{type:'ready',bridgeVersion:VERSION});return}
+  if(d.type!=='request')return;
+  const id=String(d.id||'').trim(), fn=String(d.fn||'').trim(), args=Array.isArray(d.args)?d.args:[];
+  if(!id||!fn)return;
+  if(!ready){send(event.origin,{type:'response',id,ok:false,error:{code:'BRIDGE_NOT_READY',message:'API bridge belum siap.'}});return}
+  google.script.run.withSuccessHandler(result=>send(event.origin,{type:'response',id,ok:true,result}))
+    .withFailureHandler(err=>send(event.origin,{type:'response',id,ok:false,error:{code:'RPC_ERROR',message:String(err&&err.message||'Terjadi kesalahan komunikasi dengan backend.')}}))
+    .pwaBridgeCall(fn,args);
+});
+})();
+</script></body></html>
