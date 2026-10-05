@@ -48,9 +48,8 @@
     ensureFrame();
     if(ready)return;
     await new Promise((resolve,reject)=>{
-      const timer=setTimeout(()=>reject(new Error('API bridge belum siap. Pastikan Web App Apps Script sudah dideploy.')),TIMEOUT_MS);
+      const timer=setTimeout(()=>reject(new Error('API bridge belum siap. Pastikan Web App Apps Script versi terbaru sudah dideploy.')),TIMEOUT_MS);
       readyWaiters.push(()=>{clearTimeout(timer);resolve();});
-      try{post({type:'ping'});}catch(e){clearTimeout(timer);reject(e);}
     });
   }
   window.addEventListener('message',handleMessage);
