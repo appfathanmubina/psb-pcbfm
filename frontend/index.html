@@ -14,7 +14,7 @@
 <div class="app" id="app"></div>
 <div class="boot-progress hidden" id="bootProgress"><span class="mini-spin"></span><span class="boot-copy" id="bootProgressText">Menyiapkan aplikasi...</span></div>
 <div class="loading hidden" id="loading"><div class="loading-box splash-box"><div class="splash-logo-wrap"><div class="splash-logo" id="splashLogo"><img alt="PSB Fathan Mubina" class="app-logo-img splash-app-logo" loading="eager" onerror="this.style.display='none';this.nextElementSibling.style.display='grid'" referrerpolicy="no-referrer" src="https://drive.google.com/thumbnail?id=1-5uTR0ySIZVOWFFnItG29HUFNAHkvLb4&amp;sz=w512"/><span class="app-logo-fallback">FM</span></div></div><b id="loadingText">Memuat aplikasi...</b><div class="muted splash-subtitle">Menyiapkan PSB Fathan Mubina</div><div class="splash-progress"><span></span></div></div></div>
-<script src="./app.js"></script>
+<script src="./api-bridge.js"></script>\n<script src="./app.js"></script>
 <script>
   if ('serviceWorker' in navigator) {
     window.addEventListener('load', () => navigator.serviceWorker.register('./sw.js').catch(console.warn));
