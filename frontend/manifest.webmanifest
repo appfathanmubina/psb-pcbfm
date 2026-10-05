@@ -10,7 +10,7 @@
   "icons": [
     {
       "src": "./assets/logo-fathan-mubina.png",
-      "sizes": "64x64",
+      "sizes": "96x96",
       "type": "image/png",
       "purpose": "any maskable"
     }
