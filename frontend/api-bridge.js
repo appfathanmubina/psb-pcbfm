@@ -4,6 +4,8 @@
   'use strict';
   const BRIDGE_URL="https://script.google.com/macros/s/AKfycbxs1zVZdEFwbhHFVO5nGHHhEqHQDdjVOVjfnWc1Kc6mhD5t_n8VgrdUTKhAvg8JGiau/exec";
   const BRIDGE_ORIGIN=new URL(BRIDGE_URL).origin;
+  const TRUSTED_BRIDGE_ORIGINS=new Set([BRIDGE_ORIGIN,'https://script.googleusercontent.com']);
+  let activeBridgeOrigin=BRIDGE_ORIGIN;
   const PWA_SOURCE='psb-fm-pwa';
   const BRIDGE_SOURCE='psb-fm-api-bridge';
   const TIMEOUT_MS=30000;
@@ -24,10 +26,11 @@
   }
   function post(data){
     if(!iframe?.contentWindow)throw new Error('API bridge belum tersedia.');
-    iframe.contentWindow.postMessage(Object.assign({source:PWA_SOURCE},data),BRIDGE_ORIGIN);
+    iframe.contentWindow.postMessage(Object.assign({source:PWA_SOURCE},data),activeBridgeOrigin || '*');
   }
   function handleMessage(event){
-    if(event.origin!==BRIDGE_ORIGIN || event.source!==iframe?.contentWindow)return;
+    if(!TRUSTED_BRIDGE_ORIGINS.has(event.origin) || event.source!==iframe?.contentWindow)return;
+    activeBridgeOrigin=event.origin;
     const data=event.data||{};
     if(data.source!==BRIDGE_SOURCE)return;
     if(data.type==='ready'){
