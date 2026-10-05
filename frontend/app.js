@@ -258,7 +258,8 @@ async function boot(){
       renderPublicHome();
     }
   }catch(e){
-    renderLogin('Aplikasi belum siap. Jalankan setupPSBDatabase() terlebih dahulu.');
+    console.error('PSB boot error:',e);
+    renderLogin('Koneksi ke server aplikasi belum tersedia. Silakan tunggu sebentar lalu coba lagi.');
   }
   loading(false);
 }
