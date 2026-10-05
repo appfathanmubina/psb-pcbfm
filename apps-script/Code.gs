@@ -28,7 +28,13 @@ const PSB_COMMUNICATION_RECIPIENT_ROLES = ['WALI','SUPERADMIN','ADMIN_PSB','VERI
 const PSB_CHAT_ACCESS_ROLES = ['WALI','SUPERADMIN','ADMIN_PSB'];
 const PSB_CHAT_ADMIN_ROLES = ['SUPERADMIN','ADMIN_PSB'];
 
-function doGet() {
+function doGet(e) {
+  const bridgeMode = e && e.parameter && String(e.parameter.bridge || '') === '1';
+  if (bridgeMode) {
+    return HtmlService.createTemplateFromFile('Bridge').evaluate()
+      .setTitle('PSB Fathan Mubina — API Bridge')
+      .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
+  }
   const output = HtmlService.createTemplateFromFile('Index').evaluate();
 
   // PENTING untuk Apps Script HTML Service:
@@ -3412,3 +3418,46 @@ function numberOrBlank_(v) { return v===''||v==null?'':Number(v); }
 function dateOrBlank_(v) { return clean_(v) ? new Date(clean_(v)+'T00:00:00') : ''; }
 
 function fail_(message) { return { success: false, message: message }; }
+
+
+// ============================================================
+// STATIC PWA API BRIDGE — GitHub Pages -> Apps Script
+// ============================================================
+const PSB_PWA_BRIDGE_VERSION = '32.3.7';
+const PSB_PWA_BRIDGE_ALLOWED_FUNCTIONS = Object.freeze([
+  'getAppInfo','getPublicConfig','getPublicGallery',
+  'login','finalizeLogin','registerWali','validateSession','logout','changePassword',
+  'getProductionControlData','setProductionControl','getGoLiveChecklist','createProductionBackup','runSecurityMaintenance',
+  'getUserManagementData','adminResetUserPassword','createManualUser','getAuditLogPageData',
+  'getAcademicYearLifecycleData','setActiveAcademicYear','getMasterDefinitions','getMasterData','saveMasterItem','deactivateMasterItem',
+  'getRegistrationFormOptions','getWaliHomeData','getMyRegistrations','getRegistrationList','getRegistrationDetail',
+  'getPaymentPageData','getPaymentsForRegistration','createBill','submitPayment','verifyPayment',
+  'getSelectionPageData','createSelectionSchedule','updateSelectionScheduleStatus','addSelectionParticipant','addSelectionParticipantsBulk','updateSelectionParticipantStatus','saveSelectionScore','saveSelectionResult',
+  'getAnnouncementPageData','publishAnnouncement',
+  'getNotifications','markNotificationRead','markAllNotificationsRead',
+  'getChatPageData','getChatThread','openChatThread','sendChatMessage','markChatThreadRead','closeChatThread','cleanupChatRetention','runChatAutomationNow',
+  'getCommunicationCenterData','sendCommunication',
+  'getReregistrationPageData','openReregistration','finalizeReregistration',
+  'getDashboardPageData','getProductionReadiness','getMonitoringPageData','getIncidentPageData','saveIncident','closeIncident',
+  'getReportingPageData','getAdvancedReportingData','exportAdvancedReportingCsv',
+  'getVerificationQueue','getVerificationDetail','getDocumentOptions','getRegistrationDocuments','getDocumentPageData','uploadDocument','verifyDocument',
+  'saveRegistration','submitRegistration','finalizeVerification'
+]);
+function getPwaBridgeConfig() {
+  const raw = String(PropertiesService.getScriptProperties().getProperty('PWA_ALLOWED_ORIGINS') || '').trim();
+  const configured = raw.split(',').map(function(x){return String(x||'').trim();}).filter(Boolean);
+  return {success:true,bridgeVersion:PSB_PWA_BRIDGE_VERSION,appName:getConfig_('APP_NAME')||'PSB Fathan Mubina',allowedOrigins:configured.length ? configured : ['https://appfathanmubina.github.io']};
+}
+function pwaBridgeCall(functionName,args) {
+  const fn=String(functionName||'').trim();
+  if(PSB_PWA_BRIDGE_ALLOWED_FUNCTIONS.indexOf(fn)<0)return {success:false,code:'BRIDGE_FUNCTION_NOT_ALLOWED',message:'Fungsi API bridge tidak diizinkan.'};
+  const callArgs=Array.isArray(args)?args:[];
+  try{
+    const handler=globalThis[fn];
+    if(typeof handler!=='function')return {success:false,code:'BRIDGE_FUNCTION_NOT_FOUND',message:'Fungsi backend tidak ditemukan.'};
+    return rpcSafe_(handler.apply(null,callArgs));
+  }catch(e){
+    console.error('PWA bridge backend error: '+e);
+    return {success:false,code:'BRIDGE_BACKEND_ERROR',message:String(e&&e.message||'Terjadi kesalahan pada backend.')};
+  }
+}
