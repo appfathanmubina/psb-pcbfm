@@ -97,6 +97,8 @@ function getPublicGallery(forceRefresh){
   }
 }
 
+const PSB_BRAND_LOGO_URL = 'https://appfathanmubina.github.io/psb-pcbfm/assets/logo-fathan-mubina.png';
+
 function getPublicConfig(forceRefresh) {
   const cache = CacheService.getScriptCache();
   const cacheKey = 'PSB_PUBLIC_CONFIG_V6';
@@ -117,10 +119,10 @@ function getPublicConfig(forceRefresh) {
   ]);
   values.forEach(r => { if (r[0] && PUBLIC_CONFIG_KEYS.has(String(r[0]))) config[String(r[0])] = r[1]; });
 
-  // Jangan resolve Drive asset menjadi Data URL di jalur boot.
-  // Frontend memakai APP_ICON_URL / APP_LOGO_URL dari CONFIG secara langsung
-  // (dinormalisasi menjadi thumbnail Drive), sehingga URL Database selalu menjadi
-  // sumber utama dan perubahan brand tidak tertahan oleh asset Data URL lama.
+  // Branding resmi memakai satu asset dari repository GitHub Pages.
+  // URL Google Drive lama di CONFIG tidak lagi menjadi sumber branding aplikasi.
+  config.APP_ICON_URL = PSB_BRAND_LOGO_URL;
+  config.APP_LOGO_URL = PSB_BRAND_LOGO_URL;
   config.APP_VERSION = config.APP_VERSION || PSB_PRODUCTION_VERSION;
   config.RELEASE_STAGE = config.RELEASE_STAGE || 'PRODUCTION';
   const result = { success: true, config: config };

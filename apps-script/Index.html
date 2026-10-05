@@ -511,70 +511,22 @@ input:focus,select:focus,textarea:focus{background:#fff!important;box-shadow:0 0
 const state={token:localStorage.getItem('psb_session')||'',user:null,config:{},page:'home',appInitialized:false,initialData:null,preloadRunning:false,preloadReady:false,cache:{registration:null,documents:{},payments:{},pages:{}},pageSnapshots:{},pageSnapshotTtlMs:180000,paymentRegistrationId:'',paymentData:null,paymentTypes:[],masterKey:'MASTER_TAHUN_AJARAN',masterItems:[],masterDefinitions:{},masterCache:{},academicYearLifecycle:null,auditData:null,registrationList:[],registrationOptions:null,registrationDetail:null,documentRegistrationId:'',documentData:null,selectionData:null,selectionTab:'overview',selectionRegistrationId:'',chatData:null,chatThread:null,chatThreadCache:{},chatPollTimer:null,chatLoading:false,detailLoadingLocks:{}};
 const $=id=>document.getElementById(id);
 function esc(v){return String(v??'').replace(/[&<>'"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c]));}
-function normalizeAssetUrl(raw){
-  let url=String(raw||'').trim();
-  if(!url)return '';
-  // Support the common Google Drive share/copy-link variants stored in CONFIG.
-  // Drive's thumbnail endpoint is more reliable inside Apps Script HTML Service
-  // than rendering a /file/d/... page as an <img>.
-  let m=url.match(/drive\.google\.com\/file\/d\/([A-Za-z0-9_-]{10,})/i);
-  if(!m)m=url.match(/drive\.google\.com\/(?:open|uc)\?(?:[^#]*?&)?id=([A-Za-z0-9_-]{10,})/i);
-  if(!m)m=url.match(/docs\.google\.com\/(?:uc|file)\?(?:[^#]*?&)?id=([A-Za-z0-9_-]{10,})/i);
-  if(!m)m=url.match(/[?&]id=([A-Za-z0-9_-]{10,})/i);
-  if(m)return 'https://drive.google.com/thumbnail?id='+encodeURIComponent(m[1])+'&sz=w512';
-  return url;
-}
-function configAssetUrl(...keys){
-  for(const key of keys){
-    const raw=String(state.config?.[key]||'').trim();
-    if(raw)return normalizeAssetUrl(raw);
-  }
-  return '';
-}
-const BRAND_ASSET_FALLBACKS={
-  icon:'https://drive.google.com/file/d/1L2qUg-U_Z4xb0rQvMZSX3eNIkFvsiTas/view?usp=drive_link',
-  logo:'https://drive.google.com/file/d/1-5uTR0ySIZVOWFFnItG29HUFNAHkvLb4/view?usp=drive_link'
-};
+const PSB_BRAND_LOGO_URL='https://appfathanmubina.github.io/psb-pcbfm/assets/logo-fathan-mubina.png';
 function configAssetSources(kind='logo'){
-  // CONFIG Database adalah sumber kebenaran utama. Asset yang ditanam di script
-  // hanya fallback terakhir agar brand tidak kembali ke FM ketika CONFIG kosong.
-  const keys=kind==='icon'
-    ? ['APP_ICON_URL','APP_ICON_DATA_URL','APP_LOGO_URL','APP_LOGO_DATA_URL']
-    : ['APP_LOGO_URL','APP_LOGO_DATA_URL','APP_ICON_URL','APP_ICON_DATA_URL'];
-  const out=[];
-  for(const key of keys){
-    const raw=String(state.config?.[key]||'').trim();
-    if(!raw)continue;
-    const normalized=key.endsWith('_URL')?normalizeAssetUrl(raw):raw;
-    if(normalized && !out.includes(normalized))out.push(normalized);
-  }
-  const fallbackRaw=String(BRAND_ASSET_FALLBACKS[kind]||'').trim();
-  const fallback=normalizeAssetUrl(fallbackRaw);
-  if(fallback&&!out.includes(fallback))out.push(fallback);
-  return out;
+  return [PSB_BRAND_LOGO_URL];
 }
 function appLogoMarkup(extraClass=''){
-  // Visible logo: gunakan URL dari CONFIG sebagai sumber utama. Data URL hasil resolusi server hanya fallback.
-  const sources=configAssetSources('logo');
-  const url=sources[0]||'';
-  const fallback=sources[1]||'';
+  const url=PSB_BRAND_LOGO_URL;
   const alt=esc(state.config.APP_NAME||'PSB Fathan Mubina');
-  if(!url)return `<span class="app-logo-fallback">FM</span>`;
-  // URL dari CONFIG tetap diprioritaskan. Bila sumber pertama gagal, coba fallback berikutnya;
-  // hanya setelah seluruh sumber yang dikonfigurasi gagal tampilkan fallback FM.
-  const fallbackJs=fallback ? `if(this.dataset.brandRetry!=='1'){this.dataset.brandRetry='1';this.src='${esc(fallback)}';return;}this.onerror=null;this.style.display='none';this.nextElementSibling.style.display='grid'` : `this.onerror=null;this.style.display='none';this.nextElementSibling.style.display='grid'`;
-  return `<img class="app-logo-img ${extraClass}" src="${esc(url)}" alt="${alt}" loading="eager" referrerpolicy="no-referrer" onerror="${fallbackJs}"><span class="app-logo-fallback">FM</span>`;
+  return `<img class="app-logo-img ${extraClass}" src="${esc(url)}" alt="${alt}" loading="eager" referrerpolicy="no-referrer" onerror="this.style.display='none';this.nextElementSibling.style.display='grid'"><span class="app-logo-fallback">FM</span>`;
 }
 function applyAppIcon(){
-  // Favicon mengikuti APP_ICON_URL dari CONFIG terlebih dahulu; data URL/APP_LOGO hanya fallback.
-  const sources=configAssetSources('icon');
-  const url=sources[0]||'';
+  const url=PSB_BRAND_LOGO_URL;
   let link=document.getElementById('appFavicon');
   if(!link){link=document.createElement('link');link.id='appFavicon';link.rel='icon';document.head.appendChild(link);}
-  if(url)link.href=url;
+  link.href=url;
 }
-const SPLASH_LOGO_URL='https://drive.google.com/thumbnail?id=1-5uTR0ySIZVOWFFnItG29HUFNAHkvLb4&sz=w512';
-const SPLASH_LOGO_SOURCE='https://drive.google.com/file/d/1-5uTR0ySIZVOWFFnItG29HUFNAHkvLb4/view?usp=drive_link';
+const SPLASH_LOGO_URL=PSB_BRAND_LOGO_URL;
 function hydrateSplashLogo(){
   const splashLogo=$('splashLogo');
   if(!splashLogo)return;
