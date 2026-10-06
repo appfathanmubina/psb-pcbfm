@@ -52,8 +52,8 @@ function configAssetUrl(...keys){
   return '';
 }
 const BRAND_ASSET_FALLBACKS={
-  icon:'https://appfathanmubina.github.io/psb-pcbfm/assets/logo-fathan-mubina.png?v=32.4.2',
-  logo:'https://appfathanmubina.github.io/psb-pcbfm/assets/logo-fathan-mubina.png?v=32.4.2'
+  icon:'https://appfathanmubina.github.io/psb-pcbfm/assets/logo-fathan-mubina.png?v=32.4.3',
+  logo:'https://appfathanmubina.github.io/psb-pcbfm/assets/logo-fathan-mubina.png?v=32.4.3'
 };
 function configAssetSources(kind='logo'){
   // CONFIG Database adalah sumber kebenaran utama. Asset yang ditanam di script
@@ -79,11 +79,11 @@ function appLogoMarkup(extraClass=''){
   const url=sources[0]||'';
   const fallback=sources[1]||'';
   const alt=esc(state.config.APP_NAME||'PSB Fathan Mubina');
-  if(!url)return `<span class="app-logo-fallback">FM</span>`;
+  if(!url)return `<span class="app-logo-fallback" aria-hidden="true"></span>`;
   // URL dari CONFIG tetap diprioritaskan. Bila sumber pertama gagal, coba fallback berikutnya;
   // hanya setelah seluruh sumber yang dikonfigurasi gagal tampilkan fallback FM.
   const fallbackJs=fallback ? `if(this.dataset.brandRetry!=='1'){this.dataset.brandRetry='1';this.src='${esc(fallback)}';return;}this.onerror=null;this.style.display='none';this.nextElementSibling.style.display='grid'` : `this.onerror=null;this.style.display='none';this.nextElementSibling.style.display='grid'`;
-  return `<img class="app-logo-img ${extraClass}" src="${esc(url)}" alt="${alt}" loading="eager" referrerpolicy="no-referrer" onerror="${fallbackJs}"><span class="app-logo-fallback">FM</span>`;
+  return `<img class="app-logo-img ${extraClass}" src="${esc(url)}" alt="${alt}" loading="eager" referrerpolicy="no-referrer" onerror="${fallbackJs}"><span class="app-logo-fallback" aria-hidden="true"></span>`;
 }
 function applyAppIcon(){
   // Favicon mengikuti APP_ICON_URL dari CONFIG terlebih dahulu; data URL/APP_LOGO hanya fallback.
@@ -93,12 +93,12 @@ function applyAppIcon(){
   if(!link){link=document.createElement('link');link.id='appFavicon';link.rel='icon';document.head.appendChild(link);}
   if(url)link.href=url;
 }
-const SPLASH_LOGO_URL='https://appfathanmubina.github.io/psb-pcbfm/assets/logo-fathan-mubina.png?v=32.4.2';
-const SPLASH_LOGO_SOURCE='https://appfathanmubina.github.io/psb-pcbfm/assets/logo-fathan-mubina.png?v=32.4.2';
+const SPLASH_LOGO_URL='https://appfathanmubina.github.io/psb-pcbfm/assets/logo-fathan-mubina.png?v=32.4.3';
+const SPLASH_LOGO_SOURCE='https://appfathanmubina.github.io/psb-pcbfm/assets/logo-fathan-mubina.png?v=32.4.3';
 function hydrateSplashLogo(){
   const splashLogo=$('splashLogo');
   if(!splashLogo)return;
-  splashLogo.innerHTML=`<img class="app-logo-img splash-app-logo" src="${SPLASH_LOGO_URL}" alt="PSB Fathan Mubina" loading="eager" referrerpolicy="no-referrer" onerror="this.style.display='none';this.nextElementSibling.style.display='grid'"><span class="app-logo-fallback">FM</span>`;
+  splashLogo.innerHTML=`<img class="app-logo-img splash-app-logo" src="${SPLASH_LOGO_URL}" alt="PSB Fathan Mubina" loading="eager" referrerpolicy="no-referrer" onerror="this.style.display='none';this.nextElementSibling.style.display='grid'"><span class="app-logo-fallback" aria-hidden="true"></span>`;
 }
 function loading(show,text='Memproses...'){ const t=$('loadingText'); if(t)t.textContent=text; if(state.appInitialized){if(show)bootProgress(true,text);else bootProgress(false);return;} $('loading').classList.toggle('hidden',!show); }
 const MUTATING_SERVER_FUNCTIONS=new Set(['registerWali','changePassword','saveRegistration','submitRegistration','uploadDocument','verifyDocument','finalizeVerification','submitPayment','verifyPayment','createBill','createSelectionSchedule','updateSelectionScheduleStatus','addSelectionParticipant','addSelectionParticipantsBulk','updateSelectionParticipantStatus','saveSelectionScore','saveSelectionResult','publishAnnouncement','markNotificationRead','markAllNotificationsRead','finalizeReregistration','saveMasterItem','deactivateMasterItem','setActiveAcademicYear','createManualUser','adminResetUserPassword','runSecurityMaintenance','sendCommunication']);
