@@ -97,7 +97,7 @@ function getPublicGallery(forceRefresh){
   }
 }
 
-const PSB_BRAND_LOGO_URL = 'https://appfathanmubina.github.io/psb-pcbfm/assets/logo-fathan-mubina.png';
+const PSB_BRAND_LOGO_URL = 'https://appfathanmubina.github.io/psb-pcbfm/assets/logo-fathan-mubina.png?v=32.4.2';
 
 function getPublicConfig(forceRefresh) {
   const cache = CacheService.getScriptCache();

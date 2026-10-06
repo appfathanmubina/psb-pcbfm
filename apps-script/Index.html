@@ -5,6 +5,9 @@
   <meta charset="UTF-8">
   <meta name="theme-color" content="#7c3aed">
   <title>PSB Fathan Mubina</title>
+  <link id="appFaviconStatic" rel="icon" type="image/png" sizes="192x192" href="https://appfathanmubina.github.io/psb-pcbfm/assets/logo-fathan-mubina.png?v=32.4.2">
+  <link rel="shortcut icon" type="image/png" href="https://appfathanmubina.github.io/psb-pcbfm/assets/logo-fathan-mubina.png?v=32.4.2">
+  <link rel="apple-touch-icon" href="https://appfathanmubina.github.io/psb-pcbfm/assets/logo-fathan-mubina.png?v=32.4.2">
   <style>
 :root{
   --primary:#7c3aed;--primary-dark:#5b21b6;--primary-soft:#f2edff;
@@ -511,7 +514,7 @@ input:focus,select:focus,textarea:focus{background:#fff!important;box-shadow:0 0
 const state={token:localStorage.getItem('psb_session')||'',user:null,config:{},page:'home',appInitialized:false,initialData:null,preloadRunning:false,preloadReady:false,cache:{registration:null,documents:{},payments:{},pages:{}},pageSnapshots:{},pageSnapshotTtlMs:180000,paymentRegistrationId:'',paymentData:null,paymentTypes:[],masterKey:'MASTER_TAHUN_AJARAN',masterItems:[],masterDefinitions:{},masterCache:{},academicYearLifecycle:null,auditData:null,registrationList:[],registrationOptions:null,registrationDetail:null,documentRegistrationId:'',documentData:null,selectionData:null,selectionTab:'overview',selectionRegistrationId:'',chatData:null,chatThread:null,chatThreadCache:{},chatPollTimer:null,chatLoading:false,detailLoadingLocks:{}};
 const $=id=>document.getElementById(id);
 function esc(v){return String(v??'').replace(/[&<>'"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c]));}
-const PSB_BRAND_LOGO_URL='https://appfathanmubina.github.io/psb-pcbfm/assets/logo-fathan-mubina.png';
+const PSB_BRAND_LOGO_URL='https://appfathanmubina.github.io/psb-pcbfm/assets/logo-fathan-mubina.png?v=32.4.2';
 function configAssetSources(kind='logo'){
   return [PSB_BRAND_LOGO_URL];
 }

@@ -5,6 +5,9 @@
   <meta charset="UTF-8">
   <meta name="theme-color" content="#7c3aed">
   <title>PSB Fathan Mubina</title>
+  <link id="appFaviconStatic" rel="icon" type="image/png" sizes="192x192" href="https://appfathanmubina.github.io/psb-pcbfm/assets/logo-fathan-mubina.png?v=32.4.2">
+  <link rel="shortcut icon" type="image/png" href="https://appfathanmubina.github.io/psb-pcbfm/assets/logo-fathan-mubina.png?v=32.4.2">
+  <link rel="apple-touch-icon" href="https://appfathanmubina.github.io/psb-pcbfm/assets/logo-fathan-mubina.png?v=32.4.2">
   <style>
 :root{
   --primary:#7c3aed;--primary-dark:#5b21b6;--primary-soft:#f2edff;
@@ -478,7 +481,7 @@ input:focus,select:focus,textarea:focus{background:#fff!important;box-shadow:0 0
 <body>
 <div id="app" class="app"></div>
 <div id="bootProgress" class="boot-progress hidden"><span class="mini-spin"></span><span class="boot-copy" id="bootProgressText">Menyiapkan aplikasi...</span></div>
-<div id="loading" class="loading hidden"><div class="loading-box splash-box"><div class="splash-logo-wrap"><div class="splash-logo" id="splashLogo"><img class="app-logo-img splash-app-logo" src="https://drive.google.com/thumbnail?id=1-5uTR0ySIZVOWFFnItG29HUFNAHkvLb4&sz=w512" alt="PSB Fathan Mubina" loading="eager" referrerpolicy="no-referrer" onerror="this.style.display='none';this.nextElementSibling.style.display='grid'"><span class="app-logo-fallback">FM</span></div></div><b id="loadingText">Memuat aplikasi...</b><div class="muted splash-subtitle">Menyiapkan PSB Fathan Mubina</div><div class="splash-progress"><span></span></div></div></div>
+<div id="loading" class="loading hidden"><div class="loading-box splash-box"><div class="splash-logo-wrap"><div class="splash-logo" id="splashLogo"><img class="app-logo-img splash-app-logo" src="https://appfathanmubina.github.io/psb-pcbfm/assets/logo-fathan-mubina.png?v=32.4.2" alt="PSB Fathan Mubina" loading="eager" referrerpolicy="no-referrer" onerror="this.style.display='none';this.nextElementSibling.style.display='grid'"><span class="app-logo-fallback">FM</span></div></div><b id="loadingText">Memuat aplikasi...</b><div class="muted splash-subtitle">Menyiapkan PSB Fathan Mubina</div><div class="splash-progress"><span></span></div></div></div>
 
 <script>
 (function lockDeviceLayout(){
@@ -532,8 +535,8 @@ function configAssetUrl(...keys){
   return '';
 }
 const BRAND_ASSET_FALLBACKS={
-  icon:'https://drive.google.com/file/d/1L2qUg-U_Z4xb0rQvMZSX3eNIkFvsiTas/view?usp=drive_link',
-  logo:'https://drive.google.com/file/d/1-5uTR0ySIZVOWFFnItG29HUFNAHkvLb4/view?usp=drive_link'
+  icon:'https://appfathanmubina.github.io/psb-pcbfm/assets/logo-fathan-mubina.png?v=32.4.2',
+  logo:'https://appfathanmubina.github.io/psb-pcbfm/assets/logo-fathan-mubina.png?v=32.4.2'
 };
 function configAssetSources(kind='logo'){
   // CONFIG Database adalah sumber kebenaran utama. Asset yang ditanam di script
@@ -573,8 +576,8 @@ function applyAppIcon(){
   if(!link){link=document.createElement('link');link.id='appFavicon';link.rel='icon';document.head.appendChild(link);}
   if(url)link.href=url;
 }
-const SPLASH_LOGO_URL='https://drive.google.com/thumbnail?id=1-5uTR0ySIZVOWFFnItG29HUFNAHkvLb4&sz=w512';
-const SPLASH_LOGO_SOURCE='https://drive.google.com/file/d/1-5uTR0ySIZVOWFFnItG29HUFNAHkvLb4/view?usp=drive_link';
+const SPLASH_LOGO_URL='https://appfathanmubina.github.io/psb-pcbfm/assets/logo-fathan-mubina.png?v=32.4.2';
+const SPLASH_LOGO_SOURCE='https://appfathanmubina.github.io/psb-pcbfm/assets/logo-fathan-mubina.png?v=32.4.2';
 function hydrateSplashLogo(){
   const splashLogo=$('splashLogo');
   if(!splashLogo)return;
