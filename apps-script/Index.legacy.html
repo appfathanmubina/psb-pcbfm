@@ -481,7 +481,7 @@ input:focus,select:focus,textarea:focus{background:#fff!important;box-shadow:0 0
 <body>
 <div id="app" class="app"></div>
 <div id="bootProgress" class="boot-progress hidden"><span class="mini-spin"></span><span class="boot-copy" id="bootProgressText">Menyiapkan aplikasi...</span></div>
-<div id="loading" class="loading hidden"><div class="loading-box splash-box"><div class="splash-logo-wrap"><div class="splash-logo" id="splashLogo"><img class="app-logo-img splash-app-logo" src="https://appfathanmubina.github.io/psb-pcbfm/assets/logo-fathan-mubina.png?v=32.4.3" alt="PSB Fathan Mubina" loading="eager" referrerpolicy="no-referrer" onerror="this.style.display='none';this.nextElementSibling.style.display='grid'"><span class="app-logo-fallback">FM</span></div></div><b id="loadingText">Memuat aplikasi...</b><div class="muted splash-subtitle">Menyiapkan PSB Fathan Mubina</div><div class="splash-progress"><span></span></div></div></div>
+<div id="loading" class="loading hidden"><div class="loading-box splash-box"><div class="splash-logo-wrap"><div class="splash-logo" id="splashLogo"><img class="app-logo-img splash-app-logo" src="https://appfathanmubina.github.io/psb-pcbfm/assets/logo-fathan-mubina.png?v=32.4.3" alt="PSB Fathan Mubina" loading="eager" referrerpolicy="no-referrer" onerror="this.style.display='none';this.nextElementSibling.style.display='grid'"><span class="app-logo-fallback" aria-hidden="true"></span></div></div><b id="loadingText">Memuat aplikasi...</b><div class="muted splash-subtitle">Menyiapkan PSB Fathan Mubina</div><div class="splash-progress"><span></span></div></div></div>
 
 <script>
 (function lockDeviceLayout(){
@@ -562,11 +562,11 @@ function appLogoMarkup(extraClass=''){
   const url=sources[0]||'';
   const fallback=sources[1]||'';
   const alt=esc(state.config.APP_NAME||'PSB Fathan Mubina');
-  if(!url)return `<span class="app-logo-fallback">FM</span>`;
+  if(!url)return `<span class="app-logo-fallback" aria-hidden="true"></span>`;
   // URL dari CONFIG tetap diprioritaskan. Bila sumber pertama gagal, coba fallback berikutnya;
   // hanya setelah seluruh sumber yang dikonfigurasi gagal tampilkan fallback FM.
   const fallbackJs=fallback ? `if(this.dataset.brandRetry!=='1'){this.dataset.brandRetry='1';this.src='${esc(fallback)}';return;}this.onerror=null;this.style.display='none';this.nextElementSibling.style.display='grid'` : `this.onerror=null;this.style.display='none';this.nextElementSibling.style.display='grid'`;
-  return `<img class="app-logo-img ${extraClass}" src="${esc(url)}" alt="${alt}" loading="eager" referrerpolicy="no-referrer" onerror="${fallbackJs}"><span class="app-logo-fallback">FM</span>`;
+  return `<img class="app-logo-img ${extraClass}" src="${esc(url)}" alt="${alt}" loading="eager" referrerpolicy="no-referrer" onerror="${fallbackJs}"><span class="app-logo-fallback" aria-hidden="true"></span>`;
 }
 function applyAppIcon(){
   // Favicon mengikuti APP_ICON_URL dari CONFIG terlebih dahulu; data URL/APP_LOGO hanya fallback.
@@ -581,7 +581,7 @@ const SPLASH_LOGO_SOURCE='https://appfathanmubina.github.io/psb-pcbfm/assets/log
 function hydrateSplashLogo(){
   const splashLogo=$('splashLogo');
   if(!splashLogo)return;
-  splashLogo.innerHTML=`<img class="app-logo-img splash-app-logo" src="${SPLASH_LOGO_URL}" alt="PSB Fathan Mubina" loading="eager" referrerpolicy="no-referrer" onerror="this.style.display='none';this.nextElementSibling.style.display='grid'"><span class="app-logo-fallback">FM</span>`;
+  splashLogo.innerHTML=`<img class="app-logo-img splash-app-logo" src="${SPLASH_LOGO_URL}" alt="PSB Fathan Mubina" loading="eager" referrerpolicy="no-referrer" onerror="this.style.display='none';this.nextElementSibling.style.display='grid'"><span class="app-logo-fallback" aria-hidden="true"></span>`;
 }
 function loading(show,text='Memproses...'){ const t=$('loadingText'); if(t)t.textContent=text; if(state.appInitialized){if(show)bootProgress(true,text);else bootProgress(false);return;} $('loading').classList.toggle('hidden',!show); }
 const MUTATING_SERVER_FUNCTIONS=new Set(['registerWali','changePassword','saveRegistration','submitRegistration','uploadDocument','verifyDocument','finalizeVerification','submitPayment','verifyPayment','createBill','createSelectionSchedule','updateSelectionScheduleStatus','addSelectionParticipant','addSelectionParticipantsBulk','updateSelectionParticipantStatus','saveSelectionScore','saveSelectionResult','publishAnnouncement','markNotificationRead','markAllNotificationsRead','finalizeReregistration','saveMasterItem','deactivateMasterItem','setActiveAcademicYear','createManualUser','adminResetUserPassword','runSecurityMaintenance','sendCommunication']);
