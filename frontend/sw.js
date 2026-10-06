@@ -1,5 +1,5 @@
 const CACHE='psb-pwa-shell-v32-4-6';
-const ASSETS=['./','./index.html','./manifest.webmanifest','./assets/logo-fathan-mubina.png?v=32.4.6','./icons/favicon-32.png?v=32.4.6','./icons/favicon-48.png?v=32.4.6','./icons/apple-touch-icon-180.png?v=32.4.6','./icons/icon-192.png?v=32.4.6','./icons/icon-512.png?v=32.4.6','./icons/icon-maskable-512.png?v=32.4.6'];
+const ASSETS=['./','./index.html','./manifest.webmanifest','./assets/logo-fathan-mubina.png?v=32.4.6','./icons/favicon-32.svg?v=32.4.6','./icons/favicon-48.svg?v=32.4.6','./assets/logo-fathan-mubina.png?v=32.4.6','./assets/logo-fathan-mubina.png?v=32.4.6','./icons/icon-512.svg?v=32.4.6','./icons/icon-maskable-512.svg?v=32.4.6'];
 self.addEventListener('install',event=>event.waitUntil(caches.open(CACHE).then(c=>c.addAll(ASSETS)).then(()=>self.skipWaiting())));
 self.addEventListener('activate',event=>event.waitUntil(caches.keys().then(keys=>Promise.all(keys.filter(k=>k!==CACHE).map(k=>caches.delete(k)))).then(()=>self.clients.claim())));
 self.addEventListener('fetch',event=>{
