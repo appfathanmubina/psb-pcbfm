@@ -1,4 +1,4 @@
-const CACHE='psb-pwa-shell-v32-4-11';
+const CACHE='psb-pwa-shell-v32-4-12';
 const ASSETS=['./','./index.html','./manifest.webmanifest','./assets/logo-fathan-mubina.png?v=32.4.11','./icons/favicon-32.svg?v=32.4.11','./icons/favicon-48.svg?v=32.4.11','./icons/icon-512.svg?v=32.4.11','./icons/icon-maskable-512.svg?v=32.4.11'];
 self.addEventListener('install',event=>event.waitUntil(caches.open(CACHE).then(c=>c.addAll(ASSETS)).then(()=>self.skipWaiting())));
 self.addEventListener('activate',event=>event.waitUntil(caches.keys().then(keys=>Promise.all(keys.filter(k=>k!==CACHE).map(k=>caches.delete(k)))).then(()=>self.clients.claim())));
