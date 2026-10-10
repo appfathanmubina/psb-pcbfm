@@ -19,7 +19,7 @@
   const SOURCE = 'psb-fm-api-bridge';
   const PWA_SOURCE = 'psb-fm-pwa';
   const VERSION = '33.0.0';
-  let allowedOrigins = [];
+  let allowedOrigins = ['https://appfathanmubina.github.io'];
   let configReady = false;
 
   function postToParent(event, payload) {
@@ -37,16 +37,16 @@
   function loadConfig() {
     google.script.run
       .withSuccessHandler(function(cfg){
-        allowedOrigins = Array.isArray(cfg && cfg.allowedOrigins)
+        const configured = Array.isArray(cfg && cfg.allowedOrigins)
           ? cfg.allowedOrigins.map(function(x){return String(x || '').trim();}).filter(Boolean)
           : [];
+        if (configured.length) allowedOrigins = configured;
         configReady = true;
         console.log('[PSB Bridge] config ready:', allowedOrigins);
       })
       .withFailureHandler(function(error){
-        allowedOrigins = ['https://appfathanmubina.github.io'];
         configReady = false;
-        console.error('[PSB Bridge] config load failed:', error);
+        console.error('[PSB Bridge] config load failed; using default origin:', error);
       })
       .getPwaBridgeConfig();
   }
@@ -55,12 +55,7 @@
     return allowedOrigins.indexOf(origin) >= 0;
   }
 
-  function handleHello(event) {
-    if (!isAllowedOrigin(event.origin)) {
-      console.warn('[PSB Bridge] rejected HELLO from:', event.origin);
-      return;
-    }
-
+  function sendReady(event) {
     postToParent(event, {
       type: 'ready',
       bridgeVersion: VERSION,
@@ -100,18 +95,8 @@
     if (data.source !== PWA_SOURCE) return;
     if (!isAllowedOrigin(event.origin)) return;
 
-    if (data.type === 'hello') {
-      handleHello(event);
-      return;
-    }
-
-    if (data.type === 'ping') {
-      postToParent(event, {
-        type: 'ready',
-        bridgeVersion: VERSION,
-        configReady: configReady,
-        timestamp: Date.now()
-      });
+    if (data.type === 'hello' || data.type === 'ping') {
+      sendReady(event);
       return;
     }
 
