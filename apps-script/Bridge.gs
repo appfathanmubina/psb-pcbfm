@@ -1,16 +1,23 @@
 /**
- * PSB Bridge boundary.
- *
- * Tahap 1:
- * - Tidak mengubah business logic existing.
- * - google.script.run tetap menjadi transport utama saat aplikasi dijalankan
- *   sebagai Apps Script HTML Service.
- *
- * Tahap 2:
- * - Jika frontend dipindahkan ke static hosting, fungsi-fungsi di sini dapat
- *   diekspos melalui API yang diautentikasi. Jangan menambahkan endpoint publik
- *   tanpa desain auth/CORS yang sesuai.
+ * PSB Fathan Mubina — Bridge transport helpers
+ * Transport-only layer. Business logic remains in Code.gs.
  */
+
+const PSB_BRIDGE_TRANSPORT_VERSION = '33.0.0';
+
+function include(filename) {
+  return HtmlService.createHtmlOutputFromFile(filename).getContent();
+}
+
+function bridgeHealthCheck() {
+  return {
+    ok: true,
+    service: 'PSB Bridge',
+    version: PSB_BRIDGE_TRANSPORT_VERSION,
+    timestamp: new Date().toISOString()
+  };
+}
+
 function psbBridgeHealth() {
-  return { success: true, app: 'PSB Fathan Mubina', transport: 'google.script.run' };
+  return bridgeHealthCheck();
 }
