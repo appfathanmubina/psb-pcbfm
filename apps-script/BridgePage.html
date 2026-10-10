@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <base target="_top">
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>PSB Fathan Mubina API Bridge</title>
+  <style>
+    html,body{margin:0;width:100%;height:100%;background:transparent}
+    #status{position:fixed;left:-9999px}
+  </style>
+</head>
+<body>
+  <div id="status">PSB API Bridge</div>
+<script>
+(function(){
+  'use strict';
+
+  const SOURCE = 'psb-fm-api-bridge';
+  const PWA_SOURCE = 'psb-fm-pwa';
+  const VERSION = '33.0.0';
+  let allowedOrigins = [];
+  let configReady = false;
+
+  function postToParent(event, payload) {
+    if (!event || !event.source || !event.origin || event.origin === 'null') return;
+    try {
+      event.source.postMessage(
+        Object.assign({source: SOURCE}, payload),
+        event.origin
+      );
+    } catch (error) {
+      console.error('[PSB Bridge] postMessage failed:', error);
+    }
+  }
+
+  function loadConfig() {
+    google.script.run
+      .withSuccessHandler(function(cfg){
+        allowedOrigins = Array.isArray(cfg && cfg.allowedOrigins)
+          ? cfg.allowedOrigins.map(function(x){return String(x || '').trim();}).filter(Boolean)
+          : [];
+        configReady = true;
+        console.log('[PSB Bridge] config ready:', allowedOrigins);
+      })
+      .withFailureHandler(function(error){
+        allowedOrigins = ['https://appfathanmubina.github.io'];
+        configReady = false;
+        console.error('[PSB Bridge] config load failed:', error);
+      })
+      .getPwaBridgeConfig();
+  }
+
+  function isAllowedOrigin(origin) {
+    return allowedOrigins.indexOf(origin) >= 0;
+  }
+
+  function handleHello(event) {
+    if (!isAllowedOrigin(event.origin)) {
+      console.warn('[PSB Bridge] rejected HELLO from:', event.origin);
+      return;
+    }
+
+    postToParent(event, {
+      type: 'ready',
+      bridgeVersion: VERSION,
+      configReady: configReady,
+      timestamp: Date.now()
+    });
+  }
+
+  function handleHealth(event, id) {
+    google.script.run
+      .withSuccessHandler(function(result){
+        postToParent(event, {
+          type: 'response',
+          id: id,
+          ok: true,
+          result: result
+        });
+      })
+      .withFailureHandler(function(error){
+        postToParent(event, {
+          type: 'response',
+          id: id,
+          ok: false,
+          error: {
+            code: 'HEALTH_CHECK_ERROR',
+            message: String(error && error.message || 'Health check gagal.')
+          }
+        });
+      })
+      .bridgeHealthCheck();
+  }
+
+  window.addEventListener('message', function(event){
+    if (!event.source || !event.origin) return;
+
+    const data = event.data || {};
+    if (data.source !== PWA_SOURCE) return;
+    if (!isAllowedOrigin(event.origin)) return;
+
+    if (data.type === 'hello') {
+      handleHello(event);
+      return;
+    }
+
+    if (data.type === 'ping') {
+      postToParent(event, {
+        type: 'ready',
+        bridgeVersion: VERSION,
+        configReady: configReady,
+        timestamp: Date.now()
+      });
+      return;
+    }
+
+    if (data.type === 'health') {
+      const id = String(data.id || '').trim();
+      if (!id) return;
+      handleHealth(event, id);
+      return;
+    }
+
+    if (data.type !== 'request') return;
+
+    const id = String(data.id || '').trim();
+    const fn = String(data.fn || '').trim();
+    const args = Array.isArray(data.args) ? data.args : [];
+
+    if (!id || !fn) {
+      postToParent(event, {
+        type: 'response',
+        id: id,
+        ok: false,
+        error: {
+          code: 'INVALID_REQUEST',
+          message: 'Request Bridge tidak lengkap.'
+        }
+      });
+      return;
+    }
+
+    google.script.run
+      .withSuccessHandler(function(result){
+        postToParent(event, {
+          type: 'response',
+          id: id,
+          ok: true,
+          result: result
+        });
+      })
+      .withFailureHandler(function(error){
+        postToParent(event, {
+          type: 'response',
+          id: id,
+          ok: false,
+          error: {
+            code: 'RPC_ERROR',
+            message: String(error && error.message || 'Terjadi kesalahan komunikasi dengan backend.')
+          }
+        });
+      })
+      .pwaBridgeCall(fn, args);
+  });
+
+  loadConfig();
+})();
+</script>
+</body>
+</html>
