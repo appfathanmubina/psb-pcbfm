@@ -28,8 +28,4 @@ jobs:
           node -e "JSON.parse(require('fs').readFileSync('appsscript.json', 'utf8'))"
       - name: Ensure Apps Script manifests match
         run: |
-          cmp -s appsscript.json apps-script/appsscript.json || {
-            echo "Manifest mismatch: appsscript.json and apps-script/appsscript.json must match."
-            diff -u appsscript.json apps-script/appsscript.json || true
-            exit 1
-          }
+          node -e "const fs=require('fs'); const {isDeepStrictEqual}=require('util'); const a=JSON.parse(fs.readFileSync('appsscript.json','utf8')); const b=JSON.parse(fs.readFileSync('apps-script/appsscript.json','utf8')); if(!isDeepStrictEqual(a,b)){ console.error('Manifest mismatch: root and Clasp manifests differ.'); process.exit(1); }"
