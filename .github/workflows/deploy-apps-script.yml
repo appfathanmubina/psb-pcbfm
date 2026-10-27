@@ -46,7 +46,7 @@ jobs:
           test -f apps-script/SetupDatabase.gs
           test -f apps-script/Bridge.gs
           test -f apps-script/appsscript.json
-          cmp -s appsscript.json apps-script/appsscript.json || { echo "Manifest mismatch; deployment blocked."; diff -u appsscript.json apps-script/appsscript.json || true; exit 1; }
+          node -e "const fs=require('fs'); const {isDeepStrictEqual}=require('util'); const a=JSON.parse(fs.readFileSync('appsscript.json','utf8')); const b=JSON.parse(fs.readFileSync('apps-script/appsscript.json','utf8')); if(!isDeepStrictEqual(a,b)){ console.error('Manifest mismatch; deployment blocked.'); process.exit(1); }"
           node --check frontend/app.js
       - name: Verify local Apps Script source matches remote
         env:
@@ -59,7 +59,11 @@ jobs:
           find /tmp/psb-remote -maxdepth 1 -type f \( -name '*.gs' -o -name '*.html' -o -name 'appsscript.json' \) -printf '%f\n' | sort > /tmp/psb-remote-files.txt
           diff -u /tmp/psb-local-files.txt /tmp/psb-remote-files.txt || { echo "Apps Script file set differs from remote; deployment blocked."; exit 1; }
           while IFS= read -r file; do
-            cmp -s "apps-script/$file" "/tmp/psb-remote/$file" || { echo "Source differs from remote: $file; deployment blocked."; diff -u "apps-script/$file" "/tmp/psb-remote/$file" || true; exit 1; }
+            if [ "$file" = "appsscript.json" ]; then
+              node -e "const fs=require('fs'); const {isDeepStrictEqual}=require('util'); const a=JSON.parse(fs.readFileSync(process.argv[1],'utf8')); const b=JSON.parse(fs.readFileSync(process.argv[2],'utf8')); if(!isDeepStrictEqual(a,b)){ console.error('Manifest differs from remote; deployment blocked.'); process.exit(1); }" "apps-script/$file" "/tmp/psb-remote/$file" || exit 1
+            else
+              cmp -s "apps-script/$file" "/tmp/psb-remote/$file" || { echo "Source differs from remote: $file; deployment blocked."; diff -u "apps-script/$file" "/tmp/psb-remote/$file" || true; exit 1; }
+            fi
           done < /tmp/psb-local-files.txt
           echo "Local Apps Script source matches remote."
       - name: Update existing deployment only
