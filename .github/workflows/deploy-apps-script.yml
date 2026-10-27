@@ -39,11 +39,29 @@ jobs:
         run: |
           test -n "$SCRIPT_ID"
           printf '{"scriptId":"%s","rootDir":"apps-script"}\n' "$SCRIPT_ID" > apps-script/.clasp.json
-      - name: Validate source
+      - name: Validate source and manifest
         run: |
           test -f apps-script/Code.gs
           test -f apps-script/Index.html
           test -f apps-script/SetupDatabase.gs
+          test -f apps-script/Bridge.gs
+          test -f apps-script/appsscript.json
+          cmp -s appsscript.json apps-script/appsscript.json || { echo "Manifest mismatch; deployment blocked."; diff -u appsscript.json apps-script/appsscript.json || true; exit 1; }
+          node --check frontend/app.js
+      - name: Verify local Apps Script source matches remote
+        env:
+          SCRIPT_ID: ${{ secrets.APPS_SCRIPT_ID }}
+        run: |
+          mkdir -p /tmp/psb-remote
+          printf '{"scriptId":"%s","rootDir":"/tmp/psb-remote"}\n' "$SCRIPT_ID" > /tmp/psb-remote/.clasp.json
+          (cd /tmp/psb-remote && clasp pull --force)
+          find apps-script -maxdepth 1 -type f \( -name '*.gs' -o -name '*.html' -o -name 'appsscript.json' \) -printf '%f\n' | sort > /tmp/psb-local-files.txt
+          find /tmp/psb-remote -maxdepth 1 -type f \( -name '*.gs' -o -name '*.html' -o -name 'appsscript.json' \) -printf '%f\n' | sort > /tmp/psb-remote-files.txt
+          diff -u /tmp/psb-local-files.txt /tmp/psb-remote-files.txt || { echo "Apps Script file set differs from remote; deployment blocked."; exit 1; }
+          while IFS= read -r file; do
+            cmp -s "apps-script/$file" "/tmp/psb-remote/$file" || { echo "Source differs from remote: $file; deployment blocked."; diff -u "apps-script/$file" "/tmp/psb-remote/$file" || true; exit 1; }
+          done < /tmp/psb-local-files.txt
+          echo "Local Apps Script source matches remote."
       - name: Update existing deployment only
         working-directory: apps-script
         env:
