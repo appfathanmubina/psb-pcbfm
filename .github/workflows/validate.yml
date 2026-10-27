@@ -2,6 +2,8 @@ name: Validate PSB PWA
 on:
   push:
   pull_request:
+  workflow_call:
+
 jobs:
   structure:
     runs-on: ubuntu-latest
@@ -16,3 +18,14 @@ jobs:
           test -f frontend/sw.js
           test -f apps-script/Code.gs
           test -f apps-script/SetupDatabase.gs
+          test -f apps-script/Bridge.gs
+          test -f apps-script/Index.html
+          test -f apps-script/appsscript.json
+      - name: Validate JavaScript and JSON
+        run: |
+          node --check frontend/app.js
+          node -e "JSON.parse(require('fs').readFileSync('frontend/manifest.webmanifest', 'utf8'))"
+          node -e "JSON.parse(require('fs').readFileSync('apps-script/appsscript.json', 'utf8'))"
+          node -e "JSON.parse(require('fs').readFileSync('appsscript.json', 'utf8'))"
+      - name: Ensure Apps Script manifests match
+        run: cmp -s appsscript.json apps-script/appsscript.json || { echo "Manifest mismatch: appsscript.json and apps-script/appsscript.json must match."; diff -u appsscript.json apps-script/appsscript.json || true; exit 1; }
