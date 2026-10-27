@@ -1,0 +1,44 @@
+name: Preflight Apps Script (read only)
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  preflight:
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Install clasp
+        run: npm install --global @google/clasp
+      - name: Configure clasp credentials
+        env:
+          CLASPRC_JSON: ${{ secrets.CLASPRC_JSON }}
+        run: |
+          test -n "$CLASPRC_JSON"
+          printf '%s' "$CLASPRC_JSON" > "$HOME/.clasprc.json"
+      - name: Pull remote source and compare without deploying
+        env:
+          SCRIPT_ID: ${{ secrets.APPS_SCRIPT_ID }}
+        run: |
+          test -n "$SCRIPT_ID"
+          mkdir -p /tmp/psb-remote
+          printf '{"scriptId":"%s","rootDir":"."}\n' "$SCRIPT_ID" > /tmp/psb-remote/.clasp.json
+          (cd /tmp/psb-remote && clasp pull --force)
+          find apps-script -maxdepth 1 -type f \( -name '*.gs' -o -name '*.html' -o -name 'appsscript.json' \) -printf '%f\n' | sort > /tmp/psb-local-files.txt
+          find /tmp/psb-remote -maxdepth 1 -type f \( -name '*.gs' -o -name '*.html' -o -name 'appsscript.json' \) -printf '%f\n' | sort > /tmp/psb-remote-files.txt
+          diff -u /tmp/psb-local-files.txt /tmp/psb-remote-files.txt || { echo "Apps Script file set differs from remote."; exit 1; }
+          while IFS= read -r file; do
+            if [ "$file" = "appsscript.json" ]; then
+              node -e "const fs=require('fs'); const {isDeepStrictEqual}=require('util'); const a=JSON.parse(fs.readFileSync(process.argv[1],'utf8')); const b=JSON.parse(fs.readFileSync(process.argv[2],'utf8')); if(!isDeepStrictEqual(a,b)){ console.error('Manifest differs from remote.'); process.exit(1); }" "apps-script/$file" "/tmp/psb-remote/$file" || exit 1
+            else
+              cmp -s "apps-script/$file" "/tmp/psb-remote/$file" || { echo "Source differs from remote: $file."; diff -u "apps-script/$file" "/tmp/psb-remote/$file" || true; exit 1; }
+            fi
+          done < /tmp/psb-local-files.txt
+          echo "Local Apps Script source matches remote. No deploy command was run."
