@@ -2,16 +2,16 @@ const CACHE='psb-pwa-shell-v32-4-16';
 const ASSETS=[
   './',
   './index.html',
-  './manifest.webmanifest?v=32.4.16',
-  './styles.css?v=32.4.16',
-  './api-bridge.js?v=32.4.16',
-  './app.js?v=32.4.16',
-  './assets/logo-fathanmubina.svg?v=32.4.16',
-  './assets/logo-fathan-mubina.png?v=32.4.16',
-  './icons/favicon-32.svg?v=32.4.16',
-  './icons/favicon-48.svg?v=32.4.16',
-  './icons/icon-512.svg?v=32.4.16',
-  './icons/icon-maskable-512.svg?v=32.4.16'
+  './manifest.webmanifest?v=32.4.17',
+  './styles.css?v=32.4.17',
+  './api-bridge.js?v=32.4.17',
+  './app.js?v=32.4.17',
+  './assets/logo-fathanmubina.svg?v=32.4.17',
+  './assets/logo-fathan-mubina.png?v=32.4.17',
+  './icons/favicon-32.svg?v=32.4.17',
+  './icons/favicon-48.svg?v=32.4.17',
+  './icons/icon-512.svg?v=32.4.17',
+  './icons/icon-maskable-512.svg?v=32.4.17'
 ];
 self.addEventListener('install',event=>event.waitUntil(caches.open(CACHE).then(cache=>cache.addAll(ASSETS)).then(()=>self.skipWaiting())));
 self.addEventListener('activate',event=>event.waitUntil(caches.keys().then(keys=>Promise.all(keys.filter(key=>key!==CACHE).map(key=>caches.delete(key)))).then(()=>self.clients.claim())));
