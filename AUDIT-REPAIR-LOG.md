@@ -1,6 +1,6 @@
 # PSB Audit & Repair Log
 
-Last updated: 2026-10-31
+Last updated: 2026-11-01
 Repository: `appfathanmubina/psb-pcbfm`
 Working branch: `main`
 
@@ -69,7 +69,6 @@ PWA release/cache version: `32.4.16`
 - The service-worker cache is versioned so the new HTML, JavaScript, manifest, and logo references are fetched as a coherent release.
 - Runtime startup time, logo rendering on target phones, Apps Script HTML Service behavior, and service-worker activation still require browser/device testing. No Apps Script deployment was performed.
 
-
 ## Repair batch 03 — PWA bridge handshake and splash brand asset
 
 PWA release/cache version: `32.4.17`
@@ -83,3 +82,15 @@ PWA release/cache version: `32.4.17`
 ### Deployment and verification notes
 - GitHub Pages source changes do not update the Apps Script deployment. The matching Apps Script source is now versioned as bridge `32.3.8` in `apps-script/Bridge.html` and `apps-script/Code.gs`; sync both files to the Apps Script editor and deploy a new Web App version so the deployed iframe can answer the retryable `ping` handshake.
 - No Apps Script deployment was performed by this repair. Live login, iframe handshake, and splash rendering must still be verified in the deployed PWA.
+
+## Repair batch 04 — service-worker cache alignment and Apps Script workflow paths
+
+| ID | Finding | Change | Status |
+|---|---|---|---|
+| CACHE-001 | Asset references in the PWA were versioned `32.4.17`, but the service-worker cache name remained `psb-pwa-shell-v32-4-16`. | Align the cache name to `psb-pwa-shell-v32-4-17` so the service worker treats the current shell as a new release and removes the previous cache on activation. | Code fixed; browser activation test pending |
+| CI-001 | Push and deploy workflows required `apps-script/Bridge.gs`, which does not exist. The actual project uses `Bridge.html` and `BridgeServer.gs`. | Validate both real bridge files (`Bridge.html` and `BridgeServer.gs`) in both workflows. | Code fixed; GitHub Actions run pending |
+
+### Verification limits
+- Static checks confirm all asset query versions and the service-worker cache name are aligned at `32.4.17`.
+- Both Apps Script workflows now validate the actual bridge filenames used by the repository.
+- No GitHub Actions push/deploy workflow was run. No Apps Script source was pushed and no production deployment was updated by this repair.
