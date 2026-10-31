@@ -53,19 +53,10 @@ jobs:
           test -f apps-script/appsscript.json
           node --check frontend/app.js
           node -e "const fs=require('fs'); const {isDeepStrictEqual}=require('util'); const a=JSON.parse(fs.readFileSync('appsscript.json','utf8')); const b=JSON.parse(fs.readFileSync('apps-script/appsscript.json','utf8')); if(!isDeepStrictEqual(a,b)){ console.error('Manifest mismatch; push blocked.'); process.exit(1); }"
-      - name: Verify remote manifest before push
+      - name: Review remote source differences before push
         env:
           SCRIPT_ID: ${{ secrets.APPS_SCRIPT_ID }}
-        run: |
-          mkdir -p "$RUNNER_TEMP/psb-clasp"
-          printf '{"scriptId":"%s","rootDir":"."}\n' "$SCRIPT_ID" > "$RUNNER_TEMP/psb-clasp/.clasp.json"
-          (cd "$RUNNER_TEMP/psb-clasp" && clasp pull --force)
-          test -f "$RUNNER_TEMP/psb-clasp/appsscript.json"
-          cmp -s appsscript.json "$RUNNER_TEMP/psb-clasp/appsscript.json" || {
-            echo "Remote manifest differs; push blocked. Review Apps Script configuration first." >&2
-            diff -u appsscript.json "$RUNNER_TEMP/psb-clasp/appsscript.json" || true
-            exit 1
-          }
+        run: bash .github/scripts/check-apps-script-push.sh
       - name: Show pending Apps Script file status
         working-directory: apps-script
         run: clasp show-file-status --json
