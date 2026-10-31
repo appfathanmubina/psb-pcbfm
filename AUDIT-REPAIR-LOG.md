@@ -68,3 +68,18 @@ PWA release/cache version: `32.4.16`
 - The PWA logo is loaded from the local repository asset `frontend/assets/logo-fathanmubina.svg`, not the old hard-coded remote splash PNG. The splash is visible from initial HTML parsing, before the large application JavaScript bundle executes.
 - The service-worker cache is versioned so the new HTML, JavaScript, manifest, and logo references are fetched as a coherent release.
 - Runtime startup time, logo rendering on target phones, Apps Script HTML Service behavior, and service-worker activation still require browser/device testing. No Apps Script deployment was performed.
+
+
+## Repair batch 03 — PWA bridge handshake and splash brand asset
+
+PWA release/cache version: `32.4.17`
+
+| ID | Finding | Change | Status |
+|---|---|---|---|
+| BRIDGE-001 | PWA depended on a single unsolicited `ready` message from the Apps Script iframe. A missed early message left every API call waiting until timeout, even though the login UI rendered. | Added iframe load handling and a retryable `ping` handshake. The parent accepts replies only from the expected iframe window and trusted Apps Script origins; only the metadata-only ping uses wildcard target origin to tolerate Apps Script redirects. | Code fixed; live PWA-to-Apps-Script test pending |
+| BRIDGE-002 | Bridge startup errors were opaque and the PWA had no way to re-request readiness after iframe load. | Added explicit readiness timeout diagnostics and periodic ping retries while waiting. | Code fixed; live test pending |
+| START-005 | The PWA splash referenced a complex SVG while the existing local PNG brand asset was already included in the shell cache. | Use the local PNG for initial splash and async splash hydration; bump PWA assets and service-worker cache to `32.4.17`. | Code fixed; browser/device logo test pending |
+
+### Deployment and verification notes
+- GitHub Pages source changes do not update the Apps Script deployment. For the bridge fix to work, confirm that the deployed Apps Script project contains the existing `apps-script/Bridge.html` handshake handler (including `type: 'ping'`) and the current `Code.gs` bridge endpoint.
+- No Apps Script deployment was performed by this repair. Live login, iframe handshake, and splash rendering must still be verified in the deployed PWA.
