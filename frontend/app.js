@@ -28,7 +28,7 @@
     root.style.setProperty('--app-viewport-height', (window.visualViewport?.height || window.innerHeight || root.clientHeight || 0) + 'px');
   }
 })();
-const state={token:localStorage.getItem('psb_session')||'',user:null,config:{},page:'home',appInitialized:false,initialData:null,preloadRunning:false,preloadReady:false,cache:{registration:null,documents:{},payments:{},pages:{}},pageSnapshots:{},pageSnapshotTtlMs:180000,paymentRegistrationId:'',paymentData:null,paymentTypes:[],masterKey:'MASTER_TAHUN_AJARAN',masterItems:[],masterDefinitions:{},masterCache:{},academicYearLifecycle:null,auditData:null,registrationList:[],registrationOptions:null,registrationDetail:null,documentRegistrationId:'',documentData:null,selectionData:null,selectionTab:'overview',selectionRegistrationId:'',chatData:null,chatThread:null,chatThreadCache:{},chatPollTimer:null,chatLoading:false,detailLoadingLocks:{}};
+const state={token:localStorage.getItem('psb_session')||'',user:null,config:(()=>{try{return JSON.parse(localStorage.getItem('psb_public_config')||'{}')}catch(e){return {}}})(),page:'home',appInitialized:false,initialData:null,preloadRunning:false,preloadReady:false,cache:{registration:null,documents:{},payments:{},pages:{}},pageSnapshots:{},pageSnapshotTtlMs:180000,paymentRegistrationId:'',paymentData:null,paymentTypes:[],masterKey:'MASTER_TAHUN_AJARAN',masterItems:[],masterDefinitions:{},masterCache:{},academicYearLifecycle:null,auditData:null,registrationList:[],registrationOptions:null,registrationDetail:null,documentRegistrationId:'',documentData:null,selectionData:null,selectionTab:'overview',selectionRegistrationId:'',chatData:null,chatThread:null,chatThreadCache:{},chatPollTimer:null,chatLoading:false,detailLoadingLocks:{}};
 const $=id=>document.getElementById(id);
 function esc(v){return String(v??'').replace(/[&<>'"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c]));}
 function normalizeAssetUrl(raw){
@@ -93,14 +93,31 @@ function applyAppIcon(){
   if(!link){link=document.createElement('link');link.id='appFavicon';link.rel='icon';document.head.appendChild(link);}
   if(url)link.href=url;
 }
-const SPLASH_LOGO_URL='https://appfathanmubina.github.io/psb-pcbfm/assets/logo-fathan-mubina.png?v=32.4.3';
-const SPLASH_LOGO_SOURCE='https://appfathanmubina.github.io/psb-pcbfm/assets/logo-fathan-mubina.png?v=32.4.3';
 function hydrateSplashLogo(){
   const splashLogo=$('splashLogo');
   if(!splashLogo)return;
-  splashLogo.innerHTML=`<img class="app-logo-img splash-app-logo" src="${SPLASH_LOGO_URL}" alt="PSB Fathan Mubina" loading="eager" referrerpolicy="no-referrer" onerror="this.style.display='none';this.nextElementSibling.style.display='grid'"><span class="app-logo-fallback" aria-hidden="true"></span>`;
+  const src='./assets/logo-fathanmubina.svg?v=32.4.16';
+  if(splashLogo.querySelector('img'))return;
+  splashLogo.innerHTML='<img class="app-logo-img splash-app-logo" src="'+src+'" alt="PSB Fathan Mubina" loading="eager" fetchpriority="high" decoding="async" onerror="this.style.display=\'none\';this.nextElementSibling.style.display=\'grid\'"><span class="app-logo-fallback" aria-hidden="true"></span>';
 }
+
 function loading(show,text='Memproses...'){ const t=$('loadingText'); if(t)t.textContent=text; if(state.appInitialized){if(show)bootProgress(true,text);else bootProgress(false);return;} $('loading').classList.toggle('hidden',!show); }
+async function refreshPublicConfig(){
+  try{
+    const result=await server('getPublicConfig',true);
+    const config=result?.config||{};
+    if(Object.keys(config).length){
+      state.config=config;
+      try{localStorage.setItem('psb_public_config',JSON.stringify(config));}catch(e){}
+      applyAppIcon();
+      if(!state.user){
+        const yearLabel=document.querySelector('.public-brand p');
+        if(yearLabel)yearLabel.textContent='Pendaftaran Santri Baru · '+String(state.config.ACTIVE_YEAR||'2027/2028');
+      }
+    }
+    return config;
+  }catch(e){console.warn('Public config refresh:',e);return null;}
+}
 const MUTATING_SERVER_FUNCTIONS=new Set(['registerWali','changePassword','saveRegistration','submitRegistration','uploadDocument','verifyDocument','finalizeVerification','submitPayment','verifyPayment','createBill','createSelectionSchedule','updateSelectionScheduleStatus','addSelectionParticipant','addSelectionParticipantsBulk','updateSelectionParticipantStatus','saveSelectionScore','saveSelectionResult','publishAnnouncement','markNotificationRead','markAllNotificationsRead','finalizeReregistration','saveMasterItem','deactivateMasterItem','setActiveAcademicYear','createManualUser','adminResetUserPassword','runSecurityMaintenance','sendCommunication']);
 function invalidatePageSnapshots(){state.pageSnapshots={};}
 function server(fn,...args){
@@ -230,19 +247,14 @@ async function initializeAfterLogin(){
   }finally{state.preloadRunning=false;}
 }
 async function boot(){
+  hydrateSplashLogo();
   loading(true,'Memeriksa aplikasi...');
+  const configTask=refreshPublicConfig();
   try{
-    // Jalankan pemeriksaan konfigurasi dan sesi secara paralel agar splash tidak
-    // menunggu dua request server secara berurutan.
     if(state.token){
-      const [pub,r]=await Promise.all([
-        server('getPublicConfig',true),
-        server('validateSession',state.token)
-      ]);
-      state.config=pub?.config||{}; applyAppIcon();
-      hydrateSplashLogo();
-      if(r?.success){
-        state.user=r.user;
+      const session=await server('validateSession',state.token);
+      if(session?.success){
+        state.user=session.user;
         renderApp();
         loading(false);
         initializeAfterLogin();
@@ -252,16 +264,14 @@ async function boot(){
         renderPublicHome('Sesi sebelumnya sudah berakhir. Silakan masuk kembali.');
       }
     }else{
-      const pub=await server('getPublicConfig',true);
-      state.config=pub?.config||{}; applyAppIcon();
-      hydrateSplashLogo();
       renderPublicHome();
     }
   }catch(e){
     console.error('PSB boot error:',e);
-    renderLogin('Koneksi ke server aplikasi belum tersedia. Silakan tunggu sebentar lalu coba lagi.');
-  }
-  loading(false);
+    if(state.token)renderLogin('Koneksi untuk memeriksa sesi belum tersedia. Silakan coba kembali.');
+    else renderPublicHome('Sebagian informasi belum dapat dimuat. Periksa koneksi internet Anda.');
+  }finally{loading(false);}
+  configTask.catch(()=>{});
 }
 function renderPublicHome(message=''){
   const year=esc(state.config.ACTIVE_YEAR||'2027/2028');
