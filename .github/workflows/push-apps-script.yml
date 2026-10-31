@@ -1,33 +1,37 @@
-name: Validate Apps Script Source (Manual Sync)
+name: Push Apps Script Source
 
 on:
   workflow_dispatch:
     inputs:
-      confirm_check:
-        description: Type CHECK to validate repository source only
+      confirm_push:
+        description: Type PUSH to upload the checked-in apps-script source
         required: true
         type: string
 
 permissions:
   contents: read
 
+concurrency:
+  group: psb-apps-script-production
+  cancel-in-progress: false
+
 jobs:
-  validate:
-    if: ${{ github.ref == 'refs/heads/main' && inputs.confirm_check == 'CHECK' }}
+  push:
+    if: ${{ github.ref == 'refs/heads/main' && inputs.confirm_push == 'PUSH' }}
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-node@v5
         with:
           node-version: 24
-      - name: Validate repository source
+      - name: Validate source and manifest
         run: |
           node --check frontend/app.js
-          node -e "const fs=require('fs'); const {isDeepStrictEqual}=require('util'); const a=JSON.parse(fs.readFileSync('appsscript.json','utf8')); const b=JSON.parse(fs.readFileSync('apps-script/appsscript.json','utf8')); if(!isDeepStrictEqual(a,b)){ console.error('Manifest mismatch; validation blocked.'); process.exit(1); }"
-          node -e "const fs=require('fs'); const p='apps-script'; for (const f of ['Code.gs','Index.html','SetupDatabase.gs','Bridge.html','BridgeServer.gs','appsscript.json']) if(!fs.existsSync(p+'/'+f)) { console.error('Missing required file: '+p+'/'+f); process.exit(1); }"
-      - name: Explain manual Apps Script synchronization
-        run: |
-          echo "Repository source validation completed."
-          echo "No source was uploaded to Google Apps Script."
-          echo "Automatic PUSH is disabled because no OAuth credentials are configured."
-          echo "To synchronize, use the Google Apps Script editor or a separately authenticated deployment process."
+          node -e "const fs=require('fs'); const a=JSON.parse(fs.readFileSync('appsscript.json','utf8')); const b=JSON.parse(fs.readFileSync('apps-script/appsscript.json','utf8')); if(JSON.stringify(a)!==JSON.stringify(b)) throw new Error('Root and Apps Script manifests differ');"
+          for f in Code.gs Index.html SetupDatabase.gs Bridge.html BridgeServer.gs appsscript.json; do test -f "apps-script/$f"; done
+      - name: Push source to Google Apps Script
+        env:
+          GOOGLE_OAUTH_CLIENT_ID: ${{ secrets.GOOGLE_OAUTH_CLIENT_ID }}
+          GOOGLE_OAUTH_CLIENT_SECRET: ${{ secrets.GOOGLE_OAUTH_CLIENT_SECRET }}
+          GOOGLE_OAUTH_REFRESH_TOKEN: ${{ secrets.GOOGLE_OAUTH_REFRESH_TOKEN }}
+        run: node .github/scripts/apps-script-api.mjs push
