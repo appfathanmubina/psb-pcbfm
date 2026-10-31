@@ -126,3 +126,19 @@ PWA release/cache version: `32.4.18`
 - PUSH is a source upload only. It does not create or update a Web App deployment.
 - DEPLOY updates only the existing deployment ID stored in `PRODUCTION_DEPLOYMENT_ID`.
 - The updated workflows have not yet been executed. Run PUSH first and inspect its result; only run DEPLOY after PUSH succeeds.
+
+
+## Repair batch 07 — replace clasp CLI with direct Apps Script API calls
+
+| ID | Finding | Change | Status |
+|---|---|---|---|
+| CI-005 | Removing `clasp pull` alone still left the workflows dependent on clasp credential/config files written to the GitHub runner. | Replaced `clasp push` and `clasp deploy` with direct authenticated calls to the Google Apps Script API using a committed Node.js helper. Credentials are parsed from the GitHub Secret in memory; no `.clasprc.json`, `.clasp.json`, or temporary comparison directory is created. | Code updated; Actions/API test pending |
+| CI-006 | The deployment process needed to preserve the production Web App URL while avoiding the clasp CLI. | The helper reads the configured existing deployment, creates a new Apps Script version, then updates that same deployment ID. | Code updated; production deployment test pending |
+
+### Direct API workflow notes
+- PUSH calls Apps Script `projects.updateContent` with source files read from the checked-out repository and does not retrieve remote source.
+- DEPLOY calls Apps Script deployment/version APIs and targets only `PRODUCTION_DEPLOYMENT_ID`; it does not create a new deployment ID.
+- Both workflows use the OAuth refresh token contained in `CLASPRC_JSON` directly in process memory. The secret must be the complete clasp credential JSON containing `oauth2ClientSettings.clientId`, `oauth2ClientSettings.clientSecret`, and `token.refresh_token`.
+- No `clasp` CLI, `clasp pull`, `mktemp`, `.clasprc.json`, or generated `.clasp.json` is used by either workflow.
+- GitHub Actions still checks out repository source into its hosted runner workspace; this is how the runner reads version-controlled source and is not access to files on the user's PC or phone.
+- No PUSH or DEPLOY was executed as part of this code change. Run PUSH first; confirm its Apps Script API response before running DEPLOY.
