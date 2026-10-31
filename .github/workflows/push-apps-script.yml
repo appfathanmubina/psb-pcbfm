@@ -43,13 +43,14 @@ jobs:
             echo "APPS_SCRIPT_ID has an unexpected format." >&2
             exit 1
           fi
-          printf '{"scriptId":"%s","rootDir":"apps-script"}\n' "$SCRIPT_ID" > apps-script/.clasp.json
+          printf '{"scriptId":"%s","rootDir":"apps-script"}\\n' "$SCRIPT_ID" > apps-script/.clasp.json
       - name: Validate required source and manifests
         run: |
           test -f apps-script/Code.gs
           test -f apps-script/Index.html
           test -f apps-script/SetupDatabase.gs
-          test -f apps-script/Bridge.gs
+          test -f apps-script/Bridge.html
+          test -f apps-script/BridgeServer.gs
           test -f apps-script/appsscript.json
           node --check frontend/app.js
           node -e "const fs=require('fs'); const {isDeepStrictEqual}=require('util'); const a=JSON.parse(fs.readFileSync('appsscript.json','utf8')); const b=JSON.parse(fs.readFileSync('apps-script/appsscript.json','utf8')); if(!isDeepStrictEqual(a,b)){ console.error('Manifest mismatch; push blocked.'); process.exit(1); }"
