@@ -42,3 +42,29 @@ File changed: `apps-script/Code.gs`
 3. Make focused commits with clear messages.
 4. Do not run setup, seed, cleanup, or other production data mutations as part of a static audit.
 5. Do not mark a repair verified until its relevant staging/runtime test has passed.
+
+## Repair batch 02 — startup splash, logo, and first paint
+
+Files changed:
+- `frontend/app.js`
+- `frontend/index.html`
+- `frontend/sw.js`
+- `frontend/manifest.webmanifest`
+- `apps-script/Index.html`
+
+PWA release/cache version: `32.4.16`
+
+| ID | Finding | Change | Status |
+|---|---|---|---|
+| START-001 | PWA splash logo was injected only after `getPublicConfig` returned, so it was absent during the initial checking screen. | Render the repository-local logo directly in the initial HTML and retain an eager local asset fallback in the app bootstrap. Removed the splash's dependency on the old remote PNG URL. | Code fixed; browser test pending |
+| START-002 | The unauthenticated first screen waited for the non-critical `getPublicConfig` server request before rendering the public landing page. | Render the public landing page immediately and refresh public configuration asynchronously. Cache the latest public config locally in the PWA for subsequent launches. | Code fixed; browser test pending |
+| START-003 | The Apps Script interface also waited for public configuration before rendering the public landing page. | Render the public landing page immediately; refresh configuration in the background. The brand logo is hydrated before any server request. | Code fixed; Apps Script test pending |
+| START-004 | PWA cache version was not changed when startup assets changed. | Bump PWA asset query versions and service-worker cache to `v32.4.16`. | Code fixed; cache-refresh test pending |
+
+### Startup behavior and security notes
+
+- The private dashboard is still withheld until `validateSession` succeeds. This optimization does not bypass authentication.
+- Logged-out users should see the public landing page without waiting for `getPublicConfig`; the academic-year label is updated when configuration arrives.
+- The PWA logo is loaded from the local repository asset `frontend/assets/logo-fathanmubina.svg`, not the old hard-coded remote splash PNG.
+- The service-worker cache is versioned so the new HTML, JavaScript, manifest, and logo references are fetched as a coherent release.
+- Runtime startup time, logo rendering on target phones, Apps Script HTML Service behavior, and service-worker activation still require browser/device testing. No Apps Script deployment was performed.
