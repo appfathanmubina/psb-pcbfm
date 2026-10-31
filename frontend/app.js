@@ -96,7 +96,7 @@ function applyAppIcon(){
 function hydrateSplashLogo(){
   const splashLogo=$('splashLogo');
   if(!splashLogo)return;
-  const src='./assets/logo-fathanmubina.svg?v=32.4.16';
+  const src='./assets/logo-fathan-mubina.png?v=32.4.17';
   if(splashLogo.querySelector('img'))return;
   splashLogo.innerHTML='<img class="app-logo-img splash-app-logo" src="'+src+'" alt="PSB Fathan Mubina" loading="eager" fetchpriority="high" decoding="async" onerror="this.style.display=\'none\';this.nextElementSibling.style.display=\'grid\'"><span class="app-logo-fallback" aria-hidden="true"></span>';
 }
