@@ -49,7 +49,7 @@ Semua workflow Apps Script production menggunakan GitHub Environment bernama `pr
 ### Urutan operasi
 
 1. Jalankan `Apps Script Reconcile (read only)` dari branch `main`. Workflow hanya menarik project ke direktori sementara dan membandingkan manifest. Jika berbeda, hentikan proses dan review konfigurasi Apps Script terlebih dahulu.
-2. Untuk mengirim source repository ke Apps Script, jalankan `Push Apps Script` dari `main` dengan input konfirmasi `PUSH`. Workflow memeriksa manifest online, memvalidasi source, lalu menjalankan `clasp push --force`. Operasi ini menimpa source online; pastikan perubahan sudah direview dan Environment approval sudah diberikan.
+2. Untuk mengirim source repository ke Apps Script, jalankan `Push Apps Script` dari `main` dengan input konfirmasi `PUSH`. Workflow menarik source online ke direktori sementara, memblokir jika daftar file atau manifest berbeda, lalu menampilkan diff setiap file yang isi source-nya berbeda. Setelah itu workflow menjalankan `clasp push --force`. Tinjau diff pada log Actions dan pastikan perubahan memang dikehendaki; input `PUSH` dan Environment approval tetap wajib. Operasi ini menimpa source online.
 3. Setelah push, jalankan `Preflight Apps Script (read only)` dari `main`. Preflight membandingkan daftar file, isi seluruh source, dan manifest repository dengan project online. Deployment harus ditunda jika pemeriksaan gagal.
 4. Hanya setelah preflight lulus, jalankan `Deploy Existing Apps Script Deployment` dari `main` dengan input konfirmasi `DEPLOY`. Workflow hanya memperbarui `PRODUCTION_DEPLOYMENT_ID`; tidak membuat deployment baru.
 
