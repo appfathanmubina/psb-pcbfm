@@ -4,58 +4,71 @@ on:
   workflow_dispatch:
     inputs:
       confirm_push:
-        description: Type PUSH to authorize clasp push
+        description: Type PUSH to authorize source upload
         required: true
         type: string
 
 permissions:
   contents: read
 
+concurrency:
+  group: apps-script-production
+  cancel-in-progress: false
+
 jobs:
   push:
-    if: ${{ inputs.confirm_push == 'PUSH' }}
+    if: ${{ github.ref == 'refs/heads/main' && inputs.confirm_push == 'PUSH' }}
     runs-on: ubuntu-latest
     environment: production
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
-      - name: Install clasp
-        run: npm install --global @google/clasp
+          node-version: 22
+      - name: Install pinned clasp
+        run: npm install --global @google/clasp@3.4.1
       - name: Configure clasp credentials
         env:
           CLASPRC_JSON: ${{ secrets.CLASPRC_JSON }}
         run: |
           test -n "$CLASPRC_JSON"
           printf '%s' "$CLASPRC_JSON" > "$HOME/.clasprc.json"
+          chmod 600 "$HOME/.clasprc.json"
       - name: Configure Apps Script project
         env:
           SCRIPT_ID: ${{ secrets.APPS_SCRIPT_ID }}
         run: |
           test -n "$SCRIPT_ID"
+          if [[ ! "$SCRIPT_ID" =~ ^[A-Za-z0-9_-]+$ ]]; then
+            echo "APPS_SCRIPT_ID has an unexpected format." >&2
+            exit 1
+          fi
           printf '{"scriptId":"%s","rootDir":"apps-script"}\n' "$SCRIPT_ID" > apps-script/.clasp.json
-      - name: Validate source
+      - name: Validate required source and manifests
         run: |
           test -f apps-script/Code.gs
           test -f apps-script/Index.html
           test -f apps-script/SetupDatabase.gs
           test -f apps-script/Bridge.gs
+          test -f apps-script/appsscript.json
           node --check frontend/app.js
-      - name: Reconcile remote manifest before push
+          node -e "const fs=require('fs'); const {isDeepStrictEqual}=require('util'); const a=JSON.parse(fs.readFileSync('appsscript.json','utf8')); const b=JSON.parse(fs.readFileSync('apps-script/appsscript.json','utf8')); if(!isDeepStrictEqual(a,b)){ console.error('Manifest mismatch; push blocked.'); process.exit(1); }"
+      - name: Verify remote manifest before push
         env:
           SCRIPT_ID: ${{ secrets.APPS_SCRIPT_ID }}
         run: |
-          mkdir -p /tmp/psb-clasp
-          printf '{"scriptId":"%s","rootDir":"/tmp/psb-clasp"}\n' "$SCRIPT_ID" > /tmp/psb-clasp/.clasp.json
-          cd /tmp/psb-clasp
-          clasp pull --force
-          cmp -s "$GITHUB_WORKSPACE/appsscript.json" appsscript.json || { echo "Manifest DIFF: push blocked."; diff -u "$GITHUB_WORKSPACE/appsscript.json" appsscript.json || true; exit 1; }
-      - name: Dry-run source status
+          mkdir -p "$RUNNER_TEMP/psb-clasp"
+          printf '{"scriptId":"%s","rootDir":"."}\n' "$SCRIPT_ID" > "$RUNNER_TEMP/psb-clasp/.clasp.json"
+          (cd "$RUNNER_TEMP/psb-clasp" && clasp pull --force)
+          test -f "$RUNNER_TEMP/psb-clasp/appsscript.json"
+          cmp -s appsscript.json "$RUNNER_TEMP/psb-clasp/appsscript.json" || {
+            echo "Remote manifest differs; push blocked. Review Apps Script configuration first." >&2
+            diff -u appsscript.json "$RUNNER_TEMP/psb-clasp/appsscript.json" || true
+            exit 1
+          }
+      - name: Show pending Apps Script file status
         working-directory: apps-script
-        run: |
-          echo "=== clasp status: files that will be written ==="
-          clasp show-file-status --json
+        run: clasp show-file-status --json
       - name: Push source only
         working-directory: apps-script
         run: clasp push --force
