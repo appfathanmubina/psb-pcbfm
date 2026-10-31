@@ -110,3 +110,19 @@ PWA release/cache version: `32.4.18`
 - These changes reduce stale navigation/cache behavior but cannot force-clear every browser's already-installed service worker until the updated PWA is fetched and activated.
 - The Apps Script iframe still depends on the deployed Web App version and the browser's Google session/access policy. This batch does not change Apps Script deployment or permissions.
 - Test GitHub Pages Actions deployment, then test the same URL in a normal browser tab and installed PWA on each affected device. If the bridge still fails only on one browser, inspect whether the Apps Script `/exec?bridge=1` endpoint redirects to a Google sign-in or access-denied page in that browser.
+
+
+## Repair batch 06 — remove remote pull and temporary comparison directories from Apps Script workflows
+
+| ID | Finding | Change | Status |
+|---|---|---|---|
+| CI-002 | The PUSH workflow ran a custom comparison script that created a temporary directory, generated a second clasp project config, and executed `clasp pull --force`. This failed when the remote response was not valid JSON and made the source upload dependent on a pull step. | Removed the remote-difference review and remote file-status steps. PUSH now validates checked-in repository files and manifest parity, then uploads the checked-in `apps-script/` source directly using `clasp push --force`. | Workflow updated; Actions run pending |
+| CI-003 | The DEPLOY workflow repeated the same temporary-directory/`clasp pull` process before updating the existing deployment. | Removed remote-pull verification. DEPLOY validates repository source and updates only the configured existing deployment ID. | Workflow updated; Actions run pending |
+| CI-004 | Obsolete helper scripts retained the `mktemp` + `clasp pull` implementation and could be mistakenly reused. | Removed `.github/scripts/check-apps-script-push.sh` and `.github/scripts/check-apps-script-remote.sh`. | Removed |
+
+### Workflow behavior and limitations
+- Neither workflow now runs `clasp pull`, `clasp show-file-status`, `mktemp`, or a remote source-comparison script.
+- GitHub Actions still checks out the repository and creates ephemeral clasp configuration/credential files on its hosted runner because the clasp CLI requires those files. They are not read from or written to the user's computer or phone and are discarded with the runner.
+- PUSH is a source upload only. It does not create or update a Web App deployment.
+- DEPLOY updates only the existing deployment ID stored in `PRODUCTION_DEPLOYMENT_ID`.
+- The updated workflows have not yet been executed. Run PUSH first and inspect its result; only run DEPLOY after PUSH succeeds.
