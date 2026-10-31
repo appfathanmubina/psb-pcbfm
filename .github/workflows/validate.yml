@@ -17,9 +17,13 @@ jobs:
           test -f frontend/sw.js
           test -f apps-script/Code.gs
           test -f apps-script/SetupDatabase.gs
-          test -f apps-script/Bridge.gs
+          test -f apps-script/BridgeServer.gs
+          test -f apps-script/Bridge.html
           test -f apps-script/Index.html
           test -f apps-script/appsscript.json
+      - name: Ensure Apps Script file basenames are unique
+        run: |
+          node -e "const fs=require('fs'); const files=fs.readdirSync('apps-script').filter(x=>/\\.(gs|html)$/.test(x)); const seen=new Set(); for(const f of files){const base=f.replace(/\\.(gs|html)$/,''); if(seen.has(base)){console.error('Duplicate Apps Script file basename: '+base);process.exit(1);} seen.add(base);}"
       - name: Validate JavaScript and JSON
         run: |
           node --check frontend/app.js
