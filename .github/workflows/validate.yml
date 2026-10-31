@@ -17,7 +17,8 @@ jobs:
           test -f frontend/sw.js
           test -f apps-script/Code.gs
           test -f apps-script/SetupDatabase.gs
-          test -f apps-script/Bridge.gs
+          test -f apps-script/BridgeServer.gs
+          test -f apps-script/Bridge.html
           test -f apps-script/Index.html
           test -f apps-script/appsscript.json
       - name: Validate JavaScript and JSON
