@@ -28,13 +28,18 @@ apps-script/
   Index.html
   Index.legacy.html
   SetupDatabase.gs
-  Bridge.gs
+  BridgeServer.gs
+  Bridge.html
   .clasp.example.json
 
 docs/
 .github/
 appsscript.json
 ```
+
+### Catatan nama file Apps Script
+
+Apps Script tidak mengizinkan file `.gs` dan `.html` memiliki nama dasar yang sama dalam satu project. Karena itu helper server yang sebelumnya bernama `Bridge.gs` disimpan sebagai `BridgeServer.gs`, sedangkan halaman komunikasi tetap bernama `Bridge.html`. Fungsi `doGet()` di `Code.gs` memanggil file HTML dengan nama `Bridge`; nama tersebut tidak perlu diubah.
 
 ## Apps Script production safety
 
