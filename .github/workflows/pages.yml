@@ -16,10 +16,29 @@ concurrency:
 
 jobs:
   build:
+    if: ${{ github.ref == 'refs/heads/main' }}
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v6
+
+      - name: Validate required files and source
+        run: |
+          test -f frontend/index.html
+          test -f frontend/styles.css
+          test -f frontend/app.js
+          test -f frontend/manifest.webmanifest
+          test -f frontend/sw.js
+          test -f apps-script/Code.gs
+          test -f apps-script/SetupDatabase.gs
+          test -f apps-script/Bridge.gs
+          test -f apps-script/Index.html
+          test -f apps-script/appsscript.json
+          node --check frontend/app.js
+          node -e "JSON.parse(require('fs').readFileSync('frontend/manifest.webmanifest', 'utf8'))"
+          node -e "JSON.parse(require('fs').readFileSync('apps-script/appsscript.json', 'utf8'))"
+          node -e "JSON.parse(require('fs').readFileSync('appsscript.json', 'utf8'))"
+          node -e "const fs=require('fs'); const {isDeepStrictEqual}=require('util'); const a=JSON.parse(fs.readFileSync('appsscript.json','utf8')); const b=JSON.parse(fs.readFileSync('apps-script/appsscript.json','utf8')); if(!isDeepStrictEqual(a,b)){ console.error('Manifest mismatch; Pages deployment blocked.'); process.exit(1); }"
 
       - name: Setup Pages
         uses: actions/configure-pages@v5
@@ -30,6 +49,7 @@ jobs:
           path: "./frontend"
 
   deploy:
+    if: ${{ github.ref == 'refs/heads/main' }}
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
