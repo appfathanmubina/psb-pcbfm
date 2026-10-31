@@ -94,3 +94,19 @@ PWA release/cache version: `32.4.17`
 - Static checks confirm all asset query versions and the service-worker cache name are aligned at `32.4.17`.
 - Both Apps Script workflows now validate the actual bridge filenames used by the repository.
 - No GitHub Actions push/deploy workflow was run. No Apps Script source was pushed and no production deployment was updated by this repair.
+
+ 
+## Repair batch 05 — cross-device cache freshness and bridge diagnostics
+
+PWA release/cache version: `32.4.18`
+
+| ID | Finding | Change | Status |
+|---|---|---|---|
+| CACHE-002 | Navigation requests were cache-first, allowing a device to keep serving an older cached PWA entry page after a newer Pages deployment. | Changed service-worker navigation handling to network-first with the cached shell as an offline fallback. | Code updated; deployment/device verification pending |
+| CACHE-003 | Service-worker registration did not explicitly request update checks with HTTP cache bypass. | Register with `updateViaCache: 'none'` and request `registration.update()` on page load. | Code updated; browser verification pending |
+| CACHE-004 | PWA asset URLs and cache key needed a coordinated release bump for all clients to fetch the updated shell. | Bumped shell/manifest/script asset versions and cache name to `32.4.18`. | Code updated; GitHub Pages deployment pending |
+
+### Cross-device verification limits
+- These changes reduce stale navigation/cache behavior but cannot force-clear every browser's already-installed service worker until the updated PWA is fetched and activated.
+- The Apps Script iframe still depends on the deployed Web App version and the browser's Google session/access policy. This batch does not change Apps Script deployment or permissions.
+- Test GitHub Pages Actions deployment, then test the same URL in a normal browser tab and installed PWA on each affected device. If the bridge still fails only on one browser, inspect whether the Apps Script `/exec?bridge=1` endpoint redirects to a Google sign-in or access-denied page in that browser.
