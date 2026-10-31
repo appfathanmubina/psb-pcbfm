@@ -569,32 +569,10 @@ function getSessionUser_(token, touch) {
   token = String(token || '');
   if (!token) return fail_('Session tidak ditemukan. Silakan login kembali.');
 
+  // Baca sumber sesi secara langsung agar pencabutan sesi berlaku segera.
   const cache = CacheService.getScriptCache();
   const sessionCacheKey = 'PSB_SESSION_' + sha256Hex_(token).substring(0, 40);
-  const cached = cache.get(sessionCacheKey);
-  if (cached) {
-    try {
-      const c = JSON.parse(cached);
-      const nowMs = Date.now();
-      if (c.status === 'ACTIVE' && c.expiresAtMs > nowMs) {
-        const idleMinutes = Number(c.idleMinutes) || PSB_AUTH.SESSION_IDLE_MINUTES;
-        if (!c.lastActivityMs || nowMs - c.lastActivityMs <= idleMinutes * 60000) {
-          // Avoid a Spreadsheet write on every validation. Touch at most once per minute.
-          if (touch && (!c.lastTouchedMs || nowMs - c.lastTouchedMs >= 60000)) {
-            try {
-              const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('SESSIONS');
-              if (sheet && c.rowNumber) sheet.getRange(c.rowNumber, 6).setValue(new Date());
-            } catch (e) {}
-            c.lastActivityMs = nowMs;
-            c.lastTouchedMs = nowMs;
-            cache.put(sessionCacheKey, JSON.stringify(c), Math.max(60, Math.ceil((c.expiresAtMs - nowMs) / 1000)));
-          }
-          return { success: true, user: c.user, sessionRow: { rowNumber: c.rowNumber, row: c.row }, expiresAt: new Date(c.expiresAtMs).toISOString() };
-        }
-      }
-      cache.remove(sessionCacheKey);
-    } catch (e) { cache.remove(sessionCacheKey); }
-  }
+  cache.remove(sessionCacheKey);
 
   const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('SESSIONS');
   if (!sheet || sheet.getLastRow() < 2) return fail_('Session tidak ditemukan. Silakan login kembali.');
@@ -609,32 +587,29 @@ function getSessionUser_(token, touch) {
     }
   }
   if (!found) return fail_('Session tidak valid. Silakan login kembali.');
-
   const row = found.row;
-  const status = String(row[6] || '').toUpperCase();
-  if (status !== 'ACTIVE') return fail_('Session sudah berakhir. Silakan login kembali.');
+  if (String(row[6] || '').toUpperCase() !== 'ACTIVE') return fail_('Session sudah berakhir. Silakan login kembali.');
   if (row[4] && new Date(row[4]) <= now) {
     invalidateSession_(found, 'EXPIRED');
     return fail_('Session sudah berakhir. Silakan login kembali.');
   }
-
   const idleMinutes = Number(getConfig_('SESSION_IDLE_MINUTES')) || PSB_AUTH.SESSION_IDLE_MINUTES;
   const lastActivity = row[5] ? new Date(row[5]) : now;
   if ((now.getTime() - lastActivity.getTime()) > idleMinutes * 60000) {
     invalidateSession_(found, 'IDLE_TIMEOUT');
     return fail_('Session berakhir karena tidak aktif. Silakan login kembali.');
   }
-
-  const user = findUserById_(String(row[1]));
-  if (!user || String(user.status).toUpperCase() !== 'ACTIVE') return fail_('Akun tidak aktif.');
-
-  if (touch) sheet.getRange(found.rowNumber, 6).setValue(now);
-  const c = {
-    status: 'ACTIVE', rowNumber: found.rowNumber, row: row, user: user,
-    expiresAtMs: new Date(row[4]).getTime(), lastActivityMs: now.getTime(),
-    lastTouchedMs: now.getTime(), idleMinutes: idleMinutes
-  };
-  try { cache.put(sessionCacheKey, JSON.stringify(c), Math.max(60, Math.ceil((c.expiresAtMs - now.getTime()) / 1000))); } catch (e) {}
+  // Bypass cache akun supaya perubahan status ACTIVE/non-ACTIVE langsung berlaku.
+  const user = findUserById_(String(row[1]), true);
+  if (!user || String(user.status).toUpperCase() !== 'ACTIVE') {
+    invalidateSession_(found, 'ACCOUNT_INACTIVE');
+    return fail_('Akun tidak aktif.');
+  }
+  if (touch) {
+    const touchedAt = new Date();
+    sheet.getRange(found.rowNumber, 6).setValue(touchedAt);
+    row[5] = touchedAt;
+  }
   return { success: true, user: user, sessionRow: found, expiresAt: new Date(row[4]).toISOString() };
 }
 
@@ -745,14 +720,14 @@ function findUser_(key) {
   return null;
 }
 
-function findUserById_(id) {
+function findUserById_(id, bypassCache) {
   const value = String(id || '');
   if (!value) return null;
   const cache = CacheService.getScriptCache();
   const cacheKey = 'PSB_USER_ID_' + sha256Hex_(value).substring(0, 32);
-  const cached = cache.get(cacheKey);
-  if (cached) {
-    try { return JSON.parse(cached); } catch (e) {}
+  if (!bypassCache) {
+    const cached = cache.get(cacheKey);
+    if (cached) { try { return JSON.parse(cached); } catch (e) {} }
   }
   const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('USERS');
   if (!sheet || sheet.getLastRow() < 2) return null;
@@ -760,7 +735,7 @@ function findUserById_(id) {
   for (let i = 0; i < rows.length; i++) {
     if (String(rows[i][0]) === value) {
       const user = userFromRow_(rows[i], i + 2);
-      try { cache.put(cacheKey, JSON.stringify(user), 300); } catch (e) {}
+      if (!bypassCache) { try { cache.put(cacheKey, JSON.stringify(user), 300); } catch (e) {} }
       return user;
     }
   }
@@ -2899,24 +2874,32 @@ function verifyDocument(sessionToken, payload) {
   const note=String(payload.note||'').trim();
   if(!documentId) return fail_('Dokumen belum dipilih.');
   if(['VERIFIED','REVISION'].indexOf(status)<0) return fail_('Status verifikasi dokumen tidak valid.');
-  const sheet=SpreadsheetApp.getActiveSpreadsheet().getSheetByName(PSB_SHEETS.DOCUMENTS);
-  if(!sheet || sheet.getLastRow()<2) return fail_('Dokumen tidak ditemukan.');
-  const headers=sheet.getRange(1,1,1,sheet.getLastColumn()).getValues()[0].map(String);
-  const found=findRowById_(sheet,'documentId',documentId);
-  if(!found) return fail_('Dokumen tidak ditemukan.');
-  const reg=findRegistration_(String(found.object.registrationId||''));
-  if(!reg) return fail_('Pendaftaran dokumen tidak ditemukan.');
-  if(PSB_VERIFICATION_REGISTRATION_STATUSES.indexOf(String(reg.registration.status))<0) return fail_('Pendaftaran tidak sedang dalam proses verifikasi.');
-  const statusIdx=headers.indexOf('status'), verifiedIdx=headers.indexOf('verifiedAt'), byIdx=headers.indexOf('verifiedBy'), noteIdx=headers.indexOf('revisionNote');
-  const now=new Date();
-  if(statusIdx>=0) sheet.getRange(found.rowNumber,statusIdx+1).setValue(status);
-  if(verifiedIdx>=0) sheet.getRange(found.rowNumber,verifiedIdx+1).setValue(status==='VERIFIED'?now:'');
-  if(byIdx>=0) sheet.getRange(found.rowNumber,byIdx+1).setValue(status==='VERIFIED'?actor.userId:'');
-  if(noteIdx>=0) sheet.getRange(found.rowNumber,noteIdx+1).setValue(status==='REVISION'?note:'');
-  writeAudit_(actor.userId,status==='VERIFIED'?'VERIFY':'REVISION','DOCUMENT',documentId,JSON.stringify(found.object),JSON.stringify({status:status,note:note}),status==='VERIFIED'?'Dokumen diverifikasi':'Dokumen perlu diperbaiki');
-  const docType=findMasterItemById_('MASTER_DOKUMEN','documentTypeId',String(found.object.documentTypeId||''));
-  if(status==='REVISION') notifyRegistrationOwner_(String(found.object.registrationId),'Dokumen Perlu Diperbaiki','Dokumen '+String(docType?.name||'yang diunggah')+' perlu diperbaiki.'+(note?' Catatan: '+note:''),'WARNING');
-  if(String(reg.registration.status)==='REREGISTRATION' && status==='VERIFIED') syncReregistrationAfterPayment_(String(found.object.registrationId),actor.userId);
+  const lock=LockService.getScriptLock();
+  lock.waitLock(10000);
+  let registrationId='', documentTypeId='';
+  try {
+    const sheet=SpreadsheetApp.getActiveSpreadsheet().getSheetByName(PSB_SHEETS.DOCUMENTS);
+    if(!sheet || sheet.getLastRow()<2) return fail_('Dokumen tidak ditemukan.');
+    const headers=sheet.getRange(1,1,1,sheet.getLastColumn()).getValues()[0].map(String);
+    const found=findRowById_(sheet,'documentId',documentId);
+    if(!found) return fail_('Dokumen tidak ditemukan.');
+    const reg=findRegistration_(String(found.object.registrationId||''));
+    if(!reg) return fail_('Pendaftaran dokumen tidak ditemukan.');
+    if(PSB_VERIFICATION_REGISTRATION_STATUSES.indexOf(String(reg.registration.status))<0) return fail_('Pendaftaran tidak sedang dalam proses verifikasi.');
+    registrationId=String(found.object.registrationId||'');
+    documentTypeId=String(found.object.documentTypeId||'');
+    const statusIdx=headers.indexOf('status'), verifiedIdx=headers.indexOf('verifiedAt'), byIdx=headers.indexOf('verifiedBy'), noteIdx=headers.indexOf('revisionNote');
+    const now=new Date();
+    if(statusIdx>=0) sheet.getRange(found.rowNumber,statusIdx+1).setValue(status);
+    if(verifiedIdx>=0) sheet.getRange(found.rowNumber,verifiedIdx+1).setValue(status==='VERIFIED'?now:'');
+    if(byIdx>=0) sheet.getRange(found.rowNumber,byIdx+1).setValue(status==='VERIFIED'?actor.userId:'');
+    if(noteIdx>=0) sheet.getRange(found.rowNumber,noteIdx+1).setValue(status==='REVISION'?note:'');
+    writeAudit_(actor.userId,status==='VERIFIED'?'VERIFY':'REVISION','DOCUMENT',documentId,JSON.stringify(found.object),JSON.stringify({status:status,note:note}),status==='VERIFIED'?'Dokumen diverifikasi':'Dokumen perlu diperbaiki');
+  } finally { lock.releaseLock(); }
+  const docType=findMasterItemById_('MASTER_DOKUMEN','documentTypeId',documentTypeId);
+  if(status==='REVISION') notifyRegistrationOwner_(registrationId,'Dokumen Perlu Diperbaiki','Dokumen '+String(docType?.name||'yang diunggah')+' perlu diperbaiki.'+(note?' Catatan: '+note:''),'WARNING');
+  const latestRegistration=findRegistration_(registrationId);
+  if(latestRegistration && String(latestRegistration.registration.status)==='REREGISTRATION' && status==='VERIFIED') syncReregistrationAfterPayment_(registrationId,actor.userId);
   return {success:true,message:status==='VERIFIED'?'Dokumen ditandai terverifikasi.':'Dokumen ditandai perlu diperbaiki.'};
 }
 
@@ -2929,19 +2912,24 @@ function finalizeVerification(sessionToken, payload) {
   const note=String(payload.note||'').trim();
   if(!registrationId) return fail_('Pendaftaran belum dipilih.');
   if(['VERIFIED','REVISION'].indexOf(decision)<0) return fail_('Keputusan verifikasi tidak valid.');
-  const found=findRegistration_(registrationId);
-  if(!found) return fail_('Pendaftaran tidak ditemukan.');
-  if(['SUBMITTED','UNDER_REVIEW','REVISION'].indexOf(String(found.registration.status))<0) return fail_('Pendaftaran tidak berada pada status verifikasi.');
-  if(decision==='VERIFIED') {
-    const docs=getCurrentDocuments_(registrationId);
-    const required=getActiveMasterItems_('MASTER_DOKUMEN').filter(x=>x.required);
-    for(const t of required){
-      const d=docs.find(x=>String(x.documentTypeId)===String(t.documentTypeId));
-      if(!d) return fail_('Dokumen wajib belum lengkap: '+String(t.name||t.documentTypeId));
-      if(String(d.status||'').toUpperCase()!=='VERIFIED') return fail_('Dokumen wajib belum diverifikasi: '+String(t.name||t.documentTypeId));
+  const lock=LockService.getScriptLock();
+  lock.waitLock(10000);
+  let result;
+  try {
+    const found=findRegistration_(registrationId);
+    if(!found) return fail_('Pendaftaran tidak ditemukan.');
+    if(['SUBMITTED','UNDER_REVIEW','REVISION'].indexOf(String(found.registration.status))<0) return fail_('Pendaftaran tidak berada pada status verifikasi.');
+    if(decision==='VERIFIED') {
+      const docs=getCurrentDocuments_(registrationId);
+      const required=getActiveMasterItems_('MASTER_DOKUMEN').filter(x=>x.required);
+      for(const t of required){
+        const d=docs.find(x=>String(x.documentTypeId)===String(t.documentTypeId));
+        if(!d) return fail_('Dokumen wajib belum lengkap: '+String(t.name||t.documentTypeId));
+        if(String(d.status||'').toUpperCase()!=='VERIFIED') return fail_('Dokumen wajib belum diverifikasi: '+String(t.name||t.documentTypeId));
+      }
     }
-  }
-  const result=setRegistrationStatus_(found.registration,decision,actor.userId,note|| (decision==='VERIFIED'?'Pendaftaran terverifikasi':'Pendaftaran dikembalikan untuk perbaikan'));
+    result=setRegistrationStatus_(found.registration,decision,actor.userId,note||(decision==='VERIFIED'?'Pendaftaran terverifikasi':'Pendaftaran dikembalikan untuk perbaikan'));
+  } finally { lock.releaseLock(); }
   if(result?.success){
     notifyRegistrationOwner_(registrationId,decision==='VERIFIED'?'Pendaftaran Terverifikasi':'Pendaftaran Perlu Perbaikan',decision==='VERIFIED'?'Pendaftaran dan dokumen wajib telah terverifikasi. Silakan lanjut ke tahap pembayaran formulir.':'Pendaftaran dikembalikan untuk perbaikan.'+(note?' Catatan: '+note:''),decision==='VERIFIED'?'SUCCESS':'WARNING');
   }
@@ -3309,7 +3297,7 @@ function saveRegistration(sessionToken, payload) {
 function submitRegistration(sessionToken, registrationId) {
   const actor = requireRole_(sessionToken, ['WALI','SUPERADMIN','ADMIN_PSB']);
   assertOperationalMutation_(actor);
-  const found = findRegistration_(String(registrationId || ''));
+  let found = findRegistration_(String(registrationId || ''));
   if (!found) return fail_('Pendaftaran tidak ditemukan.');
   if (String(found.registration.userId) !== String(actor.userId) && !hasRoleDirect_(actor, ['SUPERADMIN','ADMIN_PSB'])) return fail_('Anda tidak memiliki akses untuk mengirim pendaftaran ini.');
   if (PSB_REGISTRATION_EDITABLE_STATUSES.indexOf(String(found.registration.status)) < 0) return fail_('Pendaftaran tidak berada pada status yang dapat dikirim.');
