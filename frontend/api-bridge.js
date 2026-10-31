@@ -5,6 +5,11 @@
   const BRIDGE_URL="https://script.google.com/macros/s/AKfycbxs1zVZdEFwbhHFVO5nGHHhEqHQDdjVOVjfnWc1Kc6mhD5t_n8VgrdUTKhAvg8JGiau/exec";
   const BRIDGE_ORIGIN=new URL(BRIDGE_URL).origin;
   const TRUSTED_BRIDGE_ORIGINS=new Set([BRIDGE_ORIGIN,'https://script.googleusercontent.com']);
+  function isTrustedBridgeOrigin(origin){
+    if(TRUSTED_BRIDGE_ORIGINS.has(origin))return true;
+    try{const u=new URL(origin);return u.protocol==='https:' && (u.hostname==='script.googleusercontent.com' || u.hostname.endsWith('.script.googleusercontent.com'));}
+    catch(e){return false;}
+  }
   let activeBridgeOrigin=BRIDGE_ORIGIN;
   const PWA_SOURCE='psb-fm-pwa';
   const BRIDGE_SOURCE='psb-fm-api-bridge';
@@ -29,7 +34,7 @@
     iframe.contentWindow.postMessage(Object.assign({source:PWA_SOURCE},data),activeBridgeOrigin || '*');
   }
   function handleMessage(event){
-    if(!TRUSTED_BRIDGE_ORIGINS.has(event.origin) || event.source!==iframe?.contentWindow)return;
+    if(!isTrustedBridgeOrigin(event.origin) || event.source!==iframe?.contentWindow)return;
     activeBridgeOrigin=event.origin;
     const data=event.data||{};
     if(data.source!==BRIDGE_SOURCE)return;
