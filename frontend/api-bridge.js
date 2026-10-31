@@ -24,7 +24,7 @@
     iframe.style.cssText='position:fixed;left:-10000px;top:-10000px;width:1px;height:1px;border:0;opacity:0;pointer-events:none;';
     iframe.addEventListener('load',()=>{activeBridgeOrigin=BRIDGE_ORIGIN;pingBridge();});
     iframe.addEventListener('error',()=>console.warn('PSB API Bridge iframe gagal dimuat.'));
-    iframe.src=BRIDGE_URL+'?bridge=1&v=32.4.17';
+    iframe.src=BRIDGE_URL+'?bridge=1&v=32.4.18';
     document.body.appendChild(iframe);
     return iframe;
   }
