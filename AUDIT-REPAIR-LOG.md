@@ -81,5 +81,5 @@ PWA release/cache version: `32.4.17`
 | START-005 | The PWA splash referenced a complex SVG while the existing local PNG brand asset was already included in the shell cache. | Use the local PNG for initial splash and async splash hydration; bump PWA assets and service-worker cache to `32.4.17`. | Code fixed; browser/device logo test pending |
 
 ### Deployment and verification notes
-- GitHub Pages source changes do not update the Apps Script deployment. For the bridge fix to work, confirm that the deployed Apps Script project contains the existing `apps-script/Bridge.html` handshake handler (including `type: 'ping'`) and the current `Code.gs` bridge endpoint.
+- GitHub Pages source changes do not update the Apps Script deployment. The matching Apps Script source is now versioned as bridge `32.3.8` in `apps-script/Bridge.html` and `apps-script/Code.gs`; sync both files to the Apps Script editor and deploy a new Web App version so the deployed iframe can answer the retryable `ping` handshake.
 - No Apps Script deployment was performed by this repair. Live login, iframe handshake, and splash rendering must still be verified in the deployed PWA.
