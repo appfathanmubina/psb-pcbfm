@@ -18,7 +18,7 @@
  * Existing backend functions remain authoritative for authentication,
  * session validation, role authorization, and business rules.
  */
-const PSB_PWA_BRIDGE_VERSION = '32.3.5';
+const PSB_PWA_BRIDGE_VERSION = '32.3.7';
 
 const PSB_PWA_BRIDGE_ALLOWED_FUNCTIONS = Object.freeze([
   'getAppInfo','getPublicConfig','getPublicGallery',
