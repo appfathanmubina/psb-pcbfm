@@ -45,7 +45,7 @@ jobs:
             echo "Apps Script or deployment ID has an unexpected format." >&2
             exit 1
           fi
-          printf '{"scriptId":"%s","rootDir":"apps-script"}\\n' "$SCRIPT_ID" > apps-script/.clasp.json
+          printf '{"scriptId":"%s","rootDir":"apps-script"}\n' "$SCRIPT_ID" > apps-script/.clasp.json
       - name: Validate required source and manifests
         run: |
           test -f apps-script/Code.gs
