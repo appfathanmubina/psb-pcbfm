@@ -19,7 +19,7 @@
 <body>
 <div id="app" class="app"></div>
 <div id="bootProgress" class="boot-progress hidden"><span class="mini-spin"></span><span class="boot-copy" id="bootProgressText">Menyiapkan aplikasi...</span></div>
-<div id="loading" class="loading hidden"><div class="loading-box splash-box"><div class="splash-logo-wrap"><div class="splash-logo" id="splashLogo"><img class="app-logo-img splash-app-logo" src="./assets/logo-fathanmubina.svg?v=32.4.16" alt="PSB Fathan Mubina" width="96" height="96" loading="eager" fetchpriority="high" decoding="async"><span class="app-logo-fallback" aria-hidden="true"></span></div></div><b id="loadingText">Memuat aplikasi...</b><div class="muted splash-subtitle">Menyiapkan PSB Fathan Mubina</div><div class="splash-progress"><span></span></div></div></div>
+<div id="loading" class="loading" role="status" aria-live="polite"><div class="loading-box splash-box"><div class="splash-logo-wrap"><div class="splash-logo" id="splashLogo"><img class="app-logo-img splash-app-logo" src="./assets/logo-fathanmubina.svg?v=32.4.16" alt="PSB Fathan Mubina" width="96" height="96" loading="eager" fetchpriority="high" decoding="async" onerror="this.hidden=true;this.nextElementSibling.style.display='grid'"><span class="app-logo-fallback" aria-hidden="true"></span></div></div><b id="loadingText">Memuat aplikasi...</b><div class="muted splash-subtitle">Menyiapkan PSB Fathan Mubina</div><div class="splash-progress"><span></span></div></div></div>
 <section id="installOverlay" class="pwa-install-overlay" hidden aria-hidden="true">
   <div class="pwa-install-card" role="dialog" aria-modal="true" aria-labelledby="installTitle">
     <img src="./assets/logo-fathanmubina.svg?v=32.4.16" alt="" width="76" height="76">
