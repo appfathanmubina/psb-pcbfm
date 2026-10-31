@@ -1,50 +1,29 @@
-name: Deploy Existing Apps Script Deployment
+name: Apps Script Production Deployment (Manual)
 
 on:
   workflow_dispatch:
     inputs:
-      confirm_deploy:
-        description: Type DEPLOY to authorize production deployment update
+      confirm_manual:
+        description: Type MANUAL to display the production deployment checklist
         required: true
         type: string
 
 permissions:
   contents: read
 
-concurrency:
-  group: apps-script-production
-  cancel-in-progress: false
-
 jobs:
-  deploy:
-    if: ${{ github.ref == 'refs/heads/main' && inputs.confirm_deploy == 'DEPLOY' }}
+  checklist:
+    if: ${{ github.ref == 'refs/heads/main' && inputs.confirm_manual == 'MANUAL' }}
     runs-on: ubuntu-24.04
-    environment: production
     steps:
       - uses: actions/checkout@v5
-      - uses: actions/setup-node@v5
-        with:
-          node-version: 24
-      - name: Validate deployment configuration
-        env:
-          GOOGLE_OAUTH_CLIENT_ID: ${{ secrets.GOOGLE_OAUTH_CLIENT_ID }}
-          GOOGLE_OAUTH_CLIENT_SECRET: ${{ secrets.GOOGLE_OAUTH_CLIENT_SECRET }}
-          GOOGLE_OAUTH_REFRESH_TOKEN: ${{ secrets.GOOGLE_OAUTH_REFRESH_TOKEN }}
-          APPS_SCRIPT_ID: ${{ secrets.APPS_SCRIPT_ID }}
-          PRODUCTION_DEPLOYMENT_ID: ${{ secrets.PRODUCTION_DEPLOYMENT_ID }}
+      - name: Production deployment checklist
         run: |
-          test -n "$GOOGLE_OAUTH_CLIENT_ID"
-          test -n "$GOOGLE_OAUTH_CLIENT_SECRET"
-          test -n "$GOOGLE_OAUTH_REFRESH_TOKEN"
-          test -n "$APPS_SCRIPT_ID"
-          test -n "$PRODUCTION_DEPLOYMENT_ID"
-          node --check .github/scripts/apps-script-api.mjs
-      - name: Update configured existing deployment using Apps Script API
-        env:
-          GOOGLE_OAUTH_CLIENT_ID: ${{ secrets.GOOGLE_OAUTH_CLIENT_ID }}
-          GOOGLE_OAUTH_CLIENT_SECRET: ${{ secrets.GOOGLE_OAUTH_CLIENT_SECRET }}
-          GOOGLE_OAUTH_REFRESH_TOKEN: ${{ secrets.GOOGLE_OAUTH_REFRESH_TOKEN }}
-          APPS_SCRIPT_ID: ${{ secrets.APPS_SCRIPT_ID }}
-          PRODUCTION_DEPLOYMENT_ID: ${{ secrets.PRODUCTION_DEPLOYMENT_ID }}
-          GITHUB_SHA: ${{ github.sha }}
-        run: node .github/scripts/apps-script-api.mjs deploy
+          echo "No Apps Script deployment was created or updated."
+          echo "Automatic DEPLOY is disabled because no OAuth credentials are configured."
+          echo "After manually synchronizing and testing the source in Apps Script:"
+          echo "1. Open the existing production deployment in Apps Script."
+          echo "2. Select Edit deployment."
+          echo "3. Select New version and enter a description."
+          echo "4. Keep the existing deployment ID and Web App URL."
+          echo "5. Confirm Execute as and Who has access settings, then deploy."
