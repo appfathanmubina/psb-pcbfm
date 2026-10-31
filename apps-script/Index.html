@@ -664,22 +664,27 @@ async function initializeAfterLogin(){
   }finally{state.preloadRunning=false;}
 }
 async function boot(){
-  // Tampilkan logo splash sebelum pemeriksaan dimulai agar tahap "Memeriksa aplikasi" 
-  // menggunakan logo yang sama dengan tahap pemeriksaan akun.
+  // Logo merek sudah tertanam di HTML; tampilkan sebelum request server.
   hydrateSplashLogo();
   loading(true,'Memeriksa aplikasi...');
+  // Konfigurasi publik tidak boleh menahan tampilan awal.
+  const configTask=server('getPublicConfig',true).then(pub=>{
+    const config=pub?.config||{};
+    if(Object.keys(config).length){
+      state.config=config;
+      applyAppIcon();
+      if(!state.user){
+        const yearLabel=document.querySelector('.public-brand p');
+        if(yearLabel)yearLabel.textContent='Pendaftaran Santri Baru · '+String(state.config.ACTIVE_YEAR||'2027/2028');
+      }
+    }
+  }).catch(e=>console.warn('Public config refresh:',e));
   try{
-    // Jalankan pemeriksaan konfigurasi dan sesi secara paralel agar splash tidak
-    // menunggu dua request server secara berurutan.
     if(state.token){
-      const [pub,r]=await Promise.all([
-        server('getPublicConfig',true),
-        server('validateSession',state.token)
-      ]);
-      state.config=pub?.config||{}; applyAppIcon();
-      hydrateSplashLogo();
-      if(r?.success){
-        state.user=r.user;
+      // Validasi sesi tetap wajib sebelum area privat dibuka.
+      const session=await server('validateSession',state.token);
+      if(session?.success){
+        state.user=session.user;
         renderApp();
         loading(false);
         initializeAfterLogin();
@@ -689,15 +694,16 @@ async function boot(){
         renderPublicHome('Sesi sebelumnya sudah berakhir. Silakan masuk kembali.');
       }
     }else{
-      const pub=await server('getPublicConfig',true);
-      state.config=pub?.config||{}; applyAppIcon();
-      hydrateSplashLogo();
       renderPublicHome();
     }
   }catch(e){
-    renderLogin('Aplikasi belum siap. Jalankan setupPSBDatabase() terlebih dahulu.');
+    console.error('PSB boot error:',e);
+    if(state.token)renderLogin('Koneksi untuk memeriksa sesi belum tersedia. Silakan coba kembali.');
+    else renderPublicHome('Sebagian informasi belum dapat dimuat. Periksa koneksi internet Anda.');
+  }finally{
+    loading(false);
   }
-  loading(false);
+  configTask.catch(()=>{});
 }
 function renderPublicHome(message=''){
   const year=esc(state.config.ACTIVE_YEAR||'2027/2028');
