@@ -7,7 +7,7 @@ const OAUTH_TOKEN_URL = "https://oauth2.googleapis.com/token";
 
 function required(name) {
   const value = process.env[name];
-  if (!value || !value.trim()) throw new Error(`Missing required environment variable: ${name}`);
+  if (!value || !value.trim()) throw new Error(`Missing required GitHub Secret/environment variable: ${name}`);
   return value.trim();
 }
 
@@ -17,19 +17,9 @@ function safeId(value, name) {
 }
 
 async function getAccessToken() {
-  const raw = required("CLASPRC_JSON");
-  let config;
-  try {
-    config = JSON.parse(raw);
-  } catch {
-    throw new Error("CLASPRC_JSON is not valid JSON. Store the complete clasp credential JSON as the GitHub secret value.");
-  }
-  const clientId = config.oauth2ClientSettings?.clientId;
-  const clientSecret = config.oauth2ClientSettings?.clientSecret;
-  const refreshToken = config.token?.refresh_token;
-  if (!clientId || !clientSecret || !refreshToken) {
-    throw new Error("CLASPRC_JSON must contain oauth2ClientSettings.clientId, oauth2ClientSettings.clientSecret, and token.refresh_token.");
-  }
+  const clientId = required("GOOGLE_OAUTH_CLIENT_ID");
+  const clientSecret = required("GOOGLE_OAUTH_CLIENT_SECRET");
+  const refreshToken = required("GOOGLE_OAUTH_REFRESH_TOKEN");
 
   const response = await fetch(OAUTH_TOKEN_URL, {
     method: "POST",
@@ -43,7 +33,10 @@ async function getAccessToken() {
   });
   const data = await response.json();
   if (!response.ok || !data.access_token) {
-    throw new Error(`Google OAuth token refresh failed (${response.status}): ${data.error_description || data.error || "No access token returned"}`);
+    const reason = data.error === "invalid_grant"
+      ? "Google rejected the refresh token. Re-authorize the OAuth client and update GOOGLE_OAUTH_REFRESH_TOKEN."
+      : (data.error_description || data.error || "No access token returned");
+    throw new Error(`Google OAuth token refresh failed (${response.status}): ${reason}`);
   }
   return data.access_token;
 }
