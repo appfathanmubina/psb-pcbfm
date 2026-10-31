@@ -157,3 +157,14 @@ PWA release/cache version: `32.4.18`
 - The old `CLASPRC_JSON` secret is no longer read by either Apps Script workflow; it can be deleted after the new three secrets are saved.
 - Never publish or send OAuth client secrets or refresh tokens in chat/issues/logs.
 - No source PUSH or production DEPLOY was executed by this repair.
+
+
+## Repair batch 09 — remove OAuth automation dependency
+
+| ID | Finding | Change | Status |
+|---|---|---|---|
+| CI-009 | User chose to remove OAuth credentials from automated PUSH and DEPLOY workflows. | PUSH workflow is now source-validation-only and explicitly reports that it does not upload source to Apps Script. | Updated |
+| CI-010 | DEPLOY workflow cannot update a Google Apps Script deployment without authenticated access. | DEPLOY workflow now displays a manual deployment checklist and explicitly reports that it does not deploy. | Updated |
+| CI-011 | Direct Apps Script API helper required OAuth secrets. | Removed `.github/scripts/apps-script-api.mjs` because the workflows no longer invoke it. | Removed |
+
+**Important operational limitation:** GitHub Actions cannot upload source to, or update a deployment in, a Google Apps Script project without an authenticated Google identity. These workflows no longer request OAuth secrets and do not perform remote PUSH/DEPLOY. Source files under `apps-script/` and the PWA application source were not modified by this batch. The manual path is to synchronize source through the Apps Script editor and update the existing deployment there, preserving its deployment ID and URL.
