@@ -8,33 +8,33 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="description" content="Sistem Penerimaan Santri Baru Pesantren Ciawi Bogor Fathan Mubina">
-<link rel="manifest" href="./manifest.webmanifest?v=32.4.17">
-<link rel="stylesheet" href="./styles.css?v=32.4.17">
-<link rel="apple-touch-icon" sizes="192x192" href="./assets/logo-fathan-mubina.png?v=32.4.17">
-<link rel="icon" type="image/svg+xml" sizes="32x32" href="./icons/favicon-32.svg?v=32.4.17">
-<link rel="icon" type="image/svg+xml" sizes="48x48" href="./icons/favicon-48.svg?v=32.4.17">
+<link rel="manifest" href="./manifest.webmanifest?v=32.4.18">
+<link rel="stylesheet" href="./styles.css?v=32.4.18">
+<link rel="apple-touch-icon" sizes="192x192" href="./assets/logo-fathan-mubina.png?v=32.4.18">
+<link rel="icon" type="image/svg+xml" sizes="32x32" href="./icons/favicon-32.svg?v=32.4.18">
+<link rel="icon" type="image/svg+xml" sizes="48x48" href="./icons/favicon-48.svg?v=32.4.18">
 <title>PSB Fathan Mubina</title>
 <style>.pwa-install-overlay[hidden]{display:none}.pwa-install-overlay{position:fixed;inset:0;z-index:1000;display:flex;align-items:center;justify-content:center;padding:22px;background:rgba(34,20,55,.45);backdrop-filter:blur(5px)}.pwa-install-card{width:min(420px,100%);padding:24px;border-radius:22px;background:#fff;text-align:center;box-shadow:0 18px 55px rgba(30,16,50,.25)}.pwa-install-card>img{border-radius:18px}.pwa-install-card h2{margin:12px 0 8px}.pwa-install-card p{color:#756d7d;font-size:14px;line-height:1.5}.pwa-install-actions{display:flex;gap:10px;justify-content:center;margin-top:18px}.pwa-install-actions button{min-width:120px}</style>
 </head>
 <body>
 <div id="app" class="app"></div>
 <div id="bootProgress" class="boot-progress hidden"><span class="mini-spin"></span><span class="boot-copy" id="bootProgressText">Menyiapkan aplikasi...</span></div>
-<div id="loading" class="loading" role="status" aria-live="polite"><div class="loading-box splash-box"><div class="splash-logo-wrap"><div class="splash-logo" id="splashLogo"><img class="app-logo-img splash-app-logo" src="./assets/logo-fathan-mubina.png?v=32.4.17" alt="PSB Fathan Mubina" width="96" height="96" loading="eager" fetchpriority="high" decoding="async" onerror="this.hidden=true;this.nextElementSibling.style.display='grid'"><span class="app-logo-fallback" aria-hidden="true"></span></div></div><b id="loadingText">Memuat aplikasi...</b><div class="muted splash-subtitle">Menyiapkan PSB Fathan Mubina</div><div class="splash-progress"><span></span></div></div></div>
+<div id="loading" class="loading" role="status" aria-live="polite"><div class="loading-box splash-box"><div class="splash-logo-wrap"><div class="splash-logo" id="splashLogo"><img class="app-logo-img splash-app-logo" src="./assets/logo-fathan-mubina.png?v=32.4.18" alt="PSB Fathan Mubina" width="96" height="96" loading="eager" fetchpriority="high" decoding="async" onerror="this.hidden=true;this.nextElementSibling.style.display='grid'"><span class="app-logo-fallback" aria-hidden="true"></span></div></div><b id="loadingText">Memuat aplikasi...</b><div class="muted splash-subtitle">Menyiapkan PSB Fathan Mubina</div><div class="splash-progress"><span></span></div></div></div>
 <section id="installOverlay" class="pwa-install-overlay" hidden aria-hidden="true">
   <div class="pwa-install-card" role="dialog" aria-modal="true" aria-labelledby="installTitle">
-    <img src="./assets/logo-fathan-mubina.png?v=32.4.17" alt="" width="76" height="76">
+    <img src="./assets/logo-fathan-mubina.png?v=32.4.18" alt="" width="76" height="76">
     <h2 id="installTitle">Install PSB Fathan Mubina</h2>
     <p id="installText">Pasang PSB FM di perangkat agar dapat dibuka seperti aplikasi.</p>
     <div id="installSteps" hidden></div>
     <div class="pwa-install-actions"><button type="button" id="installLater" class="btn btn-secondary">Nanti</button><button type="button" id="installBtn" class="btn btn-primary">Install</button></div>
   </div>
 </section>
-<script src="./api-bridge.js?v=32.4.17"></script>
-<script src="./app.js?v=32.4.17"></script>
+<script src="./api-bridge.js?v=32.4.18"></script>
+<script src="./app.js?v=32.4.18"></script>
 <script>
 (function(){
   'use strict';
-  if('serviceWorker' in navigator)window.addEventListener('load',function(){navigator.serviceWorker.register('./sw.js?v=32.4.17').catch(function(e){console.warn('Service worker:',e);});});
+  if('serviceWorker' in navigator)window.addEventListener('load',function(){navigator.serviceWorker.register('./sw.js?v=32.4.18',{updateViaCache:'none'}).then(function(reg){return reg.update().catch(function(e){console.warn('Service worker update:',e);});}).catch(function(e){console.warn('Service worker:',e);});});
   let deferredInstallPrompt=null;
   const overlay=document.getElementById('installOverlay'),btn=document.getElementById('installBtn'),later=document.getElementById('installLater'),info=document.getElementById('installText'),steps=document.getElementById('installSteps');
   const installMode=new URLSearchParams(location.search).has('install');
