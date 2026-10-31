@@ -176,3 +176,21 @@ A full workflow-directory review found two legacy workflows that still reference
 - `.github/workflows/reconcile-apps-script.yml`
 
 Both obsolete workflows have now been removed. This also removes their stale reference to the previously deleted `.github/scripts/check-apps-script-remote.sh`. No application runtime source was changed.
+
+
+## Repair batch 10 — restore GitHub-hosted Apps Script PUSH and DEPLOY
+
+| ID | Finding | Change | Status |
+|---|---|---|---|
+| CI-012 | Apps Script synchronization had been reduced to validation/manual checklist workflows, so GitHub could not publish repository source. | Added a repository-managed Apps Script project config and a direct Apps Script API helper. PUSH now uploads checked-in files from `apps-script/`; DEPLOY uploads the same source, creates a version, and updates only the configured existing deployment ID. | Implemented; requires OAuth and deployment secrets, then runtime verification |
+| CI-013 | Apps Script API `updateContent` replaces the complete project and can silently remove files absent from the upload payload. | The helper reads the live file-name list first and blocks PUSH/DEPLOY if the live project contains additional files not represented in the repository. | Implemented; live test pending |
+| CI-014 | Credential JSON previously caused `CLASPRC_JSON` parsing failures. | Uses three explicit GitHub Secrets: `GOOGLE_OAUTH_CLIENT_ID`, `GOOGLE_OAUTH_CLIENT_SECRET`, and `GOOGLE_OAUTH_REFRESH_TOKEN`; deployment additionally requires `PRODUCTION_DEPLOYMENT_ID`. Credentials are exchanged in memory and never written to repository files. | Implemented; secrets must be configured by repository owner |
+
+### Operational notes
+- Project ID and source folder are versioned in `.github/apps-script-config.json`.
+- Google OAuth credentials and the existing production deployment ID must be configured under repository Settings → Secrets and variables → Actions.
+- The Google OAuth refresh token must have been granted Apps Script project and deployment scopes. Enable the Apps Script API for the associated Google Cloud project.
+- PUSH updates Apps Script HEAD content but does not change the live Web App deployment.
+- DEPLOY uploads the current checked-in source, creates a new immutable version, then updates the existing deployment ID. It does not create a new deployment.
+- Before upload, the helper checks the remote project's file names and aborts if there are remote-only files, because the Apps Script updateContent API replaces the full project.
+- No Apps Script PUSH or production DEPLOY was executed by this repository change. Configure secrets and run PUSH first; inspect the result and test the app before running DEPLOY.
