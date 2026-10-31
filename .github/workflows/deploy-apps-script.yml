@@ -17,29 +17,30 @@ permissions:
 
 jobs:
   deploy:
-    if: ${{ inputs.confirm_deploy == 'DEPLOY' }}
+    if: ${{ github.ref == 'refs/heads/main' && inputs.confirm_deploy == 'DEPLOY' }}
     runs-on: ubuntu-latest
     environment: production
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
-      - name: Install clasp
-        run: npm install --global @google/clasp
+          node-version: 22
+      - name: Install pinned clasp
+        run: npm install --global @google/clasp@3.4.1
       - name: Configure clasp credentials
         env:
           CLASPRC_JSON: ${{ secrets.CLASPRC_JSON }}
         run: |
           test -n "$CLASPRC_JSON"
           printf '%s' "$CLASPRC_JSON" > "$HOME/.clasprc.json"
+          chmod 600 "$HOME/.clasprc.json"
       - name: Configure Apps Script project
         env:
           SCRIPT_ID: ${{ secrets.APPS_SCRIPT_ID }}
         run: |
           test -n "$SCRIPT_ID"
           printf '{"scriptId":"%s","rootDir":"apps-script"}\n' "$SCRIPT_ID" > apps-script/.clasp.json
-      - name: Validate source and manifest
+      - name: Validate required source and manifests
         run: |
           test -f apps-script/Code.gs
           test -f apps-script/Index.html
@@ -48,26 +49,14 @@ jobs:
           test -f apps-script/appsscript.json
           node -e "const fs=require('fs'); const {isDeepStrictEqual}=require('util'); const a=JSON.parse(fs.readFileSync('appsscript.json','utf8')); const b=JSON.parse(fs.readFileSync('apps-script/appsscript.json','utf8')); if(!isDeepStrictEqual(a,b)){ console.error('Manifest mismatch; deployment blocked.'); process.exit(1); }"
           node --check frontend/app.js
-      - name: Verify local Apps Script source matches remote
+      - name: Verify local source matches Apps Script remote
         env:
           SCRIPT_ID: ${{ secrets.APPS_SCRIPT_ID }}
-        run: |
-          mkdir -p /tmp/psb-remote
-          printf '{"scriptId":"%s","rootDir":"/tmp/psb-remote"}\n' "$SCRIPT_ID" > /tmp/psb-remote/.clasp.json
-          (cd /tmp/psb-remote && clasp pull --force)
-          find apps-script -maxdepth 1 -type f \( -name '*.gs' -o -name '*.html' -o -name 'appsscript.json' \) -printf '%f\n' | sort > /tmp/psb-local-files.txt
-          find /tmp/psb-remote -maxdepth 1 -type f \( -name '*.gs' -o -name '*.html' -o -name 'appsscript.json' \) -printf '%f\n' | sort > /tmp/psb-remote-files.txt
-          diff -u /tmp/psb-local-files.txt /tmp/psb-remote-files.txt || { echo "Apps Script file set differs from remote; deployment blocked."; exit 1; }
-          while IFS= read -r file; do
-            if [ "$file" = "appsscript.json" ]; then
-              node -e "const fs=require('fs'); const {isDeepStrictEqual}=require('util'); const a=JSON.parse(fs.readFileSync(process.argv[1],'utf8')); const b=JSON.parse(fs.readFileSync(process.argv[2],'utf8')); if(!isDeepStrictEqual(a,b)){ console.error('Manifest differs from remote; deployment blocked.'); process.exit(1); }" "apps-script/$file" "/tmp/psb-remote/$file" || exit 1
-            else
-              cmp -s "apps-script/$file" "/tmp/psb-remote/$file" || { echo "Source differs from remote: $file; deployment blocked."; diff -u "apps-script/$file" "/tmp/psb-remote/$file" || true; exit 1; }
-            fi
-          done < /tmp/psb-local-files.txt
-          echo "Local Apps Script source matches remote."
+        run: bash .github/scripts/check-apps-script-remote.sh
       - name: Update existing deployment only
         working-directory: apps-script
         env:
           DEPLOYMENT_ID: ${{ inputs.deployment_id }}
-        run: clasp deploy --deploymentId "$DEPLOYMENT_ID" --description "GitHub Actions ${GITHUB_SHA}"
+        run: |
+          test -n "$DEPLOYMENT_ID"
+          clasp deploy --deploymentId "$DEPLOYMENT_ID" --description "GitHub Actions ${GITHUB_SHA}"
