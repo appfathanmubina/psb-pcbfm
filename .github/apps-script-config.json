@@ -1,0 +1,9 @@
+{
+  "scriptId": "15rpvI4pH6bUJmqMoMzE2pnh0bh8DOl1QAIwpTJletoBFJrdBmu1qmTE1",
+  "sourceDir": "apps-script",
+  "excludedFiles": [
+    "Index.legacy.html",
+    ".claspignore",
+    ".clasp.example.json"
+  ]
+}
