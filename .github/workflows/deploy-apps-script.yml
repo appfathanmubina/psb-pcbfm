@@ -1,29 +1,39 @@
-name: Apps Script Production Deployment (Manual)
+name: Deploy PSB Apps Script Production
 
 on:
   workflow_dispatch:
     inputs:
-      confirm_manual:
-        description: Type MANUAL to display the production deployment checklist
+      confirm_deploy:
+        description: Type DEPLOY to push source and update the existing production deployment
         required: true
         type: string
 
 permissions:
   contents: read
 
+concurrency:
+  group: psb-apps-script-production
+  cancel-in-progress: false
+
 jobs:
-  checklist:
-    if: ${{ github.ref == 'refs/heads/main' && inputs.confirm_manual == 'MANUAL' }}
+  deploy:
+    if: ${{ github.ref == 'refs/heads/main' && inputs.confirm_deploy == 'DEPLOY' }}
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v5
-      - name: Production deployment checklist
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+      - name: Validate source and manifest
         run: |
-          echo "No Apps Script deployment was created or updated."
-          echo "Automatic DEPLOY is disabled because no OAuth credentials are configured."
-          echo "After manually synchronizing and testing the source in Apps Script:"
-          echo "1. Open the existing production deployment in Apps Script."
-          echo "2. Select Edit deployment."
-          echo "3. Select New version and enter a description."
-          echo "4. Keep the existing deployment ID and Web App URL."
-          echo "5. Confirm Execute as and Who has access settings, then deploy."
+          node --check frontend/app.js
+          node -e "const fs=require('fs'); const a=JSON.parse(fs.readFileSync('appsscript.json','utf8')); const b=JSON.parse(fs.readFileSync('apps-script/appsscript.json','utf8')); if(JSON.stringify(a)!==JSON.stringify(b)) throw new Error('Root and Apps Script manifests differ');"
+          for f in Code.gs Index.html SetupDatabase.gs Bridge.html BridgeServer.gs appsscript.json; do test -f "apps-script/$f"; done
+      - name: Push, version, and update existing deployment
+        env:
+          GOOGLE_OAUTH_CLIENT_ID: ${{ secrets.GOOGLE_OAUTH_CLIENT_ID }}
+          GOOGLE_OAUTH_CLIENT_SECRET: ${{ secrets.GOOGLE_OAUTH_CLIENT_SECRET }}
+          GOOGLE_OAUTH_REFRESH_TOKEN: ${{ secrets.GOOGLE_OAUTH_REFRESH_TOKEN }}
+          PRODUCTION_DEPLOYMENT_ID: ${{ secrets.PRODUCTION_DEPLOYMENT_ID }}
+          GITHUB_SHA: ${{ github.sha }}
+        run: node .github/scripts/apps-script-api.mjs deploy
