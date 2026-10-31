@@ -168,3 +168,11 @@ PWA release/cache version: `32.4.18`
 | CI-011 | Direct Apps Script API helper required OAuth secrets. | Removed `.github/scripts/apps-script-api.mjs` because the workflows no longer invoke it. | Removed |
 
 **Important operational limitation:** GitHub Actions cannot upload source to, or update a deployment in, a Google Apps Script project without an authenticated Google identity. These workflows no longer request OAuth secrets and do not perform remote PUSH/DEPLOY. Source files under `apps-script/` and the PWA application source were not modified by this batch. The manual path is to synchronize source through the Apps Script editor and update the existing deployment there, preserving its deployment ID and URL.
+
+
+### Follow-up cleanup after repository verification
+A full workflow-directory review found two legacy workflows that still referenced `CLASPRC_JSON`, installed clasp, and used `clasp pull` with a temporary directory:
+- `.github/workflows/preflight-apps-script.yml`
+- `.github/workflows/reconcile-apps-script.yml`
+
+Both obsolete workflows have now been removed. This also removes their stale reference to the previously deleted `.github/scripts/check-apps-script-remote.sh`. No application runtime source was changed.
