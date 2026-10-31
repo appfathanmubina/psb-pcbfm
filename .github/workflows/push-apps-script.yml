@@ -18,25 +18,31 @@ concurrency:
 jobs:
   push:
     if: ${{ github.ref == 'refs/heads/main' && inputs.confirm_push == 'PUSH' }}
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     environment: production
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
         with:
-          node-version: 22
+          node-version: 24
       - name: Validate repository source and credentials
         env:
-          CLASPRC_JSON: ${{ secrets.CLASPRC_JSON }}
+          GOOGLE_OAUTH_CLIENT_ID: ${{ secrets.GOOGLE_OAUTH_CLIENT_ID }}
+          GOOGLE_OAUTH_CLIENT_SECRET: ${{ secrets.GOOGLE_OAUTH_CLIENT_SECRET }}
+          GOOGLE_OAUTH_REFRESH_TOKEN: ${{ secrets.GOOGLE_OAUTH_REFRESH_TOKEN }}
           APPS_SCRIPT_ID: ${{ secrets.APPS_SCRIPT_ID }}
         run: |
-          test -n "$CLASPRC_JSON"
+          test -n "$GOOGLE_OAUTH_CLIENT_ID"
+          test -n "$GOOGLE_OAUTH_CLIENT_SECRET"
+          test -n "$GOOGLE_OAUTH_REFRESH_TOKEN"
           test -n "$APPS_SCRIPT_ID"
           node --check .github/scripts/apps-script-api.mjs
           node --check frontend/app.js
           node -e "const fs=require('fs'); const {isDeepStrictEqual}=require('util'); const a=JSON.parse(fs.readFileSync('appsscript.json','utf8')); const b=JSON.parse(fs.readFileSync('apps-script/appsscript.json','utf8')); if(!isDeepStrictEqual(a,b)){ console.error('Manifest mismatch; push blocked.'); process.exit(1); }"
       - name: Push repository source using Apps Script API
         env:
-          CLASPRC_JSON: ${{ secrets.CLASPRC_JSON }}
+          GOOGLE_OAUTH_CLIENT_ID: ${{ secrets.GOOGLE_OAUTH_CLIENT_ID }}
+          GOOGLE_OAUTH_CLIENT_SECRET: ${{ secrets.GOOGLE_OAUTH_CLIENT_SECRET }}
+          GOOGLE_OAUTH_REFRESH_TOKEN: ${{ secrets.GOOGLE_OAUTH_REFRESH_TOKEN }}
           APPS_SCRIPT_ID: ${{ secrets.APPS_SCRIPT_ID }}
         run: node .github/scripts/apps-script-api.mjs push
