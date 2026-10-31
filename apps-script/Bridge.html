@@ -30,18 +30,6 @@ google.script.run.withSuccessHandler(cfg=>{
   allowedOrigins=Array.from(new Set(DEFAULT_ALLOWED_ORIGINS.concat(configured)));
   announce();
 }).withFailureHandler(()=>{announce()}).getPwaBridgeConfig();
-window.addEventListener('message',event=>{
-  if(!allowed(event.origin))return;
-  const d=event.data||{};
-  if(d.source!==PWA_SOURCE)return;
-  if(d.type==='ping'){send(event.origin,{type:'ready',bridgeVersion:VERSION});return}
-  if(d.type!=='request')return;
-  const id=String(d.id||'').trim(), fn=String(d.fn||'').trim(), args=Array.isArray(d.args)?d.args:[];
-  if(!id||!fn)return;
-  if(!ready){send(event.origin,{type:'response',id,ok:false,error:{code:'BRIDGE_NOT_READY',message:'API bridge belum siap.'}});return}
-  google.script.run.withSuccessHandler(result=>send(event.origin,{type:'response',id,ok:true,result}))
-    .withFailureHandler(err=>send(event.origin,{type:'response',id,ok:false,error:{code:'RPC_ERROR',message:String(err&&err.message||'Terjadi kesalahan komunikasi dengan backend.')}}))
-    .pwaBridgeCall(fn,args);
-});
+
 })();
 </script></body></html>
