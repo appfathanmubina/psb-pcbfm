@@ -26,6 +26,11 @@ jobs:
           node -e "JSON.parse(require('fs').readFileSync('frontend/manifest.webmanifest', 'utf8'))"
           node -e "JSON.parse(require('fs').readFileSync('apps-script/appsscript.json', 'utf8'))"
           node -e "JSON.parse(require('fs').readFileSync('appsscript.json', 'utf8'))"
+      - name: Validate shell scripts
+        run: |
+          while IFS= read -r file; do
+            bash -n "$file"
+          done < <(find .github/scripts -maxdepth 1 -type f -name '*.sh' -print | sort)
       - name: Ensure Apps Script manifests match
         run: |
           node -e "const fs=require('fs'); const {isDeepStrictEqual}=require('util'); const a=JSON.parse(fs.readFileSync('appsscript.json','utf8')); const b=JSON.parse(fs.readFileSync('apps-script/appsscript.json','utf8')); if(!isDeepStrictEqual(a,b)){ console.error('Manifest mismatch: root and Clasp manifests differ.'); process.exit(1); }"
