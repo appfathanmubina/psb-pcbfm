@@ -3,7 +3,6 @@
   "sourceDir": "apps-script",
   "excludedFiles": [
     "Index.legacy.html",
-    ".claspignore",
-    ".clasp.example.json"
+    ".claspignore"
   ]
 }
