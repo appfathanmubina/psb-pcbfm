@@ -25,36 +25,18 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      - name: Install pinned clasp
-        run: npm install --global @google/clasp@3.4.1
-      - name: Configure clasp credentials
+      - name: Validate repository source and credentials
         env:
           CLASPRC_JSON: ${{ secrets.CLASPRC_JSON }}
+          APPS_SCRIPT_ID: ${{ secrets.APPS_SCRIPT_ID }}
         run: |
           test -n "$CLASPRC_JSON"
-          node -e 'const s=process.env.CLASPRC_JSON; const j=JSON.parse(s); if(!j.token || !j.token.refresh_token) throw new Error("CLASPRC_JSON must contain token.refresh_token");'
-          printf '%s' "$CLASPRC_JSON" > "$HOME/.clasprc.json"
-          chmod 600 "$HOME/.clasprc.json"
-      - name: Configure Apps Script project
-        env:
-          SCRIPT_ID: ${{ secrets.APPS_SCRIPT_ID }}
-        run: |
-          test -n "$SCRIPT_ID"
-          if [[ ! "$SCRIPT_ID" =~ ^[A-Za-z0-9_-]+$ ]]; then
-            echo "APPS_SCRIPT_ID has an unexpected format." >&2
-            exit 1
-          fi
-          printf '{"scriptId":"%s","rootDir":"apps-script"}\n' "$SCRIPT_ID" > apps-script/.clasp.json
-      - name: Validate repository source
-        run: |
-          test -f apps-script/Code.gs
-          test -f apps-script/Index.html
-          test -f apps-script/SetupDatabase.gs
-          test -f apps-script/Bridge.html
-          test -f apps-script/BridgeServer.gs
-          test -f apps-script/appsscript.json
+          test -n "$APPS_SCRIPT_ID"
+          node --check .github/scripts/apps-script-api.mjs
           node --check frontend/app.js
           node -e "const fs=require('fs'); const {isDeepStrictEqual}=require('util'); const a=JSON.parse(fs.readFileSync('appsscript.json','utf8')); const b=JSON.parse(fs.readFileSync('apps-script/appsscript.json','utf8')); if(!isDeepStrictEqual(a,b)){ console.error('Manifest mismatch; push blocked.'); process.exit(1); }"
-      - name: Push repository source to Apps Script
-        working-directory: apps-script
-        run: clasp push --force
+      - name: Push repository source using Apps Script API
+        env:
+          CLASPRC_JSON: ${{ secrets.CLASPRC_JSON }}
+          APPS_SCRIPT_ID: ${{ secrets.APPS_SCRIPT_ID }}
+        run: node .github/scripts/apps-script-api.mjs push
