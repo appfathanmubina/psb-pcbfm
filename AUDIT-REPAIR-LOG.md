@@ -142,3 +142,18 @@ PWA release/cache version: `32.4.18`
 - No `clasp` CLI, `clasp pull`, `mktemp`, `.clasprc.json`, or generated `.clasp.json` is used by either workflow.
 - GitHub Actions still checks out repository source into its hosted runner workspace; this is how the runner reads version-controlled source and is not access to files on the user's PC or phone.
 - No PUSH or DEPLOY was executed as part of this code change. Run PUSH first; confirm its Apps Script API response before running DEPLOY.
+
+
+## Repair batch 08 — remove JSON credential parsing and update Actions runtime
+
+| ID | Finding | Change | Status |
+|---|---|---|---|
+| CI-007 | `CLASPRC_JSON` was supplied in a non-JSON format, causing the direct API helper to stop before OAuth. | Replaced the single JSON credential secret with three independent secrets: `GOOGLE_OAUTH_CLIENT_ID`, `GOOGLE_OAUTH_CLIENT_SECRET`, and `GOOGLE_OAUTH_REFRESH_TOKEN`. The helper reads them directly from environment variables and exchanges the refresh token in memory. | Updated; user must configure new secrets and rerun PUSH |
+| CI-008 | Workflow action versions/runtime generated Node 20 deprecation warnings. | Updated checkout/setup-node to v5, selected Node.js 24, and pinned runner to `ubuntu-24.04` in both Apps Script workflows. | Updated; Actions run pending |
+
+### Credential migration
+- Add the three secrets above in repository Settings → Secrets and variables → Actions.
+- Keep existing `APPS_SCRIPT_ID` and `PRODUCTION_DEPLOYMENT_ID` secrets.
+- The old `CLASPRC_JSON` secret is no longer read by either Apps Script workflow; it can be deleted after the new three secrets are saved.
+- Never publish or send OAuth client secrets or refresh tokens in chat/issues/logs.
+- No source PUSH or production DEPLOY was executed by this repair.
