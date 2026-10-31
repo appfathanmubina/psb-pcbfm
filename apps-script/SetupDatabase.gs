@@ -303,9 +303,6 @@ function createInitialSuperadmin() {
   };
 }
 
-function generateId_(prefix) {
-  return prefix + '-' + Utilities.getUuid().replace(/-/g, '').substring(0, 12).toUpperCase();
-}
 
 
 // =====================================================
