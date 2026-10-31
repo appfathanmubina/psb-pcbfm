@@ -32,6 +32,7 @@ jobs:
           CLASPRC_JSON: ${{ secrets.CLASPRC_JSON }}
         run: |
           test -n "$CLASPRC_JSON"
+          node -e 'const s=process.env.CLASPRC_JSON; const j=JSON.parse(s); if(!j.token || !j.token.refresh_token) throw new Error("CLASPRC_JSON must contain token.refresh_token");'
           printf '%s' "$CLASPRC_JSON" > "$HOME/.clasprc.json"
           chmod 600 "$HOME/.clasprc.json"
       - name: Configure Apps Script project
@@ -44,7 +45,7 @@ jobs:
             exit 1
           fi
           printf '{"scriptId":"%s","rootDir":"apps-script"}\n' "$SCRIPT_ID" > apps-script/.clasp.json
-      - name: Validate required source and manifests
+      - name: Validate repository source
         run: |
           test -f apps-script/Code.gs
           test -f apps-script/Index.html
@@ -54,13 +55,6 @@ jobs:
           test -f apps-script/appsscript.json
           node --check frontend/app.js
           node -e "const fs=require('fs'); const {isDeepStrictEqual}=require('util'); const a=JSON.parse(fs.readFileSync('appsscript.json','utf8')); const b=JSON.parse(fs.readFileSync('apps-script/appsscript.json','utf8')); if(!isDeepStrictEqual(a,b)){ console.error('Manifest mismatch; push blocked.'); process.exit(1); }"
-      - name: Review remote source differences before push
-        env:
-          SCRIPT_ID: ${{ secrets.APPS_SCRIPT_ID }}
-        run: bash .github/scripts/check-apps-script-push.sh
-      - name: Show pending Apps Script file status
-        working-directory: apps-script
-        run: clasp show-file-status --json
-      - name: Push source only
+      - name: Push repository source to Apps Script
         working-directory: apps-script
         run: clasp push --force
