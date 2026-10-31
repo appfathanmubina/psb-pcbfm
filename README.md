@@ -36,28 +36,40 @@ docs/
 appsscript.json
 ```
 
-## Clasp / Apps Script safety
+## Apps Script production safety
 
-Urutan operasi production yang diwajibkan:
+Semua workflow Apps Script production menggunakan GitHub Environment bernama `production`. Konfigurasikan Environment tersebut dengan required reviewers agar proses push/deploy memerlukan persetujuan manusia. Jangan simpan token atau isi file kredensial di repository.
 
-1. **Reconcile manifest** — jalankan workflow `Apps Script Reconcile`.
-   Workflow mengambil `appsscript.json` dari project Apps Script yang ditunjuk `APPS_SCRIPT_ID` ke direktori temporary dan membandingkannya dengan manifest repository.
-2. Jika manifest berbeda, **jangan push**. Review konfigurasi online terlebih dahulu; repository saat ini tidak boleh dianggap sebagai sumber konfigurasi OAuth/dependency tanpa verifikasi.
-3. Setelah manifest cocok, jalankan workflow `Push Apps Script` dengan input `PUSH`.
-   Workflow ini hanya menjalankan `clasp push --force`; **tidak membuat deployment baru**.
-4. Untuk deployment web app, gunakan workflow `Deploy Existing Apps Script Deployment` dan isi **deployment ID yang sudah ada**. Input konfirmasi `DEPLOY` wajib.
-5. Workflow deployment tidak menyediakan jalur fallback untuk membuat deployment baru.
+### Secrets yang wajib tersedia
 
-### Required GitHub Actions secrets
+- `APPS_SCRIPT_ID`: Script ID project Apps Script yang benar.
+- `CLASPRC_JSON`: kredensial clasp.
+- `PRODUCTION_DEPLOYMENT_ID`: ID deployment web app produksi yang sudah ada. Workflow deploy tidak lagi menerima ID bebas dari input.
 
-- `APPS_SCRIPT_ID`
-- `CLASPRC_JSON`
+### Urutan operasi
 
-`APPS_SCRIPT_ID` untuk project saat ini sudah didokumentasikan di `apps-script/.clasp.example.json`.
+1. Jalankan `Apps Script Reconcile (read only)` dari branch `main`. Workflow hanya menarik project ke direktori sementara dan membandingkan manifest. Jika berbeda, hentikan proses dan review konfigurasi Apps Script terlebih dahulu.
+2. Untuk mengirim source repository ke Apps Script, jalankan `Push Apps Script` dari `main` dengan input konfirmasi `PUSH`. Workflow memeriksa manifest online, memvalidasi source, lalu menjalankan `clasp push --force`. Operasi ini menimpa source online; pastikan perubahan sudah direview dan Environment approval sudah diberikan.
+3. Setelah push, jalankan `Preflight Apps Script (read only)` dari `main`. Preflight membandingkan daftar file, isi seluruh source, dan manifest repository dengan project online. Deployment harus ditunda jika pemeriksaan gagal.
+4. Hanya setelah preflight lulus, jalankan `Deploy Existing Apps Script Deployment` dari `main` dengan input konfirmasi `DEPLOY`. Workflow hanya memperbarui `PRODUCTION_DEPLOYMENT_ID`; tidak membuat deployment baru.
+
+Workflow push dan deploy dibatasi ke branch `main`, memakai clasp versi `3.4.1`, Node.js 22, serta concurrency group yang sama agar operasi tidak saling bertabrakan.
+
+### Proteksi branch main
+
+Aktifkan aturan perlindungan branch/ruleset pada GitHub untuk `main`:
+
+- Wajibkan Pull Request sebelum perubahan masuk.
+- Wajibkan status check `structure` dari workflow `Validate PSB PWA`.
+- Wajibkan branch terbaru terhadap base sebelum merge (opsional tetapi disarankan).
+- Batasi force-push dan penghapusan branch.
+- Jangan izinkan bypass tanpa alasan administratif yang terdokumentasi.
+
+Pemeriksaan status saat audit terakhir menunjukkan branch `main` belum protected. Pengaturan ini harus diaktifkan pada **Settings → Rules → Rulesets** atau **Settings → Branches** oleh pemilik/admin repository; perubahan file dalam Pull Request tidak dapat mengaktifkannya sendiri.
 
 ## Validation
 
-Workflow `Validate PSB PWA` memeriksa struktur source. Workflow push juga melakukan pemeriksaan keberadaan source Apps Script dan syntax check untuk `frontend/app.js`.
+Workflow `Validate PSB PWA` memeriksa struktur source, syntax JavaScript, JSON, dan kesamaan manifest root dengan manifest Apps Script.
 
 ## Catatan PWA
 
