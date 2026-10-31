@@ -1,4 +1,4 @@
-const CACHE='psb-pwa-shell-v32-4-16';
+const CACHE='psb-pwa-shell-v32-4-17';
 const ASSETS=[
   './',
   './index.html',
