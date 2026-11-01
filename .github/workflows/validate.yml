@@ -30,6 +30,9 @@ jobs:
       - name: Validate JavaScript and JSON
         run: |
           node --check frontend/app.js
+          node --check < apps-script/Code.gs
+          node --check < apps-script/SetupDatabase.gs
+          node --check < apps-script/BridgeServer.gs
           node -e "JSON.parse(require('fs').readFileSync('frontend/manifest.webmanifest', 'utf8'))"
           node -e "JSON.parse(require('fs').readFileSync('apps-script/appsscript.json', 'utf8'))"
           node -e "JSON.parse(require('fs').readFileSync('appsscript.json', 'utf8'))"
