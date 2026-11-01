@@ -44,6 +44,8 @@ jobs:
         run: node tests/email-otp.test.js
       - name: Test Script Properties preservation safeguards
         run: node tests/setup-script-properties.test.js
+      - name: Test Apps Script and PWA UI function parity safeguards
+        run: node tests/ui-function-parity.test.js
       - name: Validate shell scripts
         run: |
           while IFS= read -r file; do
