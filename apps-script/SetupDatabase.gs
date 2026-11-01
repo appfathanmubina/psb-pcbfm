@@ -102,13 +102,17 @@ function setupPSBDatabase() {
   ensureDefaultConfig_();
   ensureInitialMasterData_();
   setupDriveFolders_();
-  createInitialSuperadmin();
+  const superadminBootstrap = createInitialSuperadmin();
   ensureChatAutomationTrigger_();
 
   return {
     success: true,
-    message: 'Foundation PSB berhasil disiapkan.',
-    spreadsheetId: ss.getId()
+    message: superadminBootstrap && superadminBootstrap.created === false &&
+      superadminBootstrap.code === 'SUPERADMIN_BOOTSTRAP_NOT_CONFIGURED'
+      ? 'Foundation PSB disiapkan. Akun Superadmin belum dibuat; konfigurasi kredensial melalui editor Apps Script tepercaya.'
+      : 'Foundation PSB berhasil disiapkan.',
+    spreadsheetId: ss.getId(),
+    superadminBootstrap: superadminBootstrap
   };
 }
 
