@@ -372,6 +372,21 @@ function waliOtpSheet_() {
   return sheet;
 }
 
+function cleanupWaliOtpRecords_(sheet, now) {
+  if (!sheet || sheet.getLastRow() < 2) return 0;
+  const cutoff = now.getTime() - 24 * 60 * 60 * 1000;
+  const rows = sheet.getRange(2,1,sheet.getLastRow()-1,19).getValues();
+  let removed = 0;
+  for (let i=rows.length-1;i>=0;i--) {
+    const created = rows[i][16] instanceof Date ? rows[i][16].getTime() : new Date(rows[i][16]).getTime();
+    if (isFinite(created) && created < cutoff) {
+      sheet.deleteRow(i+2);
+      removed++;
+    }
+  }
+  return removed;
+}
+
 function waliOtpPhoneKey_(phone) {
   return 'PSB_WA_OTP_' + sha256Hex_(String(phone || '')).substring(0,32);
 }
@@ -415,16 +430,10 @@ function startWaliRegistration(payload) {
     const otpSheet = waliOtpSheet_();
     const usersSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('USERS');
     if (!usersSheet) return fail_('Database pengguna belum tersedia.');
-    const userRows = usersSheet.getLastRow() >= 2 ? usersSheet.getRange(2,1,usersSheet.getLastRow()-1,15).getValues() : [];
-    const duplicate = userRows.some(function(r) {
-      return String(r[3] || '') === input.phoneNormalized ||
-        (input.emailNormalized && String(r[5] || '').toLowerCase() === input.emailNormalized);
-    });
-    // Pesan generik mencegah endpoint dipakai untuk enumerasi akun.
-    if (duplicate) return fail_('Pendaftaran belum dapat diproses. Periksa data dan coba kembali.');
     const cache = CacheService.getScriptCache();
     if (cache.get(phoneKey + '_COOLDOWN')) return fail_('Tunggu sebentar sebelum meminta kode WhatsApp berikutnya.');
     const now = new Date();
+    cleanupWaliOtpRecords_(otpSheet,now);
     if (countRecentWaliOtpSends_(otpSheet,input.phoneNormalized,now) >= PSB_WALI_OTP_DAILY_LIMIT_) {
       return fail_('Batas pengiriman kode harian tercapai. Silakan coba kembali besok.');
     }
