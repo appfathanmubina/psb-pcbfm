@@ -1,17 +1,25 @@
-# Arsitektur Migrasi
+# Arsitektur PSB Fathan Mubina
 
-## Tahap 1 — split tanpa perubahan business logic
+## Komponen produksi
 
-Browser -> Apps Script HTML Service -> google.script.run -> Code.gs -> Sheets/Drive
+- GitHub repository menyimpan source frontend PWA dan salinan source backend Apps Script.
+- GitHub Pages menerbitkan frontend PWA statis.
+- Google Apps Script tetap menjadi backend produksi dan mengakses Google Sheets serta Google Drive.
+- Frontend PWA berkomunikasi dengan Apps Script melalui API Bridge yang memvalidasi origin, sumber pesan, dan daftar fungsi yang diizinkan.
 
-GitHub menyimpan source code dan menjadi pusat version control.
+## Sinkronisasi source secara manual
 
-## Tahap 2 — CI/CD
+1. Source aktual dari Apps Script disalin ke folder `apps-script/` di GitHub untuk pemeriksaan kesamaan.
+2. Perbaikan source dilakukan dan ditinjau di repository.
+3. Source yang telah disetujui disalin kembali ke project Apps Script secara manual.
+4. Deployment Web App Apps Script diperbarui secara manual setelah pengujian dan persetujuan.
 
-GitHub -> GitHub Actions -> clasp -> Google Apps Script deployment
+GitHub Actions hanya memvalidasi source frontend/struktur dan menerbitkan GitHub Pages. Workflow tidak mengunggah source ke Apps Script, tidak mengubah deployment Apps Script, dan tidak memerlukan clasp atau kredensial Google.
 
-## Tahap 3 — optional static PWA
+## Batas kepercayaan
 
-Static PWA -> authenticated API bridge -> Apps Script
-
-Tahap 3 bukan bagian dari migrasi awal karena `google.script.run` hanya tersedia pada Apps Script HTML Service dan pemindahan ke origin lain memerlukan desain API/authentication.
+- Repository bersifat Public sesuai keputusan pemilik. Source tidak boleh memuat password, hash/salt password, token, private key, atau kredensial layanan.
+- Apps Script mengelola autentikasi, session, role, validasi data, dan akses Sheets/Drive.
+- Fungsi backend yang dapat dipanggil melalui Bridge harus terdaftar secara eksplisit dalam allowlist.
+- Fungsi administrasi setup yang tidak diperlukan oleh PWA tidak boleh dimasukkan ke allowlist Bridge.
+- Data publik yang dikirim oleh endpoint publik harus dibatasi pada konten yang memang boleh diakses tanpa login.
