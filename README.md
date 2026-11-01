@@ -94,3 +94,7 @@ Workflow `Validate PSB PWA` memeriksa struktur source frontend, syntax JavaScrip
 `frontend/` saat ini merupakan hasil ekstraksi kode UI, bukan endpoint API mandiri. Jangan mengaktifkan API publik sebelum desain autentikasi/CORS selesai.
 
 Setelah push dan regresi aman, tahap berikutnya adalah pengujian login/session, upload dokumen, pembayaran, seleksi, chat, notifikasi, dan seluruh role sebelum mempertimbangkan static hosting penuh.
+
+## Security Audit
+
+Lihat [docs/security-audit.md](docs/security-audit.md) untuk cakupan audit, perubahan hardening, dan risiko yang masih perlu ditangani.
