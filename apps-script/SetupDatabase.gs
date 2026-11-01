@@ -95,7 +95,7 @@ function setupPSBDatabase_() {
   PropertiesService.getScriptProperties().setProperties({
     PSB_SPREADSHEET_ID: ss.getId(),
     PSB_ROOT_FOLDER_ID: getOrCreateFolder_(PSB_SETUP.ROOT_FOLDER_NAME).getId()
-  }, true);
+  }, false);
 
   Object.keys(PSB_SHEETS).forEach(key => ensureSheet_(ss, PSB_SHEETS[key], PSB_HEADERS[key]));
 
@@ -225,7 +225,7 @@ function setupDriveFolders_() {
   PropertiesService.getScriptProperties().setProperties({
     PSB_DRIVE_ROOT_ID: root.getId(),
     PSB_DRIVE_YEAR_ID: year.getId()
-  }, true);
+  }, false);
 }
 
 function getOrCreateFolder_(name) {
