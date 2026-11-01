@@ -38,5 +38,11 @@ assert.match(setup, /hashPassword_\(secret, salt\)/);
 
 console.log('Password migration checks passed.');
 
-assert.match(source, /const lock = LockService\.getScriptLock\(\);[\s\S]*?function changePassword/);
-assert.match(source, /function adminResetUserPassword[\s\S]*?const lock = LockService\.getScriptLock\(\)/);
+const changeStart = source.indexOf('function changePassword(');
+const changeEnd = source.indexOf('\nfunction ', changeStart + 1);
+const changeBlock = source.slice(changeStart, changeEnd < 0 ? source.length : changeEnd);
+assert.match(changeBlock, /const lock = LockService\.getScriptLock\(\)/);
+const resetStart = source.indexOf('function adminResetUserPassword(');
+const resetEnd = source.indexOf('\nfunction ', resetStart + 1);
+const resetBlock = source.slice(resetStart, resetEnd < 0 ? source.length : resetEnd);
+assert.match(resetBlock, /const lock = LockService\.getScriptLock\(\)/);
