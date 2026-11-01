@@ -46,6 +46,8 @@ jobs:
         run: node tests/setup-script-properties.test.js
       - name: Test Apps Script and PWA UI function parity safeguards
         run: node tests/ui-function-parity.test.js
+      - name: Test PWA and Apps Script bridge contract
+        run: node tests/bridge-contract.test.js
       - name: Validate shell scripts
         run: |
           while IFS= read -r file; do
