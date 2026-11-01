@@ -24,11 +24,12 @@ mustInclude(code, [
   'PSB_WALI_OTP_COOLDOWN_MS_ = 60 * 1000',
   'countRecentWaliEmailOtpSends_(otpSheet,input.emailNormalized,now)',
   'waliOtpEmailKey_(input.emailNormalized)',
+  'emailNormalized:emailNormalized',
   "'startWaliRegistration','resendWaliRegistrationEmailOtp','verifyWaliRegistration'"
 ], 'backend');
 assert.ok(!/graph\.facebook\.com|WA_ACCESS_TOKEN|WHATSAPP OTP/.test(code), 'WhatsApp API remnants found in registration backend');
 assert.ok(code.includes("return (String(row[3]||'') && String(r[3]||'')===String(row[3]||''))"), 'optional phone duplicate check must return a boolean');
-assert.ok(setup.includes("'emailSendStatus'"), 'OTP sheet metadata header must be emailSendStatus');
+assert.ok(setup.includes("'waMessageId'"), 'keep the existing OTP sheet schema compatible; legacy metadata column remains unused');
 for (const [source,label] of [[pwa,'PWA'],[html,'Apps Script UI']]) {
   mustInclude(source,['Email aktif *','No. HP (opsional)','resendWaliRegistrationEmailOtp','Verifikasi Email'],label);
   assert.ok(!/regWhatsappConsent|No\. HP WhatsApp \*|Email \(opsional\)/.test(source),label+' still has WhatsApp registration controls');
