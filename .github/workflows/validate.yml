@@ -44,6 +44,8 @@ jobs:
         run: node tests/email-otp.test.js
       - name: Test Script Properties preservation safeguards
         run: node tests/setup-script-properties.test.js
+      - name: Test PWA icon metadata and dimensions
+        run: node tests/pwa-icon-metadata.test.js
       - name: Validate shell scripts
         run: |
           while IFS= read -r file; do
