@@ -28,7 +28,7 @@
     root.style.setProperty('--app-viewport-height', (window.visualViewport?.height || window.innerHeight || root.clientHeight || 0) + 'px');
   }
 })();
-const state={token:localStorage.getItem('psb_session')||'',user:null,config:(()=>{try{return JSON.parse(localStorage.getItem('psb_public_config')||'{}')}catch(e){return {}}})(),page:'home',appInitialized:false,initialData:null,preloadRunning:false,preloadReady:false,cache:{registration:null,documents:{},payments:{},pages:{}},pageSnapshots:{},pageSnapshotTtlMs:180000,paymentRegistrationId:'',paymentData:null,paymentTypes:[],masterKey:'MASTER_TAHUN_AJARAN',masterItems:[],masterDefinitions:{},masterCache:{},academicYearLifecycle:null,auditData:null,registrationList:[],registrationOptions:null,registrationDetail:null,documentRegistrationId:'',documentData:null,selectionData:null,selectionTab:'overview',selectionRegistrationId:'',chatData:null,chatThread:null,chatThreadCache:{},chatPollTimer:null,chatLoading:false,detailLoadingLocks:{},waliOtpVerificationId:'',waliOtpPhone:''};
+const state={token:localStorage.getItem('psb_session')||'',user:null,config:(()=>{try{return JSON.parse(localStorage.getItem('psb_public_config')||'{}')}catch(e){return {}}})(),page:'home',appInitialized:false,initialData:null,preloadRunning:false,preloadReady:false,cache:{registration:null,documents:{},payments:{},pages:{}},pageSnapshots:{},pageSnapshotTtlMs:180000,paymentRegistrationId:'',paymentData:null,paymentTypes:[],masterKey:'MASTER_TAHUN_AJARAN',masterItems:[],masterDefinitions:{},masterCache:{},academicYearLifecycle:null,auditData:null,registrationList:[],registrationOptions:null,registrationDetail:null,documentRegistrationId:'',documentData:null,selectionData:null,selectionTab:'overview',selectionRegistrationId:'',chatData:null,chatThread:null,chatThreadCache:{},chatPollTimer:null,chatLoading:false,detailLoadingLocks:{},waliOtpVerificationId:'',waliOtpEmail:''};
 const $=id=>document.getElementById(id);
 function esc(v){return String(v??'').replace(/[&<>'"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c]));}
 function normalizeAssetUrl(raw){
@@ -118,7 +118,7 @@ async function refreshPublicConfig(){
     return config;
   }catch(e){console.warn('Public config refresh:',e);return null;}
 }
-const MUTATING_SERVER_FUNCTIONS=new Set(['registerWali','startWaliRegistration','resendWaliRegistrationOtp','verifyWaliRegistration','changePassword','saveRegistration','submitRegistration','uploadDocument','verifyDocument','finalizeVerification','submitPayment','verifyPayment','createBill','createSelectionSchedule','updateSelectionScheduleStatus','addSelectionParticipant','addSelectionParticipantsBulk','updateSelectionParticipantStatus','saveSelectionScore','saveSelectionResult','publishAnnouncement','markNotificationRead','markAllNotificationsRead','finalizeReregistration','saveMasterItem','deactivateMasterItem','setActiveAcademicYear','createManualUser','adminResetUserPassword','runSecurityMaintenance','sendCommunication']);
+const MUTATING_SERVER_FUNCTIONS=new Set(['registerWali','startWaliRegistration','resendWaliRegistrationEmailOtp','verifyWaliRegistration','changePassword','saveRegistration','submitRegistration','uploadDocument','verifyDocument','finalizeVerification','submitPayment','verifyPayment','createBill','createSelectionSchedule','updateSelectionScheduleStatus','addSelectionParticipant','addSelectionParticipantsBulk','updateSelectionParticipantStatus','saveSelectionScore','saveSelectionResult','publishAnnouncement','markNotificationRead','markAllNotificationsRead','finalizeReregistration','saveMasterItem','deactivateMasterItem','setActiveAcademicYear','createManualUser','adminResetUserPassword','runSecurityMaintenance','sendCommunication']);
 function invalidatePageSnapshots(){state.pageSnapshots={};}
 function server(fn,...args){
   return new Promise((resolve,reject)=>{
@@ -428,59 +428,59 @@ function renderLogin(error=''){
   </div></div>`;
 }
 function renderRegisterWali(error=''){
-  state.waliOtpVerificationId='';state.waliOtpPhone='';
+  state.waliOtpVerificationId='';state.waliOtpEmail='';
   $('app').innerHTML=`<div class="login-wrap"><div class="login-card">
     <div class="logo login-logo center">${appLogoMarkup()}</div><div class="center"><h1 class="login-title">Daftar Akun Wali</h1><div class="login-sub">PSB Fathan Mubina · ${esc(state.config.ACTIVE_YEAR||'2027/2028')}</div></div>
     ${error?showMessage(error):''}
     <form onsubmit="submitRegisterWali(event)">
       <div class="field"><label>Nama Lengkap *</label><input id="regName" autocomplete="name" placeholder="Nama ayah / ibu / wali" required maxlength="120"></div>
-      <div class="field"><label>No. HP WhatsApp *</label><input id="regPhone" autocomplete="tel" inputmode="tel" placeholder="08xxxxxxxxxx" required></div>
-      <div class="field"><label>Email (opsional)</label><input id="regEmail" type="email" autocomplete="email" placeholder="nama@email.com"></div>
-      <div class="muted" style="font-size:12px;margin:-2px 0 12px">Kode verifikasi 6 digit akan dikirim ke nomor WhatsApp yang didaftarkan.</div>
-      <label class="muted" style="display:flex;gap:8px;align-items:flex-start;font-size:12px;margin:-4px 0 12px"><input id="regWhatsappConsent" type="checkbox" required style="margin-top:2px"> Saya setuju menerima kode verifikasi pendaftaran melalui WhatsApp pada nomor tersebut.</label>
+      <div class="field"><label>No. HP (opsional)</label><input id="regPhone" autocomplete="tel" inputmode="tel" placeholder="08xxxxxxxxxx"></div>
+      <div class="field"><label>Email aktif *</label><input id="regEmail" type="email" autocomplete="email" placeholder="nama@email.com" required></div>
+      <div class="muted" style="font-size:12px;margin:-2px 0 12px">Kode verifikasi 6 digit akan dikirim ke alamat email aktif yang didaftarkan.</div>
+      
       <div class="field"><label>Password *</label><div class="input-wrap"><input id="regPassword" type="password" autocomplete="new-password" placeholder="Minimal 6 karakter" required><button class="toggle" type="button" onclick="toggleRegisterPassword('regPassword',this)">Lihat</button></div></div>
       <div class="field"><label>Konfirmasi Password *</label><input id="regConfirmPassword" type="password" autocomplete="new-password" placeholder="Ulangi password" required></div>
-      <button class="btn btn-primary" id="registerBtn">Kirim Kode WhatsApp</button>
+      <button class="btn btn-primary" id="registerBtn">Kirim Kode Email</button>
     </form>
-    <div class="status-card" style="margin-top:14px;box-shadow:none"><b>Verifikasi wajib</b><div class="muted" style="font-size:11px;margin-top:5px">Akun hanya dibuat setelah kode WhatsApp berhasil diverifikasi. Jangan bagikan kode OTP kepada siapa pun.</div></div>
+    <div class="status-card" style="margin-top:14px;box-shadow:none"><b>Verifikasi wajib</b><div class="muted" style="font-size:11px;margin-top:5px">Akun hanya dibuat setelah kode email berhasil diverifikasi. Jangan bagikan kode OTP kepada siapa pun.</div></div>
     <div class="center" style="margin-top:14px"><button type="button" class="link-btn" onclick="renderLogin()">Sudah punya akun? Masuk</button></div>
   </div></div>`;
 }
 function renderWaliOtp(error=''){
   $('app').innerHTML=`<div class="login-wrap"><div class="login-card">
-    <div class="logo login-logo center">${appLogoMarkup()}</div><div class="center"><h1 class="login-title">Verifikasi WhatsApp</h1><div class="login-sub">Masukkan kode 6 digit yang dikirim ke ${esc(state.waliOtpPhone||'nomor WhatsApp Anda')}.</div></div>
+    <div class="logo login-logo center">${appLogoMarkup()}</div><div class="center"><h1 class="login-title">Verifikasi Email</h1><div class="login-sub">Masukkan kode 6 digit yang dikirim ke ${esc(state.waliOtpEmail||'email Anda')}.</div></div>
     ${error?showMessage(error):''}
     <form onsubmit="submitWaliOtp(event)">
       <div class="field"><label>Kode OTP *</label><input id="waliOtpCode" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]{6}" maxlength="6" minlength="6" placeholder="000000" required style="text-align:center;letter-spacing:8px;font-size:22px"></div>
       <div class="muted" style="font-size:12px;margin:-2px 0 12px">Kode berlaku selama 5 menit. Maksimal 5 kali percobaan.</div>
       <button class="btn btn-primary" id="verifyWaliOtpBtn">Verifikasi dan Buat Akun</button>
     </form>
-    <div class="center" style="margin-top:14px"><button type="button" class="link-btn" onclick="resendWaliOtp()">Kirim ulang kode WhatsApp</button></div>
+    <div class="center" style="margin-top:14px"><button type="button" class="link-btn" onclick="resendWaliOtp()">Kirim ulang kode email</button></div>
     <div class="center" style="margin-top:10px"><button type="button" class="link-btn muted" onclick="renderRegisterWali()">Kembali ke pendaftaran</button></div>
   </div></div>`;
   $('waliOtpCode')?.focus();
 }
 function toggleRegisterPassword(id,button){const i=$(id);i.type=i.type==='password'?'text':'password';button.textContent=i.type==='password'?'Lihat':'Sembunyikan'}
 async function submitRegisterWali(e){
-  e.preventDefault();const btn=$('registerBtn');btn.disabled=true;btn.textContent='Mengirim kode...';loading(true,'Mengirim kode verifikasi WhatsApp...');
+  e.preventDefault();const btn=$('registerBtn');btn.disabled=true;btn.textContent='Mengirim kode...';loading(true,'Mengirim kode verifikasi email...');
   try{
-    const r=await server('startWaliRegistration',{name:$('regName').value,phone:$('regPhone').value,email:$('regEmail').value,password:$('regPassword').value,confirmPassword:$('regConfirmPassword').value,whatsappConsent:$('regWhatsappConsent').checked});
-    if(r.success){state.waliOtpVerificationId=r.verificationId;state.waliOtpPhone=r.maskedPhone||'nomor WhatsApp Anda';renderWaliOtp();showToast('Kode verifikasi telah dikirim melalui WhatsApp.','success');}
+    const r=await server('startWaliRegistration',{name:$('regName').value,phone:$('regPhone').value,email:$('regEmail').value,password:$('regPassword').value,confirmPassword:$('regConfirmPassword').value,whatsappConsent:$('regEmailConsent').checked});
+    if(r.success){state.waliOtpVerificationId=r.verificationId;state.waliOtpEmail=r.maskedEmail||'email Anda';renderWaliOtp();showToast('Kode verifikasi telah dikirim melalui email.','success');}
     else renderRegisterWali(r.message);
-  }catch(err){renderRegisterWali('Kode WhatsApp belum dapat dikirim. Periksa koneksi dan coba kembali.')}finally{loading(false)}
+  }catch(err){renderRegisterWali('Kode email belum dapat dikirim. Periksa koneksi dan coba kembali.')}finally{loading(false)}
 }
 async function submitWaliOtp(e){
-  e.preventDefault();const btn=$('verifyWaliOtpBtn');btn.disabled=true;btn.textContent='Memverifikasi...';loading(true,'Memverifikasi kode WhatsApp...');
+  e.preventDefault();const btn=$('verifyWaliOtpBtn');btn.disabled=true;btn.textContent='Memverifikasi...';loading(true,'Memverifikasi kode email...');
   try{
     const r=await server('verifyWaliRegistration',state.waliOtpVerificationId,$('waliOtpCode').value);
-    if(r.success){state.token=r.sessionToken;state.user=r.user;state.waliOtpVerificationId='';state.waliOtpPhone='';localStorage.setItem('psb_session',state.token);showToast('Nomor WhatsApp berhasil diverifikasi.','success');renderApp();setTimeout(()=>goPage('registration'),0);}
+    if(r.success){state.token=r.sessionToken;state.user=r.user;state.waliOtpVerificationId='';state.waliOtpEmail='';localStorage.setItem('psb_session',state.token);showToast('Email berhasil diverifikasi.','success');renderApp();setTimeout(()=>goPage('registration'),0);}
     else renderWaliOtp(r.message);
   }catch(err){renderWaliOtp('Verifikasi belum dapat diproses. Silakan coba kembali.')}finally{loading(false)}
 }
 async function resendWaliOtp(){
   if(!state.waliOtpVerificationId)return renderRegisterWali('Silakan mulai pendaftaran kembali.');
-  loading(true,'Mengirim ulang kode WhatsApp...');
-  try{const r=await server('resendWaliRegistrationOtp',state.waliOtpVerificationId);if(r.success){renderWaliOtp();showToast('Kode baru telah dikirim.','success');}else renderWaliOtp(r.message);}
+  loading(true,'Mengirim ulang kode email...');
+  try{const r=await server('resendWaliRegistrationEmailOtp',state.waliOtpVerificationId);if(r.success){renderWaliOtp();showToast('Kode baru telah dikirim.','success');}else renderWaliOtp(r.message);}
   catch(err){renderWaliOtp('Kode belum dapat dikirim ulang. Silakan coba kembali.')}
   finally{loading(false)}
 }
