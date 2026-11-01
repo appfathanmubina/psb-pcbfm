@@ -40,6 +40,8 @@ jobs:
         run: node tests/password-migration.test.js
       - name: Test upload validation safeguards
         run: node tests/upload-validation.test.js
+      - name: Test WhatsApp OTP registration safeguards
+        run: node tests/whatsapp-otp.test.js
       - name: Validate shell scripts
         run: |
           while IFS= read -r file; do

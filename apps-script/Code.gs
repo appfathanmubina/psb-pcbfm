@@ -22,7 +22,7 @@ const PSB_PWA_BRIDGE_VERSION = '32.3.8';
 
 const PSB_PWA_BRIDGE_ALLOWED_FUNCTIONS = Object.freeze([
   'getAppInfo','getPublicConfig','getPublicGallery',
-  'login','finalizeLogin','registerWali','validateSession','logout','changePassword',
+  'login','finalizeLogin','registerWali','startWaliRegistration','resendWaliRegistrationOtp','verifyWaliRegistration','validateSession','logout','changePassword',
   'getProductionControlData','setProductionControl','getGoLiveChecklist','createProductionBackup','runSecurityMaintenance',
   'getUserManagementData','adminResetUserPassword','createManualUser','getAuditLogPageData',
   'getAcademicYearLifecycleData','setActiveAcademicYear','getMasterDefinitions','getMasterData','saveMasterItem','deactivateMasterItem',
@@ -302,60 +302,277 @@ function decodeAndValidateUpload_(base64Input, mimeTypeInput, maxBytes) {
   return { success: true, bytes: bytes, size: bytes.length };
 }
 
-function registerWali(payload) {
+// =====================================================
+// WHATSAPP OTP - REGISTRASI WALI
+// Kredensial Cloud API hanya boleh disimpan di Script Properties.
+// Tidak ada OTP, token, atau password plaintext yang disimpan/log.
+// =====================================================
+const PSB_WALI_OTP_TTL_MS_ = 5 * 60 * 1000;
+const PSB_WALI_OTP_COOLDOWN_MS_ = 60 * 1000;
+const PSB_WALI_OTP_DAILY_LIMIT_ = 5;
+const PSB_WALI_OTP_MAX_ATTEMPTS_ = 5;
+
+function getWhatsAppOtpSettings_() {
+  const p = PropertiesService.getScriptProperties();
+  return {
+    version: String(p.getProperty('WA_GRAPH_API_VERSION') || '').trim(),
+    phoneNumberId: String(p.getProperty('WA_PHONE_NUMBER_ID') || '').trim(),
+    accessToken: String(p.getProperty('WA_ACCESS_TOKEN') || '').trim(),
+    templateName: String(p.getProperty('WA_AUTH_TEMPLATE_NAME') || '').trim(),
+    language: String(p.getProperty('WA_TEMPLATE_LANGUAGE') || 'id').trim()
+  };
+}
+
+function sendWhatsAppAuthenticationOtp_(phone, otp) {
+  const cfg = getWhatsAppOtpSettings_();
+  if (!/^v\d+\.\d+$/.test(cfg.version) || !cfg.phoneNumberId || !cfg.accessToken ||
+      !/^[a-z0-9_]{2,512}$/i.test(cfg.templateName) || !cfg.language) {
+    return { success:false, code:'WHATSAPP_NOT_CONFIGURED' };
+  }
+  const url = 'https://graph.facebook.com/' + cfg.version + '/' + encodeURIComponent(cfg.phoneNumberId) + '/messages';
+  const payload = {
+    messaging_product:'whatsapp',
+    to:String(phone),
+    type:'template',
+    template:{
+      name:cfg.templateName,
+      language:{code:cfg.language},
+      components:[
+        {type:'body',parameters:[{type:'text',text:String(otp)}]},
+        {type:'button',sub_type:'url',index:'0',parameters:[{type:'text',text:String(otp)}]}
+      ]
+    }
+  };
+  try {
+    const response = UrlFetchApp.fetch(url,{
+      method:'post',
+      contentType:'application/json',
+      headers:{Authorization:'Bearer '+cfg.accessToken},
+      payload:JSON.stringify(payload),
+      muteHttpExceptions:true
+    });
+    const status = response.getResponseCode();
+    let body = {};
+    try { body = JSON.parse(response.getContentText() || '{}'); } catch (e) {}
+    const messageId = body && body.messages && body.messages[0] ? String(body.messages[0].id || '') : '';
+    if (status < 200 || status >= 300 || !messageId) {
+      console.error('WhatsApp OTP send failed. HTTP status: ' + status);
+      return {success:false,code:'WHATSAPP_SEND_FAILED'};
+    }
+    return {success:true,messageId:messageId};
+  } catch (e) {
+    console.error('WhatsApp OTP transport failed: ' + String(e && e.message || e));
+    return {success:false,code:'WHATSAPP_SEND_FAILED'};
+  }
+}
+
+function waliOtpSheet_() {
+  const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('WALI_OTP');
+  if (!sheet || sheet.getLastColumn() < 19) throw new Error('Sheet WALI_OTP belum tersedia. Jalankan setupPSBDatabase() terbaru.');
+  return sheet;
+}
+
+function cleanupWaliOtpRecords_(sheet, now) {
+  if (!sheet || sheet.getLastRow() < 2) return 0;
+  const cutoff = now.getTime() - 24 * 60 * 60 * 1000;
+  const rows = sheet.getRange(2,1,sheet.getLastRow()-1,19).getValues();
+  let removed = 0;
+  for (let i=rows.length-1;i>=0;i--) {
+    const created = rows[i][16] instanceof Date ? rows[i][16].getTime() : new Date(rows[i][16]).getTime();
+    if (isFinite(created) && created < cutoff) {
+      sheet.deleteRow(i+2);
+      removed++;
+    }
+  }
+  return removed;
+}
+
+function waliOtpPhoneKey_(phone) {
+  return 'PSB_WA_OTP_' + sha256Hex_(String(phone || '')).substring(0,32);
+}
+
+function countRecentWaliOtpSends_(sheet, phone, now) {
+  if (!sheet || sheet.getLastRow() < 2) return 0;
+  const start = Math.max(2, sheet.getLastRow() - 1999);
+  const rows = sheet.getRange(start,1,sheet.getLastRow()-start+1,19).getValues();
+  const cutoff = now.getTime() - 24 * 60 * 60 * 1000;
+  return rows.reduce(function(total,row) {
+    const last = row[14] instanceof Date ? row[14].getTime() : new Date(row[14]).getTime();
+    return String(row[3] || '') === String(phone) && isFinite(last) && last >= cutoff
+      ? total + Math.max(0,Number(row[13]) || 0) : total;
+  },0);
+}
+
+function validateWaliRegistrationPayload_(payload) {
   payload = payload || {};
   const name = String(payload.name || '').trim();
   const phone = String(payload.phone || '').trim();
   const email = String(payload.email || '').trim();
   const password = String(payload.password || '');
   const confirmPassword = String(payload.confirmPassword || '');
+  const whatsappConsent = payload.whatsappConsent === true || String(payload.whatsappConsent || '').toLowerCase() === 'true';
+  const phoneNormalized = normalizePhone_(phone);
+  const emailNormalized = email.toLowerCase();
+  if (!name || name.length > 120) return {success:false,message:'Nama lengkap wajib diisi (maksimal 120 karakter).'};
+  if (!whatsappConsent) return {success:false,message:'Persetujuan pengiriman kode verifikasi melalui WhatsApp wajib dicentang.'};
+  if (!phone || !/^62\d{8,13}$/.test(phoneNormalized)) return {success:false,message:'Nomor WhatsApp tidak valid. Gunakan nomor aktif dengan kode negara Indonesia.'};
+  if (email && (email.length > 254 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))) return {success:false,message:'Format email tidak valid.'};
+  if (password.length < 6 || password.length > 128) return {success:false,message:'Password harus terdiri dari 6 sampai 128 karakter.'};
+  if (password !== confirmPassword) return {success:false,message:'Konfirmasi password tidak sama.'};
+  return {success:true,name:name,phone:phone,phoneNormalized:phoneNormalized,email:email,emailNormalized:emailNormalized,password:password};
+}
 
-  if (!name) return fail_('Nama lengkap wajib diisi.');
-  if (!phone && !email) return fail_('No. HP atau Email wajib diisi minimal salah satu.');
-  if (phone && normalizePhone_(phone).length < 10) return fail_('No. HP tidak valid.');
-  if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return fail_('Format email tidak valid.');
-  if (password.length < 6) return fail_('Password minimal 6 karakter.');
-  if (password !== confirmPassword) return fail_('Konfirmasi password tidak sama.');
-
-  const phoneNormalized = phone ? normalizePhone_(phone) : '';
-  const emailNormalized = email ? email.toLowerCase() : '';
+function startWaliRegistration(payload) {
+  const input = validateWaliRegistrationPayload_(payload);
+  if (!input.success) return fail_(input.message);
+  const phoneKey = waliOtpPhoneKey_(input.phoneNormalized);
   const lock = LockService.getScriptLock();
-  lock.waitLock(10000);
+  lock.waitLock(15000);
   try {
-    const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('USERS');
-    if (!sheet) return fail_('Database USERS belum tersedia. Jalankan setupPSBDatabase() terlebih dahulu.');
-    const lastRow = sheet.getLastRow();
-    const rows = lastRow >= 2 ? sheet.getRange(2, 1, lastRow - 1, 15).getValues() : [];
-
-    for (let i = 0; i < rows.length; i++) {
-      const r = rows[i];
-      if (phoneNormalized && String(r[3] || '') === phoneNormalized) return fail_('No. HP sudah terdaftar. Silakan masuk menggunakan No. HP tersebut.');
-      if (emailNormalized && String(r[5] || '').toLowerCase() === emailNormalized) return fail_('Email sudah terdaftar. Silakan masuk menggunakan email tersebut.');
+    const otpSheet = waliOtpSheet_();
+    const usersSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('USERS');
+    if (!usersSheet) return fail_('Database pengguna belum tersedia.');
+    const cache = CacheService.getScriptCache();
+    if (cache.get(phoneKey + '_COOLDOWN')) return fail_('Tunggu sebentar sebelum meminta kode WhatsApp berikutnya.');
+    const now = new Date();
+    cleanupWaliOtpRecords_(otpSheet,now);
+    if (countRecentWaliOtpSends_(otpSheet,input.phoneNormalized,now) >= PSB_WALI_OTP_DAILY_LIMIT_) {
+      return fail_('Batas pengiriman kode harian tercapai. Silakan coba kembali besok.');
     }
 
-    const now = new Date();
-    const userId = generateId_('USR');
-    const salt = Utilities.getUuid().replace(/-/g, '').substring(0, 32);
-    const hash = hashPassword_(password, salt);
-    const row = [
-      userId, name, phone, phoneNormalized, email, emailNormalized,
-      hash, salt, 'WALI', 'ACTIVE', '', '', now, now, false
-    ];
-    sheet.appendRow(row);
-    writeAudit_(userId, 'REGISTER', 'AUTH', userId, '', JSON.stringify({name:name, phone:phoneNormalized, email:emailNormalized, role:'WALI'}), 'Akun WALI baru dibuat tanpa OTP');
+    const passwordSalt = Utilities.getUuid().replace(/-/g,'').substring(0,32);
+    const passwordHash = hashPassword_(input.password,passwordSalt);
+    const randomHex = Utilities.getUuid().replace(/-/g,'').substring(0,8);
+    const otp = String(parseInt(randomHex,16) % 1000000).padStart(6,'0');
+    const otpSalt = Utilities.getUuid().replace(/-/g,'').substring(0,32);
+    const sent = sendWhatsAppAuthenticationOtp_(input.phoneNormalized,otp);
+    if (!sent.success) {
+      return fail_(sent.code === 'WHATSAPP_NOT_CONFIGURED'
+        ? 'Layanan verifikasi WhatsApp belum dikonfigurasi administrator.'
+        : 'Kode WhatsApp belum dapat dikirim. Periksa nomor dan coba kembali.');
+    }
 
-    const session = createSession_(userId);
-    const user = findUserById_(userId);
-    return {
-      success: true,
-      message: 'Akun WALI berhasil dibuat.',
-      sessionToken: session.token,
-      user: publicUser_(user),
-      mustChangePassword: false
-    };
+    // Batalkan permintaan lama yang masih menunggu untuk nomor yang sama.
+    if (otpSheet.getLastRow() >= 2) {
+      const all = otpSheet.getRange(2,1,otpSheet.getLastRow()-1,19).getValues();
+      all.forEach(function(row,i) {
+        if (String(row[3] || '') === input.phoneNormalized && String(row[15] || '') === 'PENDING') {
+          otpSheet.getRange(i+2,16).setValue('CANCELLED');
+        }
+      });
+    }
+    const verificationId = generateId_('WOTP');
+    otpSheet.appendRow([
+      verificationId,input.name,input.phone,input.phoneNormalized,input.email,input.emailNormalized,
+      passwordHash,passwordSalt,sha256Hex_(otp+otpSalt),otpSalt,
+      new Date(now.getTime()+PSB_WALI_OTP_TTL_MS_),0,PSB_WALI_OTP_MAX_ATTEMPTS_,1,now,
+      'PENDING',now,'',sent.messageId
+    ]);
+    cache.put(phoneKey+'_COOLDOWN','1',Math.ceil(PSB_WALI_OTP_COOLDOWN_MS_/1000));
+    writeAudit_('','WALI_OTP_SENT','AUTH',verificationId,'','', 'OTP verifikasi pendaftaran Wali dikirim melalui WhatsApp');
+    return {success:true,verificationId:verificationId,maskedPhone:input.phoneNormalized.replace(/^(\d{4})\d+(\d{3})$/,'$1••••$2'),expiresInSeconds:300};
   } finally {
     lock.releaseLock();
   }
+}
+
+function resendWaliRegistrationOtp(verificationId) {
+  const id = String(verificationId || '').trim();
+  if (!id) return fail_('Permintaan verifikasi tidak ditemukan.');
+  const lock = LockService.getScriptLock();
+  lock.waitLock(15000);
+  try {
+    const sheet = waliOtpSheet_();
+    if (sheet.getLastRow() < 2) return fail_('Permintaan verifikasi tidak ditemukan.');
+    const rows = sheet.getRange(2,1,sheet.getLastRow()-1,19).getValues();
+    let rowNumber = 0, row = null;
+    rows.forEach(function(r,i){if(String(r[0])===id){rowNumber=i+2;row=r;}});
+    if (!row || !['PENDING','EXPIRED'].includes(String(row[15]))) return fail_('Permintaan verifikasi tidak aktif. Silakan mulai pendaftaran kembali.');
+    const phone = String(row[3] || '');
+    const key = waliOtpPhoneKey_(phone);
+    const cache = CacheService.getScriptCache();
+    if (cache.get(key+'_COOLDOWN')) return fail_('Tunggu sebentar sebelum meminta kode WhatsApp berikutnya.');
+    const now = new Date();
+    if (countRecentWaliOtpSends_(sheet,phone,now) >= PSB_WALI_OTP_DAILY_LIMIT_) return fail_('Batas pengiriman kode harian tercapai. Silakan coba kembali besok.');
+    const randomHex = Utilities.getUuid().replace(/-/g,'').substring(0,8);
+    const otp = String(parseInt(randomHex,16) % 1000000).padStart(6,'0');
+    const otpSalt = Utilities.getUuid().replace(/-/g,'').substring(0,32);
+    const sent = sendWhatsAppAuthenticationOtp_(phone,otp);
+    if (!sent.success) return fail_('Kode WhatsApp belum dapat dikirim. Silakan coba kembali.');
+    sheet.getRange(rowNumber,9,1,11).setValues([[
+      sha256Hex_(otp+otpSalt),otpSalt,new Date(now.getTime()+PSB_WALI_OTP_TTL_MS_),
+      0,PSB_WALI_OTP_MAX_ATTEMPTS_,Math.max(0,Number(row[13])||0)+1,now,'PENDING',row[16],'',sent.messageId
+    ]]);
+    cache.put(key+'_COOLDOWN','1',Math.ceil(PSB_WALI_OTP_COOLDOWN_MS_/1000));
+    return {success:true,message:'Kode verifikasi baru telah dikirim.'};
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+function verifyWaliRegistration(verificationId, code) {
+  const id = String(verificationId || '').trim();
+  const otp = String(code || '').trim();
+  if (!id || !/^\d{6}$/.test(otp)) return fail_('Masukkan kode verifikasi 6 digit.');
+  const lock = LockService.getScriptLock();
+  lock.waitLock(15000);
+  try {
+    const otpSheet = waliOtpSheet_();
+    if (otpSheet.getLastRow() < 2) return fail_('Kode verifikasi tidak ditemukan. Silakan daftar kembali.');
+    const rows = otpSheet.getRange(2,1,otpSheet.getLastRow()-1,19).getValues();
+    let rowNumber = 0, row = null;
+    rows.forEach(function(r,i){if(String(r[0])===id){rowNumber=i+2;row=r;}});
+    if (!row || String(row[15]) !== 'PENDING') return fail_('Kode verifikasi tidak aktif. Silakan minta kode baru.');
+    const now = new Date();
+    const expiresAt = row[10] instanceof Date ? row[10] : new Date(row[10]);
+    if (!isFinite(expiresAt.getTime()) || now.getTime() > expiresAt.getTime()) {
+      otpSheet.getRange(rowNumber,16).setValue('EXPIRED');
+      return fail_('Kode verifikasi sudah kedaluwarsa. Silakan kirim ulang kode.');
+    }
+    const attempts = Math.max(0,Number(row[11])||0)+1;
+    if (attempts > PSB_WALI_OTP_MAX_ATTEMPTS_) {
+      otpSheet.getRange(rowNumber,12,1,5).setValues([[attempts,row[12],row[13],row[14], 'LOCKED']]);
+      return fail_('Batas percobaan kode tercapai. Silakan mulai pendaftaran kembali.');
+    }
+    const expected = sha256Hex_(otp+String(row[9]||''));
+    if (!constantTimeEqual_(expected,String(row[8]||''))) {
+      otpSheet.getRange(rowNumber,12).setValue(attempts);
+      if (attempts >= PSB_WALI_OTP_MAX_ATTEMPTS_) otpSheet.getRange(rowNumber,16).setValue('LOCKED');
+      return fail_('Kode verifikasi tidak sesuai.');
+    }
+
+    const usersSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('USERS');
+    if (!usersSheet) return fail_('Database pengguna belum tersedia.');
+    const users = usersSheet.getLastRow() >= 2 ? usersSheet.getRange(2,1,usersSheet.getLastRow()-1,15).getValues() : [];
+    const duplicate = users.some(function(r) {
+      return String(r[3]||'')===String(row[3]||'') ||
+        (String(row[5]||'') && String(r[5]||'').toLowerCase()===String(row[5]||'').toLowerCase());
+    });
+    if (duplicate) {
+      otpSheet.getRange(rowNumber,16).setValue('BLOCKED');
+      return fail_('Pendaftaran belum dapat diselesaikan. Silakan hubungi administrator.');
+    }
+    const userId = generateId_('USR');
+    const createdAt = new Date();
+    usersSheet.appendRow([
+      userId,String(row[1]||''),String(row[2]||''),String(row[3]||''),
+      String(row[4]||''),String(row[5]||''),String(row[6]||''),String(row[7]||''),
+      'WALI','ACTIVE','','',createdAt,createdAt,false
+    ]);
+    otpSheet.getRange(rowNumber,9,1,8).setValues([['','','',attempts,row[12],row[13],row[14],'VERIFIED']]);
+    otpSheet.getRange(rowNumber,18).setValue(createdAt);
+    writeAudit_(userId,'REGISTER','AUTH',userId,'',JSON.stringify({phone:String(row[3]||''),role:'WALI'}),'Akun WALI dibuat setelah OTP WhatsApp berhasil diverifikasi');
+    const user = findUserById_(userId,true);
+    const session = createSession_(userId);
+    return {success:true,message:'Nomor WhatsApp berhasil diverifikasi. Akun Wali berhasil dibuat.',sessionToken:session.token,user:publicUser_(user),mustChangePassword:false};
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+// Endpoint lama dinonaktifkan agar tidak ada jalur pendaftaran yang melewati OTP.
+function registerWali() {
+  return fail_('Pendaftaran Wali wajib melalui verifikasi WhatsApp OTP. Gunakan formulir pendaftaran terbaru.');
 }
 
 function getInitialAppData(sessionToken) {

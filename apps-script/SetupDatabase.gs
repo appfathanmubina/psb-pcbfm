@@ -52,7 +52,8 @@ const PSB_SHEETS = {
   REREGISTRATIONS: 'REREGISTRATIONS',
   INCIDENTS: 'INCIDENTS',
   CHAT_THREADS: 'CHAT_THREADS',
-  CHAT_MESSAGES: 'CHAT_MESSAGES'
+  CHAT_MESSAGES: 'CHAT_MESSAGES',
+  WALI_OTP: 'WALI_OTP'
 };
 
 const PSB_HEADERS = {
@@ -83,7 +84,8 @@ const PSB_HEADERS = {
   REREGISTRATIONS: ['reregistrationId','registrationId','status','completedAt','note','createdAt','updatedAt'],
   INCIDENTS: ['incidentId','category','priority','status','title','description','relatedModule','relatedRecordId','reportedBy','assignedTo','resolutionNote','createdAt','updatedAt','resolvedAt','closedAt'],
   CHAT_THREADS: ['threadId','registrationId','waliUserId','adminUserId','subject','status','lastMessageAt','lastMessageBy','createdAt','updatedAt','closedAt'],
-  CHAT_MESSAGES: ['messageId','threadId','senderUserId','senderRole','message','attachmentFileId','attachmentName','attachmentMimeType','isRead','createdAt','readAt']
+  CHAT_MESSAGES: ['messageId','threadId','senderUserId','senderRole','message','attachmentFileId','attachmentName','attachmentMimeType','isRead','createdAt','readAt'],
+  WALI_OTP: ['verificationId','name','phone','phoneNormalized','email','emailNormalized','passwordHash','passwordSalt','otpHash','otpSalt','expiresAt','attempts','maxAttempts','sendCount','lastSentAt','status','createdAt','verifiedAt','waMessageId']
 };
 
 function setupPSBDatabase_() {
