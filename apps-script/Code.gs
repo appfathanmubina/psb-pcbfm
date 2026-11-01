@@ -410,9 +410,11 @@ function validateWaliRegistrationPayload_(payload) {
   const email = String(payload.email || '').trim();
   const password = String(payload.password || '');
   const confirmPassword = String(payload.confirmPassword || '');
+  const whatsappConsent = payload.whatsappConsent === true || String(payload.whatsappConsent || '').toLowerCase() === 'true';
   const phoneNormalized = normalizePhone_(phone);
   const emailNormalized = email.toLowerCase();
   if (!name || name.length > 120) return {success:false,message:'Nama lengkap wajib diisi (maksimal 120 karakter).'};
+  if (!whatsappConsent) return {success:false,message:'Persetujuan pengiriman kode verifikasi melalui WhatsApp wajib dicentang.'};
   if (!phone || !/^62\d{8,13}$/.test(phoneNormalized)) return {success:false,message:'Nomor WhatsApp tidak valid. Gunakan nomor aktif dengan kode negara Indonesia.'};
   if (email && (email.length > 254 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))) return {success:false,message:'Format email tidak valid.'};
   if (password.length < 6 || password.length > 128) return {success:false,message:'Password harus terdiri dari 6 sampai 128 karakter.'};
