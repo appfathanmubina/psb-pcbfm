@@ -661,12 +661,6 @@ function cleanupPSBSessions_(limit) {
   return {processed:processed,expired:expired,idle:idle};
 }
 
-function cleanupPSBSessions_() {
-  const lock=LockService.getScriptLock();
-  lock.waitLock(10000);
-  try { return cleanupPSBSessions_(getConfig_('SESSION_CLEANUP_BATCH') || 500); }
-  finally { lock.releaseLock(); }
-}
 
 function runSecurityMaintenance(sessionToken) {
   const actor=requireRole_(sessionToken, PSB_SECURITY_ADMIN_ROLES);
