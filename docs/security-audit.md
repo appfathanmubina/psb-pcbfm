@@ -1,7 +1,7 @@
 # PSB Fathan Mubina — Security Audit
 
 **Repository:** `appfathanmubina/psb-pcbfm`  
-**Branch audited:** `security/batch-3-email-otp` (proposed changes; review before merge)  
+**Branch audited:** `main` (static review of the current repository source)  
 **Repository visibility:** Public  
 **Audit type:** Static source review and GitHub repository hygiene review  
 **Runtime status:** Google Apps Script production runtime was not tested; repository changes have not been copied to or deployed in production.
@@ -47,7 +47,7 @@
 ### High priority
 
 - **Password hashing / work factor:** new and migrated passwords now use PBKDF2-HMAC-SHA256 with a per-user random salt and 60,000 iterations. Existing one-round SHA-256 accounts are verified using the legacy method only at successful login, then upgraded in place; the password, user ID, role, registration records, and other user data are preserved. This is a compatibility-preserving improvement, but 60,000 iterations is a transitional work factor and must be benchmarked on a test Apps Script deployment before production rollout. Increase the work factor only after measuring login latency and Apps Script execution limits. Argon2id/bcrypt/scrypt are not natively available through the current Apps Script Utilities interface.
-- **WhatsApp provider readiness:** Wali registration now requires WhatsApp OTP, but live delivery is unavailable until the trusted Apps Script editor configures Meta WhatsApp Cloud API Script Properties and an approved Authentication template. Provider credentials must never be placed in this public repository.
+- **Email delivery readiness:** Wali registration uses Email OTP through `MailApp.sendEmail()`. Delivery depends on the Apps Script execution account's remaining daily quota, sender reputation, recipient filtering, and Google Workspace/Gmail policy. Validate delivery and quota behavior in a test deployment; MailApp accepting a message does not guarantee inbox delivery.
 
 ### Medium priority
 
