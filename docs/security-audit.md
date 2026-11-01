@@ -1,7 +1,7 @@
 # PSB Fathan Mubina — Security Audit
 
 **Repository:** `appfathanmubina/psb-pcbfm`  
-**Branch audited:** `main`  
+**Branch audited:** `security/batch-3-whatsapp-otp` (proposed changes; review before merge)  
 **Repository visibility:** Public  
 **Audit type:** Static source review and GitHub repository hygiene review  
 **Runtime status:** Google Apps Script production runtime was not tested; repository changes have not been copied to or deployed in production.
@@ -30,6 +30,7 @@
 7. Existing spreadsheet headers are checked and mismatches cause a safe stop rather than overwriting headers.
 8. Added CI checks to prevent the protected setup/maintenance functions from being reintroduced as browser-callable public functions, and to parse-check Apps Script JavaScript files.
 9. Earlier repository checks found no matches for common Google API keys, GitHub tokens, OAuth client secrets, private-key markers, or Google access-token patterns in the scanned source. A pattern scan is not proof that no secret exists anywhere.
+10. Added WhatsApp OTP verification to Wali registration; the old direct registration endpoint is disabled.
 
 ## Controls observed in reviewed application paths
 
@@ -46,7 +47,7 @@
 ### High priority
 
 - **Password hashing / work factor:** new and migrated passwords now use PBKDF2-HMAC-SHA256 with a per-user random salt and 60,000 iterations. Existing one-round SHA-256 accounts are verified using the legacy method only at successful login, then upgraded in place; the password, user ID, role, registration records, and other user data are preserved. This is a compatibility-preserving improvement, but 60,000 iterations is a transitional work factor and must be benchmarked on a test Apps Script deployment before production rollout. Increase the work factor only after measuring login latency and Apps Script execution limits. Argon2id/bcrypt/scrypt are not natively available through the current Apps Script Utilities interface.
-- **Wali identity verification:** `registerWali` accepts a new account without OTP or verified email/phone. This allows unverified accounts and potential registration spam. Introduce a verified contact flow or another suitable anti-abuse control before relying on contact details for identity.
+- **WhatsApp provider readiness:** Wali registration now requires WhatsApp OTP, but live delivery is unavailable until the trusted Apps Script editor configures Meta WhatsApp Cloud API Script Properties and an approved Authentication template. Provider credentials must never be placed in this public repository.
 
 ### Medium priority
 
@@ -55,6 +56,23 @@
 - **Abuse throttling:** login lockout uses CacheService, which is best-effort and can be affected by concurrent requests or cache eviction. Add stronger server-side throttling for login and public registration if the service receives abusive traffic.
 - **Bootstrap password entry:** the trusted-editor bootstrap uses a standard Apps Script prompt; the password is not masked. Run it only in a private environment with the screen not visible to others.
 
+## WhatsApp OTP registration
+
+- `startWaliRegistration()` validates the Wali form and sends a six-digit OTP using the Meta WhatsApp Cloud API. `verifyWaliRegistration()` creates the WALI account and session only after the OTP is correct. The old `registerWali()` endpoint now fails closed and cannot create accounts.
+- WhatsApp phone number is mandatory; email is optional. The registration UI requires explicit consent to receive the verification message.
+- OTP expires after 5 minutes, permits at most 5 attempts, has a 60-second resend cooldown, and is limited to 5 sends per phone in a rolling 24-hour window. Old OTP records are removed after 24 hours.
+- OTP values are never stored or returned. Only SHA-256(OTP + per-request random salt) is stored and checked with constant-time comparison. The pending record stores a PBKDF2 password hash and salt, never the plaintext password. Pending rows are protected by a ScriptLock during send/verify and account creation.
+- Duplicate phone/email checks happen only after OTP entry to avoid exposing whether an account already exists through the public start endpoint. Public responses do not return provider error bodies or access tokens.
+- The backend uses an approved Meta AUTHENTICATION template. The send request fills the OTP in both the body variable and the first URL button parameter (`sub_type: url`, `index: 0`); the configured template must match that structure and language.
+- Configure these Script Properties in the Apps Script project (not in the spreadsheet CONFIG tab and never in GitHub):
+  - `WA_GRAPH_API_VERSION` — a currently supported Graph API version such as `v26.0`.
+  - `WA_PHONE_NUMBER_ID` — Meta WhatsApp Business phone-number ID.
+  - `WA_ACCESS_TOKEN` — server-side token with `whatsapp_business_messaging` permission.
+  - `WA_AUTH_TEMPLATE_NAME` — exact approved Authentication template name.
+  - `WA_TEMPLATE_LANGUAGE` — exact approved language code (for example `id`).
+- Only trusted Apps Script project editors should be able to view Script Properties. Use a system-user token with the minimum required permission and rotate it according to Meta's token policy.
+- Setup adds the `WALI_OTP` sheet. Run the updated database setup in a test Apps Script project / duplicate spreadsheet first and verify sheet creation, sending, expiry, wrong-code lockout, resend cooldown, daily limits, duplicate-account handling, and successful account/session creation.
+- This repository change does not configure Meta Business Manager, approve the template, send a live message, or update the deployed Apps Script runtime.
 ## Upload validation details
 
 - `decodeAndValidateUpload_()` rejects empty/malformed Base64 and checks the encoded length against the maximum byte size before calling `Utilities.base64Decode()`.
