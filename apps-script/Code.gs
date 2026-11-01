@@ -272,7 +272,7 @@ function finalizeLogin(sessionToken) {
  */
 function decodeAndValidateUpload_(base64Input, mimeTypeInput, maxBytes) {
   const mimeType = String(mimeTypeInput || '').trim().toLowerCase();
-  const encoded = String(base64Input || '').replace(/\s+/g, '');
+  const encoded = String(base64Input || '').replace(/\\s+/g, '');
   const limit = Math.max(1, Math.floor(Number(maxBytes) || 0));
   if (!encoded) return { success: false, message: 'File belum diterima server.' };
   if (!limit || encoded.length > Math.ceil(limit / 3) * 4) {
