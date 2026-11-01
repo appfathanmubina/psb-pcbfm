@@ -1,7 +1,7 @@
 # PSB Fathan Mubina — Security Audit
 
 **Repository:** `appfathanmubina/psb-pcbfm`  
-**Branch audited:** `security/batch-3-whatsapp-otp (Email OTP revision)` (proposed changes; review before merge)  
+**Branch audited:** `security/batch-3-email-otp` (proposed changes; review before merge)  
 **Repository visibility:** Public  
 **Audit type:** Static source review and GitHub repository hygiene review  
 **Runtime status:** Google Apps Script production runtime was not tested; repository changes have not been copied to or deployed in production.
