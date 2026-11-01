@@ -437,6 +437,7 @@ function renderRegisterWali(error=''){
       <div class="field"><label>No. HP WhatsApp *</label><input id="regPhone" autocomplete="tel" inputmode="tel" placeholder="08xxxxxxxxxx" required></div>
       <div class="field"><label>Email (opsional)</label><input id="regEmail" type="email" autocomplete="email" placeholder="nama@email.com"></div>
       <div class="muted" style="font-size:12px;margin:-2px 0 12px">Kode verifikasi 6 digit akan dikirim ke nomor WhatsApp yang didaftarkan.</div>
+      <label class="muted" style="display:flex;gap:8px;align-items:flex-start;font-size:12px;margin:-4px 0 12px"><input id="regWhatsappConsent" type="checkbox" required style="margin-top:2px"> Saya setuju menerima kode verifikasi pendaftaran melalui WhatsApp pada nomor tersebut.</label>
       <div class="field"><label>Password *</label><div class="input-wrap"><input id="regPassword" type="password" autocomplete="new-password" placeholder="Minimal 6 karakter" required><button class="toggle" type="button" onclick="toggleRegisterPassword('regPassword',this)">Lihat</button></div></div>
       <div class="field"><label>Konfirmasi Password *</label><input id="regConfirmPassword" type="password" autocomplete="new-password" placeholder="Ulangi password" required></div>
       <button class="btn btn-primary" id="registerBtn">Kirim Kode WhatsApp</button>
@@ -463,7 +464,7 @@ function toggleRegisterPassword(id,button){const i=$(id);i.type=i.type==='passwo
 async function submitRegisterWali(e){
   e.preventDefault();const btn=$('registerBtn');btn.disabled=true;btn.textContent='Mengirim kode...';loading(true,'Mengirim kode verifikasi WhatsApp...');
   try{
-    const r=await server('startWaliRegistration',{name:$('regName').value,phone:$('regPhone').value,email:$('regEmail').value,password:$('regPassword').value,confirmPassword:$('regConfirmPassword').value});
+    const r=await server('startWaliRegistration',{name:$('regName').value,phone:$('regPhone').value,email:$('regEmail').value,password:$('regPassword').value,confirmPassword:$('regConfirmPassword').value,whatsappConsent:$('regWhatsappConsent').checked});
     if(r.success){state.waliOtpVerificationId=r.verificationId;state.waliOtpPhone=r.maskedPhone||'nomor WhatsApp Anda';renderWaliOtp();showToast('Kode verifikasi telah dikirim melalui WhatsApp.','success');}
     else renderRegisterWali(r.message);
   }catch(err){renderRegisterWali('Kode WhatsApp belum dapat dikirim. Periksa koneksi dan coba kembali.')}finally{loading(false)}
