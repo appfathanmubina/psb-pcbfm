@@ -33,7 +33,7 @@ assert.match(source, /const legacy = sha256Hex_\(String\(password\) \+ salt\)/);
 assert.match(source, /function migrateLegacyPasswordAfterLogin_\(/);
 assert.match(source, /findUserById_\(verifiedUser\.userId, true\)/);
 assert.match(source, /passwordCheck\.needsUpgrade && !migrateLegacyPasswordAfterLogin_\(user, password\)/);
-assert.match(source, /verifyPasswordForUser_\(String\(currentPassword \|\| ''\), result\.user\)/);
+assert.match(source, /verifyPasswordForUser_\(String\(currentPassword \|\| ''\), current\)/);
 assert.match(setup, /hashPassword_\(secret, salt\)/);
 
 console.log('Password migration checks passed.');
