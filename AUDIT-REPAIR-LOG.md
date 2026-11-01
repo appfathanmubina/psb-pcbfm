@@ -194,3 +194,19 @@ Both obsolete workflows have now been removed. This also removes their stale ref
 - DEPLOY uploads the current checked-in source, creates a new immutable version, then updates the existing deployment ID. It does not create a new deployment.
 - Before upload, the helper checks the remote project's file names and aborts if there are remote-only files, because the Apps Script updateContent API replaces the full project.
 - No Apps Script PUSH or production DEPLOY was executed by this repository change. Configure secrets and run PUSH first; inspect the result and test the app before running DEPLOY.
+
+
+## Repair batch 11 — Apps Script DEPLOY kembali manual
+
+| ID | Temuan | Perubahan | Status |
+|---|---|---|---|
+| CI-015 | Workflow DEPLOY otomatis tidak lagi sesuai keputusan operasional: deployment Web App harus dilakukan langsung oleh pemilik project melalui editor Apps Script. | Menghapus `.github/workflows/deploy-apps-script.yml`. | Selesai |
+| CI-016 | Helper API masih memuat fungsi untuk membuat versi dan mengubah deployment produksi. | Menghapus fungsi DEPLOY dari helper; helper kini hanya menerima perintah `push`. | Selesai |
+
+### Alur kerja yang berlaku
+- GitHub Pages tetap dibangun/deploy otomatis melalui workflow Pages yang sudah ada.
+- PUSH Apps Script tetap tersedia sebagai workflow manual GitHub Actions dan hanya mengunggah source dari folder `apps-script/`; PUSH tidak mengubah deployment Web App yang sedang aktif.
+- DEPLOY Apps Script dilakukan manual melalui editor Google Apps Script: periksa source yang sudah disinkronkan, buat versi baru, lalu kelola deployment Web App yang sudah ada. Pertahankan deployment ID dan URL produksi.
+- `PRODUCTION_DEPLOYMENT_ID` tidak lagi diperlukan oleh workflow Apps Script karena workflow DEPLOY otomatis telah dihapus.
+- PUSH otomatis melalui GitHub Actions masih membutuhkan autentikasi Google yang sah. Tidak ada token atau secret yang dibuat, dibaca, atau diubah dalam batch ini.
+- Tidak ada file source aplikasi Apps Script, spreadsheet produksi, atau deployment Web App produksi yang diubah.
