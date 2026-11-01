@@ -366,19 +366,30 @@ function changePassword(sessionToken, currentPassword, newPassword) {
   if (String(newPassword || '').length < 6) return fail_('Password baru minimal 6 karakter.');
   if (String(newPassword) === String(currentPassword || '')) return fail_('Password baru harus berbeda dari password lama.');
 
-  const oldPasswordCheck = verifyPasswordForUser_(String(currentPassword || ''), result.user);
-  if (!oldPasswordCheck.valid) return fail_('Password lama tidak sesuai.');
+  const lock = LockService.getScriptLock();
+  lock.waitLock(20000);
+  try {
+    const current = findUserById_(result.user.userId, true);
+    if (!current || current.passwordHash !== result.user.passwordHash || current.passwordSalt !== result.user.passwordSalt) {
+      return fail_('Data password telah berubah. Silakan masuk kembali sebelum mengganti password.');
+    }
+    const oldPasswordCheck = verifyPasswordForUser_(String(currentPassword || ''), current);
+    if (!oldPasswordCheck.valid) return fail_('Password lama tidak sesuai.');
 
-  const salt = Utilities.getUuid().replace(/-/g, '').substring(0, 32);
-  const hash = hashPassword_(String(newPassword), salt);
-  const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('USERS');
-  sheet.getRange(result.user.rowNumber, 7, 1, 3).setValues([[hash, salt, result.user.role]]);
-  sheet.getRange(result.user.rowNumber, 14, 1, 2).setValues([[new Date(), false]]);
-  revokeOtherSessionsForUser_(result.user.userId, String(result.sessionRow.rowNumber));
-  try { CacheService.getScriptCache().remove('PSB_USER_V3_' + sha256Hex_(String(result.user.phoneNormalized || '').toLowerCase()).substring(0, 32)); } catch (e) {}
-  if (result.user.emailNormalized) { try { CacheService.getScriptCache().remove('PSB_USER_V3_' + sha256Hex_(String(result.user.emailNormalized || '').toLowerCase()).substring(0, 32)); } catch (e) {} }
-  writeAudit_(result.user.userId, 'CHANGE_PASSWORD', 'AUTH', result.user.userId, '', '', 'Password berhasil diubah');
-  return { success: true, message: 'Password berhasil diubah.' };
+    const salt = Utilities.getUuid().replace(/-/g, '').substring(0, 32);
+    const hash = hashPassword_(String(newPassword), salt);
+    const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('USERS');
+    sheet.getRange(current.rowNumber, 7, 1, 3).setValues([[hash, salt, current.role]]);
+    sheet.getRange(current.rowNumber, 14, 1, 2).setValues([[new Date(), false]]);
+    revokeOtherSessionsForUser_(current.userId, String(result.sessionRow.rowNumber));
+    try { CacheService.getScriptCache().remove('PSB_USER_V3_' + sha256Hex_(String(current.phoneNormalized || '').toLowerCase()).substring(0, 32)); } catch (e) {}
+    if (current.emailNormalized) { try { CacheService.getScriptCache().remove('PSB_USER_V3_' + sha256Hex_(String(current.emailNormalized || '').toLowerCase()).substring(0, 32)); } catch (e) {} }
+    try { CacheService.getScriptCache().remove('PSB_USER_ID_' + sha256Hex_(String(current.userId)).substring(0, 32)); } catch (e) {}
+    writeAudit_(current.userId, 'CHANGE_PASSWORD', 'AUTH', current.userId, '', '', 'Password berhasil diubah');
+    return { success: true, message: 'Password berhasil diubah.' };
+  } finally {
+    lock.releaseLock();
+  }
 }
 
 // =====================================================
@@ -793,28 +804,33 @@ function adminResetUserPassword(sessionToken, payload) {
   if (newPassword.length < 6) return fail_('Password baru minimal 6 karakter.');
   if (newPassword !== confirmPassword) return fail_('Konfirmasi password tidak sama.');
 
-  const target = findUserById_(userId);
-  if (!target) return fail_('Pengguna tidak ditemukan.');
-
-  const salt = Utilities.getUuid().replace(/-/g, '').substring(0, 32);
-  const hash = hashPassword_(newPassword, salt);
-  const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('USERS');
-  if (!sheet) return fail_('Sheet USERS tidak ditemukan.');
-
-  // USERS: passwordHash=7, passwordSalt=8, role=9, updatedAt=14, mustChangePassword=15.
-  sheet.getRange(target.rowNumber, 7, 1, 3).setValues([[hash, salt, target.role]]);
-  sheet.getRange(target.rowNumber, 14, 1, 2).setValues([[new Date(), true]]);
-
-  // Password reset oleh SUPERADMIN memaksa seluruh sesi target login ulang.
-  const revoked = revokeOtherSessionsForUser_(target.userId, 0);
+  const lock = LockService.getScriptLock();
+  lock.waitLock(20000);
   try {
-    if (target.phoneNormalized) CacheService.getScriptCache().remove('PSB_USER_V3_' + sha256Hex_(String(target.phoneNormalized).toLowerCase()).substring(0, 32));
-    if (target.emailNormalized) CacheService.getScriptCache().remove('PSB_USER_V3_' + sha256Hex_(String(target.emailNormalized).toLowerCase()).substring(0, 32));
-    CacheService.getScriptCache().remove('PSB_USER_ID_' + sha256Hex_(String(target.userId)).substring(0, 32));
-  } catch (e) {}
+    const target = findUserById_(userId, true);
+    if (!target) return fail_('Pengguna tidak ditemukan.');
 
-  writeAudit_(actor.userId, 'RESET_PASSWORD', 'USER', target.userId, '', JSON.stringify({targetUserId:target.userId}), 'SUPERADMIN mereset password pengguna');
-  return {success:true, message:'Password pengguna berhasil direset. Pengguna wajib mengganti password saat login berikutnya.', revokedSessions:revoked};
+    const salt = Utilities.getUuid().replace(/-/g, '').substring(0, 32);
+    const hash = hashPassword_(newPassword, salt);
+    const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('USERS');
+    if (!sheet) return fail_('Sheet USERS tidak ditemukan.');
+
+    // USERS: passwordHash=7, passwordSalt=8, role=9, updatedAt=14, mustChangePassword=15.
+    sheet.getRange(target.rowNumber, 7, 1, 3).setValues([[hash, salt, target.role]]);
+    sheet.getRange(target.rowNumber, 14, 1, 2).setValues([[new Date(), true]]);
+
+    const revoked = revokeOtherSessionsForUser_(target.userId, 0);
+    try {
+      if (target.phoneNormalized) CacheService.getScriptCache().remove('PSB_USER_V3_' + sha256Hex_(String(target.phoneNormalized).toLowerCase()).substring(0, 32));
+      if (target.emailNormalized) CacheService.getScriptCache().remove('PSB_USER_V3_' + sha256Hex_(String(target.emailNormalized).toLowerCase()).substring(0, 32));
+      CacheService.getScriptCache().remove('PSB_USER_ID_' + sha256Hex_(String(target.userId)).substring(0, 32));
+    } catch (e) {}
+
+    writeAudit_(actor.userId, 'RESET_PASSWORD', 'USER', target.userId, '', JSON.stringify({targetUserId:target.userId}), 'SUPERADMIN mereset password pengguna');
+    return {success:true, message:'Password pengguna berhasil direset. Pengguna wajib mengganti password saat login berikutnya.', revokedSessions:revoked};
+  } finally {
+    lock.releaseLock();
+  }
 }
 
 function createManualUser(sessionToken, payload) {
