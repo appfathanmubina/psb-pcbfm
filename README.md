@@ -2,15 +2,16 @@
 
 Repository ini adalah tahap awal pemisahan frontend dari Google Apps Script.
 
-## Prinsip migrasi
+## Arsitektur dan prinsip kerja
 
-- Business logic Apps Script **tidak diubah** pada tahap ini.
-- Source Apps Script tetap berada di `apps-script/`.
-- `apps-script/Index.html` tetap menjadi entry point HTML Service.
-- `apps-script/Index.legacy.html` adalah snapshot source asli untuk rollback/reference.
-- Frontend hasil ekstraksi berada di `frontend/`.
-- `google.script.run` tetap menjadi transport yang kompatibel untuk tahap Apps Script.
-- Static PWA hosting belum diaktifkan sebagai backend/API publik.
+- Google Apps Script tetap menjadi backend produksi yang mengelola autentikasi, session, role, business logic, Google Sheets, dan Google Drive.
+- Repository menyimpan frontend PWA serta salinan source backend pada folder `apps-script/`.
+- `apps-script/Index.html` tetap menjadi entry point HTML Service untuk akses langsung melalui Apps Script.
+- `apps-script/Index.legacy.html` adalah snapshot UI lama untuk referensi/rollback, bukan file yang disalin ke deployment.
+- Frontend PWA statis berada di `frontend/` dan diterbitkan melalui GitHub Pages.
+- PWA berkomunikasi dengan Apps Script melalui `frontend/api-bridge.js`, `Bridge.html`, dan `google.script.run` di sisi Bridge.
+- GitHub Actions memvalidasi source dan menerbitkan frontend GitHub Pages saja. Sinkronisasi source dan deployment Apps Script dilakukan manual.
+- Perubahan backend yang baru ada di GitHub belum dianggap aktif di Apps Script sampai disalin, disimpan, dan deployment Web App diperbarui.
 
 ## Struktur
 
@@ -30,7 +31,6 @@ apps-script/
   SetupDatabase.gs
   BridgeServer.gs
   Bridge.html
-  .clasp.example.json
 
 docs/
 .github/
@@ -86,7 +86,7 @@ Pemeriksaan status saat audit terakhir menunjukkan branch `main` belum protected
 
 ## Validation
 
-Workflow `Validate PSB PWA` memeriksa struktur source, syntax JavaScript, JSON, dan kesamaan manifest root dengan manifest Apps Script.
+Workflow `Validate PSB PWA` memeriksa struktur source frontend, syntax JavaScript, JSON, dan kesamaan manifest root dengan manifest Apps Script. Workflow ini tidak menguji runtime Google Apps Script atau melakukan deployment backend.
 
 ## Catatan PWA
 
