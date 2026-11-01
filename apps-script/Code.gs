@@ -75,11 +75,13 @@ function pwaBridgeCall(functionName, args) {
     }
     return rpcSafe_(handler.apply(null, callArgs));
   } catch (e) {
-    console.error('PWA bridge backend error: ' + e);
+    // Detail error hanya masuk execution log; jangan bocorkan detail internal
+    // (nama sheet, struktur data, atau informasi implementasi) ke pemanggil publik.
+    console.error('PWA bridge backend error: ' + String(e && e.stack || e));
     return {
       success: false,
       code: 'BRIDGE_BACKEND_ERROR',
-      message: String(e && e.message || 'Terjadi kesalahan pada backend.')
+      message: 'Terjadi kesalahan pada server. Silakan coba kembali atau hubungi administrator.'
     };
   }
 }
