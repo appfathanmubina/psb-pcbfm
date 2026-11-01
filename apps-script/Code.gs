@@ -266,6 +266,42 @@ function finalizeLogin(sessionToken) {
   return { success: true };
 }
 
+/**
+ * Decode uploads only after checking the encoded request size, then verify
+ * the actual file signature. Keep the accepted formats aligned with the UI.
+ */
+function decodeAndValidateUpload_(base64Input, mimeTypeInput, maxBytes) {
+  const mimeType = String(mimeTypeInput || '').trim().toLowerCase();
+  const encoded = String(base64Input || '').replace(/\\s+/g, '');
+  const limit = Math.max(1, Math.floor(Number(maxBytes) || 0));
+  if (!encoded) return { success: false, message: 'File belum diterima server.' };
+  if (!limit || encoded.length > Math.ceil(limit / 3) * 4) {
+    return { success: false, message: 'Ukuran file melebihi batas yang diizinkan.' };
+  }
+  if (!/^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/.test(encoded)) {
+    return { success: false, message: 'Format data file tidak valid.' };
+  }
+  const signatures = {
+    'application/pdf': function(b) { return b.length >= 5 && b[0] === 37 && b[1] === 80 && b[2] === 68 && b[3] === 70 && b[4] === 45; },
+    'image/jpeg': function(b) { return b.length >= 3 && (b[0] & 255) === 255 && (b[1] & 255) === 216 && (b[2] & 255) === 255; },
+    'image/png': function(b) { return b.length >= 8 && [137,80,78,71,13,10,26,10].every(function(v,i){ return (b[i] & 255) === v; }); },
+    'image/webp': function(b) { return b.length >= 12 && String.fromCharCode.apply(null,b.slice(0,4)) === 'RIFF' && String.fromCharCode.apply(null,b.slice(8,12)) === 'WEBP'; }
+  };
+  if (!Object.prototype.hasOwnProperty.call(signatures, mimeType)) {
+    return { success: false, message: 'Format file tidak didukung.' };
+  }
+  let bytes;
+  try { bytes = Utilities.base64Decode(encoded); }
+  catch (e) { return { success: false, message: 'Data file tidak valid atau rusak.' }; }
+  if (!bytes || !bytes.length || bytes.length > limit) {
+    return { success: false, message: 'Ukuran file melebihi batas yang diizinkan.' };
+  }
+  if (!signatures[mimeType](bytes)) {
+    return { success: false, message: 'Isi file tidak sesuai dengan tipe file yang dikirim.' };
+  }
+  return { success: true, bytes: bytes, size: bytes.length };
+}
+
 function registerWali(payload) {
   payload = payload || {};
   const name = String(payload.name || '').trim();
@@ -1682,7 +1718,7 @@ function submitPayment(sessionToken,payload){
   if(!canAccessRegistration_(actor,found.registration) && !hasRoleDirect_(actor,PSB_PAYMENT_MANAGE_ROLES)) return fail_('Anda tidak memiliki akses ke tagihan ini.');
   if(String(br.object.status).toUpperCase()==='PAID') return fail_('Tagihan ini sudah lunas.');
   if(!/^image\/(jpeg|png|webp)$/i.test(mimeType) && mimeType!=='application/pdf') return fail_('Bukti pembayaran harus berupa JPG, PNG, WEBP, atau PDF.');
-  const bytes=Utilities.base64Decode(base64); if(bytes.length>5*1024*1024) return fail_('Ukuran bukti pembayaran maksimal 5 MB.');
+  const upload=decodeAndValidateUpload_(base64,mimeType,5*1024*1024); if(!upload.success) return fail_(upload.message==='Ukuran file melebihi batas yang diizinkan.'?'Ukuran bukti pembayaran maksimal 5 MB.':upload.message); const bytes=upload.bytes;
   const lock=LockService.getScriptLock(); lock.waitLock(10000);
   try{
     const paymentSheet=SpreadsheetApp.getActiveSpreadsheet().getSheetByName(PSB_SHEETS.PAYMENTS);
@@ -2187,9 +2223,12 @@ function sendChatMessage(sessionToken,threadId,rawMessage,attachmentPayload){
       const allowed=String(getConfig_('CHAT_ATTACHMENT_ALLOWED_MIME_TYPES')||'image/jpeg,image/png,image/webp,application/pdf').split(',').map(x=>x.trim().toLowerCase()).filter(Boolean);
       if(!attachmentMimeType||!allowed.includes(attachmentMimeType))return fail_('Tipe lampiran tidak diizinkan. Gunakan JPG, PNG, WEBP, atau PDF.');
       const base64=String(attachmentPayload.base64||'').trim();
-      let bytes;try{bytes=Utilities.base64Decode(base64);}catch(e){return fail_('Lampiran tidak valid. Silakan pilih file kembali.');}
-      attachmentSize=bytes.length;const maxMb=Math.max(1,Number(getConfig_('CHAT_ATTACHMENT_MAX_SIZE_MB'))||5);
-      if(attachmentSize>maxMb*1024*1024)return fail_('Ukuran lampiran melebihi batas '+maxMb+' MB.');
+      const configuredMaxMb=Math.max(1,Number(getConfig_('CHAT_ATTACHMENT_MAX_SIZE_MB'))||5);
+      const maxMb=Math.min(configuredMaxMb,10);
+      const upload=decodeAndValidateUpload_(base64,attachmentMimeType,maxMb*1024*1024);
+      if(!upload.success)return fail_(upload.message==='Ukuran file melebihi batas yang diizinkan.'?'Ukuran lampiran melebihi batas '+maxMb+' MB.':upload.message);
+      const bytes=upload.bytes;
+      attachmentSize=upload.size;
       const clientSize=Number(attachmentPayload.fileSize||0);if(clientSize>0&&Math.abs(clientSize-attachmentSize)>1024)return fail_('Ukuran lampiran tidak sesuai. Silakan pilih file kembali.');
       const reg=findRegistration_(String(thread.registrationId));if(!reg)return fail_('Pendaftaran terkait percakapan tidak ditemukan.');
       const folder=getChatAttachmentFolder_(reg.registration,thread);
@@ -3141,12 +3180,16 @@ function uploadDocument(sessionToken, payload) {
     return fail_('Tipe file tidak diizinkan untuk dokumen "' + String(type.name || '') + '".');
   }
 
-  const bytes = Utilities.base64Decode(base64);
-  const actualSize = bytes.length;
-  const maxSizeMb = Number(type.maxSizeMb || 0);
-  if (maxSizeMb > 0 && actualSize > maxSizeMb * 1024 * 1024) {
-    return fail_('Ukuran file melebihi batas ' + maxSizeMb + ' MB.');
+  const configuredMaxSizeMb = Number(type.maxSizeMb || 0);
+  const maxSizeMb = Math.min(configuredMaxSizeMb > 0 ? configuredMaxSizeMb : 10, 20);
+  const upload = decodeAndValidateUpload_(base64, mimeType, maxSizeMb * 1024 * 1024);
+  if (!upload.success) {
+    return fail_(upload.message === 'Ukuran file melebihi batas yang diizinkan.'
+      ? 'Ukuran file melebihi batas ' + maxSizeMb + ' MB.'
+      : upload.message);
   }
+  const bytes = upload.bytes;
+  const actualSize = upload.size;
   if (clientSize > 0 && Math.abs(clientSize - actualSize) > 1024) {
     return fail_('Ukuran file tidak sesuai. Silakan pilih file kembali.');
   }
