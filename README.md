@@ -69,7 +69,7 @@ Untuk memastikan source di kedua tempat sama, gunakan prosedur manual berikut:
 - Fungsi pemeliharaan internal (`cleanupPSBSessions_`, `runChatAutomation_`) dan fungsi setup/bootstrap (`setupPSBDatabase_`, `configureInitialSuperadmin_`, `createInitialSuperadmin_`, `installChatAutomationTrigger_`) memakai akhiran garis bawah agar tidak menjadi endpoint `google.script.run` yang dapat dipanggil browser.
 - `ensureSheet_()` tidak lagi menimpa header sheet yang berbeda. Proses setup berhenti dengan pesan kesalahan agar struktur dan data dapat diperiksa manual.
 - Error internal dari handler Bridge dicatat di execution log dan pesan yang dikirim ke pemanggil publik dibuat umum.
-- Pendaftaran Wali kini mewajibkan OTP WhatsApp. Nomor WhatsApp wajib, email opsional, dan akun baru hanya dibuat setelah OTP berhasil diverifikasi. Token WhatsApp hanya disimpan di Script Properties Apps Script, tidak di repository.
+- Pendaftaran Wali mewajibkan OTP email. Email wajib, nomor HP opsional, dan akun baru hanya dibuat setelah OTP berhasil diverifikasi. Pengiriman menggunakan MailApp bawaan Google Apps Script; tidak memerlukan token layanan eksternal.
 - Tidak ada workflow rekonsiliasi otomatis, OIDC, clasp, atau kredensial Google yang diperlukan untuk prosedur sinkronisasi manual ini.
 - GitHub Pages hanya menerbitkan frontend PWA; ia tidak menjalankan backend Apps Script.
 - GitHub menjadi tempat pengelolaan source dan salinan backend; Google Apps Script tetap menjadi backend produksi.
@@ -88,21 +88,12 @@ Aktifkan aturan perlindungan branch/ruleset pada GitHub untuk `main`:
 
 Pemeriksaan status saat audit terakhir menunjukkan branch `main` belum protected. Pengaturan ini harus diaktifkan pada **Settings → Rules → Rulesets** atau **Settings → Branches** oleh pemilik/admin repository; perubahan file dalam Pull Request tidak dapat mengaktifkannya sendiri.
 
-## Konfigurasi WhatsApp OTP
+## Konfigurasi Email OTP
 
-Integrasi menggunakan Meta WhatsApp Cloud API dan template kategori **AUTHENTICATION** yang sudah disetujui. Sebelum pendaftaran Wali diaktifkan pada deployment Apps Script, siapkan nomor WhatsApp Business dan template OTP di Meta Business Manager.
+Integrasi menggunakan MailApp bawaan Google Apps Script. Tidak diperlukan akun Meta, WhatsApp Cloud API, token API, atau template eksternal. Email verifikasi dikirim dari akun Google yang menjalankan Apps Script. Kuota penerima harian bergantung pada jenis akun Google dan batas Apps Script. Kode berlaku 5 menit, maksimal 5 percobaan, jeda kirim ulang 60 detik, dan maksimal 5 pengiriman per alamat email dalam 24 jam.
 
-Tambahkan properti berikut melalui Apps Script → Project Settings → Script Properties. Jangan masukkan nilainya ke GitHub, file source, atau spreadsheet:
+Opsional, administrator dapat mengatur Script Properties `PSB_OTP_SENDER_NAME` dan `PSB_OTP_REPLY_TO`. Jangan menyimpan kredensial di repository. Uji terlebih dahulu pada project Apps Script dan spreadsheet duplikat.
 
-- `WA_GRAPH_API_VERSION` — versi Graph API yang masih didukung Meta.
-- `WA_PHONE_NUMBER_ID` — ID nomor telepon WhatsApp Business.
-- `WA_ACCESS_TOKEN` — token server-side dengan izin `whatsapp_business_messaging`.
-- `WA_AUTH_TEMPLATE_NAME` — nama template Authentication yang disetujui.
-- `WA_TEMPLATE_LANGUAGE` — kode bahasa template yang persis, misalnya `id`.
-
-Template harus memiliki kode OTP pada body dan tombol OTP pertama (copy-code / URL OTP) agar cocok dengan payload pengiriman backend. Kode berlaku 5 menit, maksimal 5 percobaan, jeda kirim ulang 60 detik, dan maksimal 5 pengiriman per nomor dalam 24 jam.
-
-Perubahan source ini hanya berada di GitHub sampai disalin secara manual. Uji terlebih dahulu pada project Apps Script dan spreadsheet duplikat. Lihat [docs/security-audit.md](docs/security-audit.md) untuk rincian alur dan batasan.
 ## Validation
 
 Workflow `Validate PSB PWA` memeriksa struktur source frontend, syntax JavaScript, JSON, dan kesamaan manifest root dengan manifest Apps Script. Workflow ini tidak menguji runtime Google Apps Script atau melakukan deployment backend.
