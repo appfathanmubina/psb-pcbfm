@@ -62,7 +62,7 @@ Untuk memastikan source di kedua tempat sama, gunakan prosedur manual berikut:
 
 - Repository tetap **Public** sesuai keputusan pengelola. Jangan pernah menyimpan password, hash/salt password, token, private key, atau kredensial layanan di source.
 - Fungsi pengisian dan penghapusan data dummy (`seedPSBTestData` dan `clearPSBTestData`) telah dihapus dari source produksi.
-- Kredensial bootstrap Superadmin tidak lagi ditanam di source. Untuk instalasi baru, editor Apps Script tepercaya harus menjalankan `configureInitialSuperadmin(username, nama, password)` dari editor Apps Script. Gunakan password kuat minimal 12 karakter. Fungsi ini menyimpan hash dan salt ke Script Properties, bukan mengembalikannya ke browser. Setelah akun dibuat oleh `setupPSBDatabase()`, properti bootstrap dihapus.
+- Kredensial bootstrap Superadmin tidak lagi ditanam di source. Untuk instalasi baru, editor Apps Script tepercaya harus menjalankan `configureInitialSuperadmin()` dari editor Apps Script. Fungsi akan meminta username, nama, dan password melalui dialog spreadsheet. Gunakan password kuat minimal 12 karakter dan pastikan layar tidak terlihat orang lain. Fungsi ini menyimpan hash dan salt ke Script Properties, bukan ke source repository atau browser. Setelah akun dibuat oleh `setupPSBDatabase()`, properti bootstrap dihapus.
 - Jika akun Superadmin sudah ada, fungsi bootstrap tidak menimpa password atau akun yang ada.
 - `ensureSheet_()` tidak lagi menimpa header sheet yang berbeda. Proses setup berhenti dengan pesan kesalahan agar struktur dan data dapat diperiksa manual.
 - Error internal dari handler Bridge dicatat di execution log dan pesan yang dikirim ke pemanggil publik dibuat umum.
