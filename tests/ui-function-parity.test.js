@@ -14,7 +14,7 @@ const intentionallyDifferentBodies = [
 
 function extractFunctionBodies(source) {
   const functions = new Map();
-  const declaration = /(?:async\\s+)?function\\s+([A-Za-z_$][\\w$]*)\\s*\\(/g;
+  const declaration = /(?:async\s+)?function\s+([A-Za-z_$][\w$]*)\s*\(/g;
   let match;
   while ((match = declaration.exec(source))) {
     const name = match[1], start = match.index;
