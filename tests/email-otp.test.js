@@ -15,6 +15,7 @@ mustInclude(code, [
   'function sendWaliEmailOtp_(email, otp)',
   'MailApp.sendEmail(options)',
   'MailApp.getRemainingDailyQuota()',
+  'if (!email || email.length > 254',
   'sha256Hex_(otp+otpSalt)',
   'constantTimeEqual_(expected,String(row[8]||\'\'))',
   'PSB_WALI_OTP_TTL_MS_ = 5 * 60 * 1000',
@@ -26,7 +27,7 @@ mustInclude(code, [
   "'startWaliRegistration','resendWaliRegistrationEmailOtp','verifyWaliRegistration'"
 ], 'backend');
 assert.ok(!/graph\.facebook\.com|WA_ACCESS_TOKEN|WHATSAPP OTP/.test(code), 'WhatsApp API remnants found in registration backend');
-assert.ok(code.includes('return (String(row[3]||\'\') && String(r[3]||\'\')===String(row[3]||\'\'))'), 'optional phone duplicate check must return a boolean');
+assert.ok(code.includes("return (String(row[3]||'') && String(r[3]||'')===String(row[3]||''))"), 'optional phone duplicate check must return a boolean');
 assert.ok(setup.includes("'emailSendStatus'"), 'OTP sheet metadata header must be emailSendStatus');
 for (const [source,label] of [[pwa,'PWA'],[html,'Apps Script UI']]) {
   mustInclude(source,['Email aktif *','No. HP (opsional)','resendWaliRegistrationEmailOtp','Verifikasi Email'],label);
