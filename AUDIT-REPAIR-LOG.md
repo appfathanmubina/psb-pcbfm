@@ -229,3 +229,28 @@ Both obsolete workflows have now been removed. This also removes their stale ref
 - File source aplikasi Apps Script, spreadsheet produksi, project Apps Script, dan deployment produksi tidak diubah dalam batch ini.
 
 **Catatan koreksi:** Batch 11 sebelumnya menyatakan PUSH Apps Script tetap tersedia; keputusan batch 12 menggantikannya. Mulai batch ini, baik PUSH maupun DEPLOY Apps Script dilakukan manual.
+
+
+## Repair batch 13 — audit statis integrasi PWA API Bridge
+
+| ID | Pemeriksaan | Hasil | Status |
+|---|---|---|---|
+| BRIDGE-004 | Kesesuaian fungsi yang dipanggil frontend dengan allowlist API Bridge. | Ditemukan 76 nama fungsi server yang dipanggil secara literal dari `frontend/app.js`; seluruhnya tercakup dalam allowlist `PSB_PWA_BRIDGE_ALLOWED_FUNCTIONS`. | Lulus statis |
+| BRIDGE-005 | Kesesuaian allowlist dengan fungsi backend. | Seluruh 79 entri allowlist memiliki deklarasi fungsi backend; tidak ditemukan nama ganda. | Lulus statis |
+| BRIDGE-006 | Versi Bridge antara HTML transport dan backend. | `Bridge.html` dan `Code.gs` sama-sama menggunakan versi `32.3.8`. | Lulus statis |
+| BRIDGE-007 | Validasi akses fungsi backend. | Fungsi sensitif yang diperiksa menggunakan pemeriksaan sesi/role; endpoint publik dibatasi pada informasi publik, login, dan pendaftaran Wali. `getRegistrationDocuments` mendelegasikan pemeriksaan akses ke `getDocumentOptions`. | Lulus pemeriksaan statis; uji negatif runtime pending |
+| BRIDGE-008 | Izin iframe Apps Script. | Jalur `doGet(e)` untuk `?bridge=1` mengembalikan template `Bridge` dengan `XFrameOptionsMode.ALLOWALL`; jalur aplikasi utama juga menggunakan mode tersebut. | Lulus statis |
+| BRIDGE-009 | Handshake lintas origin. | Kode frontend memverifikasi origin Apps Script tepercaya dan sumber iframe; Bridge memeriksa origin PWA terhadap allowlist dan mendukung ping berulang. | Lulus review kode; browser runtime pending |
+
+### Hasil validasi GitHub setelah Repair Batch 12
+- Validate PSB PWA: berhasil pada commit `38b66a75f70ded6034eb083f9d498044878bae40`.
+- Deploy PWA to GitHub Pages: berhasil pada commit yang sama.
+- GitHub Pages build/deployment: berhasil pada commit yang sama.
+- Tidak ada perubahan source aplikasi dalam batch 13; hanya hasil audit yang dicatat.
+
+### Batas verifikasi dan langkah manual yang masih wajib
+- Pemeriksaan di atas adalah audit statis repository, bukan bukti bahwa deployment Apps Script yang sedang aktif sudah menggunakan source `Bridge.html`/`Code.gs` versi `32.3.8`.
+- URL Apps Script produksi tidak dapat diverifikasi melalui pemeriksaan repository. Tidak dilakukan PUSH, sinkronisasi source, atau DEPLOY ke Apps Script.
+- Sebelum menyatakan integrasi PWA–Apps Script lulus runtime, pemilik project perlu memastikan source `Code.gs` dan `Bridge.html` versi repository sudah disalin ke editor Apps Script, lalu memperbarui deployment Web App yang sama secara manual. Pertahankan deployment ID dan URL produksi.
+- Setelah deployment manual, uji URL PWA pada browser: sinyal bridge siap, `getPublicConfig`, login, `validateSession`, navigasi dashboard, logout, serta akses role yang tidak berwenang. Uji juga bahwa sesi Wali hanya dapat membaca/mengubah pendaftaran miliknya sendiri.
+- Sampai uji tersebut selesai, status integrasi end-to-end tetap **menunggu uji runtime manual**; jangan menandai BRIDGE-004 s.d. BRIDGE-009 sebagai runtime verified.
