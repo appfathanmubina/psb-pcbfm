@@ -41,24 +41,30 @@ appsscript.json
 
 Apps Script tidak mengizinkan file `.gs` dan `.html` memiliki nama dasar yang sama dalam satu project. Karena itu helper server yang sebelumnya bernama `Bridge.gs` disimpan sebagai `BridgeServer.gs`, sedangkan halaman komunikasi tetap bernama `Bridge.html`. Fungsi `doGet()` di `Code.gs` memanggil file HTML dengan nama `Bridge`; nama tersebut tidak perlu diubah.
 
-## Apps Script production safety
+## Sinkronisasi source Apps Script secara manual
 
-Semua workflow Apps Script production menggunakan GitHub Environment bernama `production`. Konfigurasikan Environment tersebut dengan required reviewers agar proses push/deploy memerlukan persetujuan manusia. Jangan simpan token atau isi file kredensial di repository.
+Repository ini menyimpan salinan source backend Apps Script pada folder `apps-script/`, sedangkan project Google Apps Script tetap menjadi backend produksi yang berjalan. Perubahan di GitHub **tidak otomatis** mengubah source maupun deployment Apps Script.
 
-### Secrets yang wajib tersedia
+Untuk memastikan source di kedua tempat sama, gunakan prosedur manual berikut:
 
-- `APPS_SCRIPT_ID`: Script ID project Apps Script yang benar.
-- `CLASPRC_JSON`: kredensial clasp.
-- `PRODUCTION_DEPLOYMENT_ID`: ID deployment web app produksi yang sudah ada. Workflow deploy tidak lagi menerima ID bebas dari input.
+1. Buka project Apps Script produksi dan salin isi file dari editor Apps Script ke file yang sesuai di repository:
+   - `Bridge.html` → `apps-script/Bridge.html`
+   - `BridgeServer.gs` → `apps-script/BridgeServer.gs`
+   - `Code.gs` → `apps-script/Code.gs`
+2. Periksa juga file backend lain, terutama `Index.html`, `SetupDatabase.gs`, dan `appsscript.json`. Jangan menghapus atau mengganti file project lain hanya karena tidak termasuk tiga file utama.
+3. Commit perubahan ke branch kerja, tinjau diff, lalu gabungkan ke `main` setelah disetujui.
+4. Audit source di repository. Jika ada perbaikan, lakukan dan tinjau perubahan di GitHub terlebih dahulu.
+5. Setelah source repository disetujui, salin perubahan yang diperlukan kembali ke project Apps Script. Pastikan file lain tetap dipertahankan.
+6. Perbarui deployment Web App yang sudah ada melalui Apps Script, bukan membuat deployment baru tanpa kebutuhan. Pertahankan URL produksi agar frontend PWA tetap terhubung.
+7. Uji PWA dan backend setelah deployment.
 
-### Urutan operasi
+### Batasan dan keamanan
 
-1. Jalankan `Apps Script Reconcile (read only)` dari branch `main`. Workflow hanya menarik project ke direktori sementara dan membandingkan manifest. Jika berbeda, hentikan proses dan review konfigurasi Apps Script terlebih dahulu.
-2. Untuk mengirim source repository ke Apps Script, jalankan `Push Apps Script` dari `main` dengan input konfirmasi `PUSH`. Workflow menarik source online ke direktori sementara, memblokir jika daftar file atau manifest berbeda, lalu menampilkan diff setiap file yang isi source-nya berbeda. Setelah itu workflow menjalankan `clasp push --force`. Tinjau diff pada log Actions dan pastikan perubahan memang dikehendaki; input `PUSH` dan Environment approval tetap wajib. Operasi ini menimpa source online.
-3. Setelah push, jalankan `Preflight Apps Script (read only)` dari `main`. Preflight membandingkan daftar file, isi seluruh source, dan manifest repository dengan project online. Deployment harus ditunda jika pemeriksaan gagal.
-4. Hanya setelah preflight lulus, jalankan `Deploy Existing Apps Script Deployment` dari `main` dengan input konfirmasi `DEPLOY`. Workflow hanya memperbarui `PRODUCTION_DEPLOYMENT_ID`; tidak membuat deployment baru.
-
-Workflow push dan deploy dibatasi ke branch `main`, memakai clasp versi `3.4.1`, Node.js 22, serta concurrency group yang sama agar operasi tidak saling bertabrakan.
+- Tidak ada workflow rekonsiliasi otomatis, OIDC, clasp, atau kredensial Google yang diperlukan untuk prosedur manual ini.
+- GitHub Pages hanya menerbitkan frontend PWA; ia tidak menjalankan backend Apps Script.
+- GitHub menjadi tempat pengelolaan source dan salinan backend; Google Apps Script tetap menjadi backend produksi.
+- Perubahan pada repository tidak boleh dianggap sudah diterapkan ke backend sebelum disalin dan disimpan di Apps Script.
+- Jangan menaruh password, token, kredensial, atau data rahasia ke repository.
 
 ### Proteksi branch main
 
