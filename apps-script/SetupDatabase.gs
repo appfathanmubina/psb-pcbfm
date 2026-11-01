@@ -335,7 +335,8 @@ function createInitialSuperadmin_() {
     String(row[4] || '').toLowerCase() === usernameNormalized
   );
   if (exists) {
-    return { success: true, created: false, message: 'Akun Superadmin sudah ada.' };
+    ['PSB_INITIAL_SUPERADMIN_HASH','PSB_INITIAL_SUPERADMIN_SALT','PSB_INITIAL_SUPERADMIN_USERNAME','PSB_INITIAL_SUPERADMIN_NAME'].forEach(key => props.deleteProperty(key));
+    return { success: true, created: false, message: 'Akun Superadmin sudah ada. Data bootstrap sementara dibersihkan.' };
   }
 
   const hash = String(props.getProperty('PSB_INITIAL_SUPERADMIN_HASH') || '');
