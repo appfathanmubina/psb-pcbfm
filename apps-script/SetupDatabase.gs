@@ -9,10 +9,11 @@
  * - Menyiapkan konfigurasi dasar
  * - Membuat akun Superadmin awal
  *
- * Catatan:
- * Password awal tidak disimpan dalam bentuk asli.
- * Hash + salt awal sudah ditanamkan untuk bootstrap pertama.
- * Setelah login, gunakan fitur Ganti Password pada stage Authentication.
+ * Keamanan:
+ * - Tidak menyimpan hash/salt/password Superadmin di source repository.
+ * - Kredensial bootstrap disimpan di Script Properties melalui
+ *   configureInitialSuperadmin() yang dijalankan manual oleh editor tepercaya.
+ * - Tidak menyediakan fungsi seed/clear data dummy di source produksi.
  */
 
 const PSB_SETUP = {
@@ -22,9 +23,7 @@ const PSB_SETUP = {
   ROOT_FOLDER_NAME: 'PSB Fathan Mubina',
   YEAR_FOLDER_NAME: '2027-2028',
   INITIAL_SUPERADMIN_USERNAME: 'Superadmin',
-  INITIAL_SUPERADMIN_NAME: 'Aba Nadheera',
-  INITIAL_SUPERADMIN_SALT: 'b887a583c81d5ddd927542dcce69605e',
-  INITIAL_SUPERADMIN_HASH: '9cd7ef2a49bc84b807471dc5fa65f48d74072842a24d4b4b5f828aeedaa385c5'
+  INITIAL_SUPERADMIN_NAME: 'Superadmin'
 };
 
 const PSB_SHEETS = {
@@ -120,12 +119,33 @@ function ensureSheet_(ss, name, headers) {
   if (sheet.getLastRow() === 0) {
     sheet.getRange(1, 1, 1, headers.length).setValues([headers]);
     sheet.setFrozenRows(1);
-  } else {
-    const current = sheet.getRange(1, 1, 1, headers.length).getValues()[0];
-    const needsUpdate = headers.some((h, i) => current[i] !== h);
-    if (needsUpdate) sheet.getRange(1, 1, 1, headers.length).setValues([headers]);
-    sheet.setFrozenRows(1);
+    return sheet;
   }
+
+  const lastColumn = sheet.getLastColumn();
+  if (lastColumn < headers.length) {
+    throw new Error(
+      'Struktur sheet "' + name + '" tidak sesuai. Ditemukan ' +
+      lastColumn + ' kolom, sedangkan diperlukan minimal ' + headers.length +
+      '. Header tidak diubah untuk melindungi data. Periksa sheet secara manual.'
+    );
+  }
+
+  const current = sheet.getRange(1, 1, 1, headers.length).getDisplayValues()[0]
+    .map(value => String(value || '').trim());
+  const mismatches = headers
+    .map((expected, index) => current[index] === expected ? '' :
+      (index + 1) + ': seharusnya "' + expected + '", ditemukan "' + current[index] + '"')
+    .filter(Boolean);
+
+  if (mismatches.length) {
+    throw new Error(
+      'Header sheet "' + name + '" tidak cocok. Tidak ada perubahan yang dilakukan. ' +
+      mismatches.join('; ')
+    );
+  }
+
+  sheet.setFrozenRows(1);
   return sheet;
 }
 
@@ -240,52 +260,74 @@ function installChatAutomationTrigger() {
   return ensureChatAutomationTrigger_();
 }
 
+function configureInitialSuperadmin(username, name, password) {
+  const user = String(username || '').trim();
+  const displayName = String(name || '').trim();
+  const secret = String(password || '');
+
+  if (!user || !displayName || secret.length < 12) {
+    throw new Error('Username, nama, dan password minimal 12 karakter wajib diisi.');
+  }
+  if (!/^[A-Za-z0-9._-]{4,40}$/.test(user)) {
+    throw new Error('Username hanya boleh berisi huruf, angka, titik, garis bawah, atau tanda hubung (4-40 karakter).');
+  }
+
+  const salt = Utilities.getUuid().replace(/-/g, '') + Utilities.getUuid().replace(/-/g, '');
+  const props = PropertiesService.getScriptProperties();
+  props.setProperties({
+    PSB_INITIAL_SUPERADMIN_USERNAME: user,
+    PSB_INITIAL_SUPERADMIN_NAME: displayName,
+    PSB_INITIAL_SUPERADMIN_SALT: salt,
+    PSB_INITIAL_SUPERADMIN_HASH: hashPassword_(secret, salt)
+  }, false);
+
+  return {
+    success: true,
+    message: 'Kredensial bootstrap tersimpan di Script Properties. Jalankan setupPSBDatabase() untuk membuat akun jika belum ada.'
+  };
+}
+
 function createInitialSuperadmin() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
+  if (!ss) throw new Error('Spreadsheet aktif tidak ditemukan.');
   const sheet = ss.getSheetByName(PSB_SHEETS.USERS);
-  const data = sheet.getDataRange().getValues();
+  if (!sheet) throw new Error('Sheet USERS belum tersedia.');
 
-  const username = PSB_SETUP.INITIAL_SUPERADMIN_USERNAME;
+  const props = PropertiesService.getScriptProperties();
+  const username = String(props.getProperty('PSB_INITIAL_SUPERADMIN_USERNAME') || PSB_SETUP.INITIAL_SUPERADMIN_USERNAME).trim();
   const usernameNormalized = username.toLowerCase();
+  const data = sheet.getDataRange().getValues();
 
   const exists = data.slice(1).some(row =>
     String(row[2] || '').toLowerCase() === usernameNormalized ||
     String(row[4] || '').toLowerCase() === usernameNormalized
   );
-
   if (exists) {
-    // Migrasi aman Stage 2: versi awal Stage 2 memiliki hash bootstrap yang keliru.
-    // Hanya perbaiki jika hash lama tersebut masih tersimpan; jangan menimpa password
-    // yang sudah pernah diubah oleh Superadmin.
-    const oldBrokenHash = '15b49e0a2ac7af9edde8bbd516b24c91b1cbc00049bb61965f3778f288724698';
-    const rows = sheet.getDataRange().getValues();
-    for (let i = 1; i < rows.length; i++) {
-      const row = rows[i];
-      const phoneNorm = String(row[3] || '').toLowerCase();
-      const emailNorm = String(row[5] || '').toLowerCase();
-      if (phoneNorm === usernameNormalized || emailNorm === usernameNormalized) {
-        if (String(row[6] || '') === oldBrokenHash) {
-          sheet.getRange(i + 1, 7, 1, 2).setValues([[PSB_SETUP.INITIAL_SUPERADMIN_HASH, PSB_SETUP.INITIAL_SUPERADMIN_SALT]]);
-          return { success: true, created: false, repaired: true, message: 'Hash Superadmin diperbaiki.' };
-        }
-        return { success: true, created: false, message: 'Superadmin sudah ada.' };
-      }
-    }
-    return { success: true, created: false, message: 'Superadmin sudah ada.' };
+    return { success: true, created: false, message: 'Akun Superadmin sudah ada.' };
+  }
+
+  const hash = String(props.getProperty('PSB_INITIAL_SUPERADMIN_HASH') || '');
+  const salt = String(props.getProperty('PSB_INITIAL_SUPERADMIN_SALT') || '');
+  if (!hash || !salt) {
+    return {
+      success: false,
+      created: false,
+      code: 'SUPERADMIN_BOOTSTRAP_NOT_CONFIGURED',
+      message: 'Akun Superadmin belum dibuat. Editor tepercaya harus menjalankan configureInitialSuperadmin(username, nama, password) terlebih dahulu.'
+    };
   }
 
   const userId = generateId_('USR');
   const now = new Date();
-
   sheet.appendRow([
     userId,
-    PSB_SETUP.INITIAL_SUPERADMIN_NAME,
+    String(props.getProperty('PSB_INITIAL_SUPERADMIN_NAME') || PSB_SETUP.INITIAL_SUPERADMIN_NAME),
     username,
     usernameNormalized,
     '',
     '',
-    PSB_SETUP.INITIAL_SUPERADMIN_HASH,
-    PSB_SETUP.INITIAL_SUPERADMIN_SALT,
+    hash,
+    salt,
     'SUPERADMIN',
     'ACTIVE',
     '',
@@ -295,335 +337,11 @@ function createInitialSuperadmin() {
     true
   ]);
 
-  return {
-    success: true,
-    created: true,
-    userId: userId,
-    username: username
-  };
-}
+  // Hapus rahasia bootstrap setelah akun berhasil dibuat.
+  props.deleteProperty('PSB_INITIAL_SUPERADMIN_HASH');
+  props.deleteProperty('PSB_INITIAL_SUPERADMIN_SALT');
+  props.deleteProperty('PSB_INITIAL_SUPERADMIN_USERNAME');
+  props.deleteProperty('PSB_INITIAL_SUPERADMIN_NAME');
 
-
-
-// =====================================================
-// TEST DATA - SAFE / MANUAL ONLY
-// =====================================================
-// Fungsi ini TIDAK dipanggil otomatis oleh aplikasi.
-// Jalankan manual dari Apps Script editor jika ingin mengisi data uji.
-// Semua record dummy memakai prefix TEST- agar mudah dibedakan dan dihapus.
-// Tidak membuat file Drive palsu dan tidak mengubah master data yang sudah ada.
-
-const PSB_TEST_DATA = {
-  PREFIX: 'TEST-',
-  PASSWORD: 'Test12345!',
-  VERSION: 'V1'
-};
-
-function seedPSBTestData() {
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
-  if (!ss) throw new Error('Spreadsheet aktif tidak ditemukan.');
-
-  const requiredSheets = Object.keys(PSB_SHEETS).filter(k => [
-    'USERS','REGISTRATIONS','CANDIDATES','GUARDIANS','ADDRESSES','SCHOOLS',
-    'BILLS','PAYMENTS','PAYMENT_VERIFICATIONS','SELECTION_SCHEDULE',
-    'SELECTION_PARTICIPANTS','SELECTION_SCORES','SELECTION_RESULTS','NOTIFICATIONS','REREGISTRATIONS'
-  ].indexOf(k) >= 0);
-  const missing = requiredSheets.filter(k => !ss.getSheetByName(PSB_SHEETS[k]));
-  if (missing.length) throw new Error('Sheet belum tersedia: ' + missing.map(k => PSB_SHEETS[k]).join(', ') + '. Jalankan setupPSBDatabase() terlebih dahulu.');
-
-  const year = getActiveMasterItems_('MASTER_TAHUN_AJARAN')[0];
-  const waves = getActiveMasterItems_('MASTER_GELOMBANG');
-  const levels = getActiveMasterItems_('MASTER_JENJANG');
-  const formPaymentType = getActiveMasterItems_('MASTER_JENIS_PEMBAYARAN').find(x => /formulir/i.test(String(x.name || '')));
-
-  if (!year) throw new Error('Belum ada Tahun Ajaran aktif. Isi master Tahun Ajaran terlebih dahulu.');
-  if (!waves.length) throw new Error('Belum ada Gelombang aktif. Isi master Gelombang terlebih dahulu.');
-  if (!levels.length) throw new Error('Belum ada Jenjang aktif. Isi master Jenjang terlebih dahulu.');
-
-  const regSheet = ss.getSheetByName(PSB_SHEETS.REGISTRATIONS);
-  const existingTest = findRowById_(regSheet, 'registrationId', 'TEST-REG-001');
-  if (existingTest) {
-    return {
-      success: true,
-      alreadySeeded: true,
-      message: 'Data dummy TEST- sudah tersedia. Tidak ada data tambahan yang dibuat.',
-      registrationCount: countTestRows_(regSheet, 'registrationId'),
-      userCount: countTestRows_(ss.getSheetByName(PSB_SHEETS.USERS), 'userId')
-    };
-  }
-
-  const lock = LockService.getScriptLock();
-  lock.waitLock(20000);
-  try {
-    // Cek ulang setelah lock agar dua eksekusi bersamaan tidak menggandakan data.
-    if (findRowById_(regSheet, 'registrationId', 'TEST-REG-001')) {
-      return {success:true, alreadySeeded:true, message:'Data dummy TEST- sudah tersedia.'};
-    }
-
-    const now = new Date();
-    const tz = getConfig_('TIMEZONE') || PSB_SETUP.TIMEZONE;
-    const baseDate = new Date(now.getTime());
-    const waveA = waves[0];
-    const waveB = waves[1] || waves[0];
-    const levelA = levels[0];
-    const levelB = levels[1] || levels[0];
-    const formAmount = formPaymentType ? Number(formPaymentType.amount || 0) : 0;
-
-    // Variasi status sengaja dibuat untuk menguji queue verifikasi, pembayaran,
-    // Generate Tes, nilai, hasil seleksi, dan alur lanjutan tanpa menyentuh data asli.
-    const profiles = [
-      {n:'Ahmad Fikri Pratama', gender:'L', status:'DRAFT',        level:levelA, wave:waveA, payment:'NONE',     participant:false, result:''},
-      {n:'Bintang Ramadhan',      gender:'L', status:'SUBMITTED',   level:levelA, wave:waveA, payment:'SUBMITTED', participant:false, result:''},
-      {n:'Citra Aulia Rahmah',    gender:'P', status:'UNDER_REVIEW',level:levelB, wave:waveA, payment:'NONE',     participant:false, result:''},
-      {n:'Daffa Maulana',         gender:'L', status:'REVISION',    level:levelB, wave:waveA, payment:'REJECTED', participant:false, result:''},
-      {n:'Eka Nur Safitri',       gender:'P', status:'VERIFIED',    level:levelA, wave:waveB, payment:'NONE',     participant:false, result:''},
-      {n:'Fauzan Hakim',          gender:'L', status:'PAYMENT_VERIFIED', level:levelA, wave:waveB, payment:'VERIFIED', participant:true, result:'PASSED'},
-      {n:'Ghina Maharani',        gender:'P', status:'PAYMENT_VERIFIED', level:levelB, wave:waveB, payment:'VERIFIED', participant:true, result:'NOT_PASSED'},
-      {n:'Hafiz Alamsyah',        gender:'L', status:'PAYMENT_VERIFIED', level:levelB, wave:waveB, payment:'VERIFIED', participant:true, result:'WAITLIST'},
-      {n:'Intan Permata Sari',    gender:'P', status:'VERIFIED',    level:levelA, wave:waveA, payment:'VERIFIED', participant:true, result:'PASSED'},
-      {n:'Jauhar Akbar',          gender:'L', status:'PAYMENT_VERIFIED', level:levelB, wave:waveA, payment:'VERIFIED', participant:true, result:''},
-      {n:'Kirana Putri',          gender:'P', status:'PAYMENT_VERIFIED', level:levelA, wave:waveB, payment:'VERIFIED', participant:false, result:''},
-      {n:'Lukman Hakim',         gender:'L', status:'SUBMITTED',   level:levelB, wave:waveB, payment:'SUBMITTED', participant:false, result:''}
-    ];
-
-    // Akun WALI dummy: login memakai email dengan password yang sama.
-    const userSheet = ss.getSheetByName(PSB_SHEETS.USERS);
-    const regRows = [], candidateRows = [], guardianRows = [], addressRows = [], schoolRows = [], userRows = [];
-    const billRows = [], paymentRows = [], paymentVerificationRows = [], notificationRows = [];
-    const userByIndex = {};
-
-    profiles.forEach((p, i) => {
-      const no = String(i + 1).padStart(2, '0');
-      const userId = 'TEST-USER-' + no;
-      const candidateId = 'TEST-CND-' + no;
-      const guardianId = 'TEST-GRD-' + no;
-      const addressId = 'TEST-ADR-' + no;
-      const schoolId = 'TEST-SCH-' + no;
-      const registrationId = 'TEST-REG-' + no;
-      const email = 'dummy.wali' + no + '@example.test';
-      const phone = '081299900' + String(100 + i);
-      const phoneNormalized = normalizePhone_(phone);
-      const salt = 'TESTSALT' + no + '2027';
-      const hash = hashPassword_(PSB_TEST_DATA.PASSWORD, salt);
-      const birth = new Date(2012 + (i % 3), (i * 2) % 12, 5 + (i % 20));
-      const graduationYear = 2026;
-
-      userRows.push([
-        userId, 'Wali ' + p.n, phone, phoneNormalized, email, email.toLowerCase(),
-        hash, salt, 'WALI', 'ACTIVE', '', '', now, now, false
-      ]);
-      userByIndex[i] = userId;
-
-      candidateRows.push([
-        candidateId, p.n, '3276010101' + String(700000 + i).padStart(6, '0'),
-        ['Bogor','Depok','Jakarta','Bekasi'][i % 4], birth, p.gender, 1 + (i % 3),
-        ['ANAK_KANDUNG','ANAK_KANDUNG','ANAK_KANDUNG','ANAK_TIRI'][i % 4], '', now, now
-      ]);
-
-      guardianRows.push([
-        guardianId, userId, candidateId, 'AYAH', 'Wali ' + p.n, '3276010101' + String(800000 + i).padStart(6, '0'),
-        phone, email, ['Wiraswasta','Karyawan','Guru','Pedagang'][i % 4], ['SMA','D3','S1','S2'][i % 4], true, now, now
-      ]);
-
-      addressRows.push([
-        addressId, candidateId, 'DOMISILI',
-        'Jl. Dummy Uji Coba No. ' + (10 + i), String(1 + (i % 8)).padStart(2,'0'), String(1 + (i % 6)).padStart(2,'0'),
-        ['Cibinong','Beji','Cipayung','Pondok Gede'][i % 4],
-        ['Cibinong','Beji','Cimanggis','Jatiasih'][i % 4],
-        ['Bogor','Depok','Depok','Bekasi'][i % 4], 'Jawa Barat', '16' + String(100 + i), now, now
-      ]);
-
-      schoolRows.push([
-        schoolId, candidateId, ['SDN Contoh 01','SDIT Contoh 02','MI Contoh 03'][i % 3],
-        i % 3 === 0 ? 'SDN' : i % 3 === 1 ? 'SDIT' : 'MI', 'TEST-NPSN-' + no,
-        'Alamat Sekolah Dummy ' + no, graduationYear, now, now
-      ]);
-
-      regRows.push([
-        registrationId, 'TEST-PSB-2027-' + no, userId, candidateId, year.tahunAjaranId, p.wave.gelombangId,
-        p.level.jenjangId, p.status,
-        ['DRAFT','SUBMITTED'].indexOf(p.status) >= 0 ? now : new Date(now.getTime() - (i + 1) * 86400000),
-        ['VERIFIED','PAYMENT_VERIFIED'].indexOf(p.status) >= 0 ? new Date(now.getTime() - (i + 1) * 43200000) : '',
-        '', now, now
-      ]);
-
-      if (p.payment !== 'NONE' && formPaymentType) {
-        const billId = 'TEST-BIL-' + no;
-        const paymentId = 'TEST-PAY-' + no;
-        const verificationId = 'TEST-PVF-' + no;
-        const paymentStatus = p.payment === 'VERIFIED' ? 'VERIFIED' : p.payment === 'REJECTED' ? 'REJECTED' : 'SUBMITTED';
-        const billStatus = paymentStatus === 'VERIFIED' ? 'PAID' : paymentStatus === 'SUBMITTED' ? 'PAYMENT_REVIEW' : 'UNPAID';
-        const amount = formAmount > 0 ? formAmount : 150000;
-        const submittedAt = new Date(now.getTime() - (i + 1) * 3600000);
-
-        billRows.push([billId, registrationId, formPaymentType.paymentTypeId, amount, new Date(now.getTime() + 7 * 86400000), billStatus, now, now]);
-        paymentRows.push([paymentId, billId, registrationId, amount, 'TRANSFER', '', '', paymentStatus, submittedAt, submittedAt, now]);
-        paymentVerificationRows.push([verificationId, paymentId, paymentStatus, 'TEST-USER-SYSTEM', now, p.payment === 'REJECTED' ? 'Dummy: bukti pembayaran ditolak.' : 'Dummy: verifikasi pembayaran formulir.']);
-      }
-
-      if (i < 3 || i === 11) {
-        notificationRows.push(['TEST-NOTIF-' + no, userId, 'Notifikasi Uji Coba',
-          i === 0 ? 'Ini contoh notifikasi untuk akun WALI dummy.' : 'Status pendaftaran dummy dapat digunakan untuk pengujian.',
-          'INFO', i === 0 ? false : true, now, i === 0 ? '' : now]);
-      }
-    });
-
-    // Jadwal seleksi dummy. Tidak memakai Drive dan tidak mengubah master.
-    const scheduleId = 'TEST-SCH-SEL-01';
-    const scheduleDate = new Date(now.getTime() + 3 * 86400000);
-    const scheduleRows = [[scheduleId, year.tahunAjaranId, 'Tes Seleksi Dummy - Batch Uji', scheduleDate, 'Ruang Uji Coba PSB', true, now, now]];
-
-    const participantRows = [];
-    const scoreRows = [];
-    const resultRows = [];
-    const selectedIndexes = [5,6,7,8,9];
-    selectedIndexes.forEach(i => {
-      const no = String(i + 1).padStart(2, '0');
-      const participantId = 'TEST-PTC-' + no;
-      const registrationId = 'TEST-REG-' + no;
-      const participantStatus = i === 6 ? 'ABSENT' : 'PRESENT';
-      participantRows.push([participantId, registrationId, scheduleId, participantStatus, now, now]);
-
-      const base = i === 5 ? 92 : i === 6 ? 55 : i === 7 ? 78 : i === 8 ? 88 : 81;
-      [['AKADEMIK',base],['WAWANCARA',Math.max(0,base-3)],['BACA_QURAN',Math.max(0,base-5)]].forEach((sc, j) => {
-        scoreRows.push(['TEST-SCR-' + no + '-' + (j + 1), participantId, sc[0], sc[1], 'Dummy score untuk pengujian.', now, now]);
-      });
-
-      const profile = profiles[i];
-      if (profile.result) {
-        resultRows.push(['TEST-RES-' + no, registrationId, profile.result, new Date(now.getTime() + 7 * 86400000), 'Hasil dummy untuk pengujian Stage 8.', now, now]);
-      }
-    });
-
-    const reregRows = [[
-      'TEST-RRG-06', 'TEST-REG-06', 'PENDING', '', 'Dummy daftar ulang untuk calon yang lulus.', now, now
-    ]];
-
-    appendRowsByHeaders_(userSheet, userRows);
-    appendRowsByHeaders_(ss.getSheetByName(PSB_SHEETS.CANDIDATES), candidateRows);
-    appendRowsByHeaders_(ss.getSheetByName(PSB_SHEETS.GUARDIANS), guardianRows);
-    appendRowsByHeaders_(ss.getSheetByName(PSB_SHEETS.ADDRESSES), addressRows);
-    appendRowsByHeaders_(ss.getSheetByName(PSB_SHEETS.SCHOOLS), schoolRows);
-    appendRowsByHeaders_(regSheet, regRows);
-    appendRowsByHeaders_(ss.getSheetByName(PSB_SHEETS.BILLS), billRows);
-    appendRowsByHeaders_(ss.getSheetByName(PSB_SHEETS.PAYMENTS), paymentRows);
-    appendRowsByHeaders_(ss.getSheetByName(PSB_SHEETS.PAYMENT_VERIFICATIONS), paymentVerificationRows);
-    appendRowsByHeaders_(ss.getSheetByName(PSB_SHEETS.NOTIFICATIONS), notificationRows);
-    appendRowsByHeaders_(ss.getSheetByName(PSB_SHEETS.SELECTION_SCHEDULE), scheduleRows);
-    appendRowsByHeaders_(ss.getSheetByName(PSB_SHEETS.SELECTION_PARTICIPANTS), participantRows);
-    appendRowsByHeaders_(ss.getSheetByName(PSB_SHEETS.SELECTION_SCORES), scoreRows);
-    appendRowsByHeaders_(ss.getSheetByName(PSB_SHEETS.SELECTION_RESULTS), resultRows);
-    appendRowsByHeaders_(ss.getSheetByName(PSB_SHEETS.REREGISTRATIONS), reregRows);
-
-    return {
-      success: true,
-      message: 'Data dummy berhasil dibuat. Semua record memakai prefix TEST- dan tidak membuat file Drive.',
-      password: PSB_TEST_DATA.PASSWORD,
-      waliLoginHint: 'dummy.wali01@example.test s.d. dummy.wali12@example.test',
-      counts: {
-        users: userRows.length,
-        registrations: regRows.length,
-        bills: billRows.length,
-        payments: paymentRows.length,
-        participants: participantRows.length,
-        scores: scoreRows.length,
-        results: resultRows.length,
-        notifications: notificationRows.length
-      }
-    };
-  } finally {
-    lock.releaseLock();
-  }
-}
-
-function clearPSBTestData() {
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
-  if (!ss) throw new Error('Spreadsheet aktif tidak ditemukan.');
-  const fields = [
-    [PSB_SHEETS.SELECTION_SCORES, 'scoreId'],
-    [PSB_SHEETS.SELECTION_RESULTS, 'resultId'],
-    [PSB_SHEETS.SELECTION_PARTICIPANTS, 'participantId'],
-    [PSB_SHEETS.SELECTION_SCHEDULE, 'scheduleId'],
-    [PSB_SHEETS.PAYMENT_VERIFICATIONS, 'verificationId'],
-    [PSB_SHEETS.PAYMENTS, 'paymentId'],
-    [PSB_SHEETS.BILLS, 'billId'],
-    [PSB_SHEETS.REREGISTRATIONS, 'reregistrationId'],
-    [PSB_SHEETS.NOTIFICATIONS, 'notificationId'],
-    [PSB_SHEETS.SCHOOLS, 'schoolId'],
-    [PSB_SHEETS.ADDRESSES, 'addressId'],
-    [PSB_SHEETS.GUARDIANS, 'guardianId'],
-    [PSB_SHEETS.CANDIDATES, 'candidateId'],
-    [PSB_SHEETS.REGISTRATIONS, 'registrationId'],
-    [PSB_SHEETS.USERS, 'userId']
-  ];
-  const lock = LockService.getScriptLock();
-  lock.waitLock(20000);
-  try {
-    let removed = 0;
-    fields.forEach(([sheetName, idField]) => {
-      const sheet = ss.getSheetByName(sheetName);
-      if (!sheet || sheet.getLastRow() < 2) return;
-      const headers = sheet.getRange(1,1,1,sheet.getLastColumn()).getValues()[0].map(String);
-      const idx = headers.indexOf(idField);
-      if (idx < 0) return;
-      const rows = sheet.getRange(2,1,sheet.getLastRow()-1,sheet.getLastColumn()).getValues();
-      for (let i = rows.length - 1; i >= 0; i--) {
-        if (String(rows[i][idx] || '').indexOf(PSB_TEST_DATA.PREFIX) === 0) {
-          sheet.deleteRow(i + 2);
-          removed++;
-        }
-      }
-    });
-    // Bersihkan cache login untuk akun dummy yang mungkin pernah dipakai.
-    for (let i = 1; i <= 12; i++) {
-      const no = String(i).padStart(2, '0');
-      const email = 'dummy.wali' + no + '@example.test';
-      const phone = normalizePhone_('081299900' + String(100 + i - 1));
-      try { CacheService.getScriptCache().remove('PSB_USER_V3_' + sha256Hex_(email).substring(0,32)); } catch (e) {}
-      try { CacheService.getScriptCache().remove('PSB_USER_V3_' + sha256Hex_(phone).substring(0,32)); } catch (e) {}
-    }
-    return {success:true, removed:removed, message:'Semua data dummy dengan prefix TEST- berhasil dihapus.'};
-  } finally {
-    lock.releaseLock();
-  }
-}
-
-function appendRowsByHeaders_(sheet, rows) {
-  if (!sheet || !rows || !rows.length) return;
-
-  // Data dummy dibuat mengikuti PSB_HEADERS, sedangkan sheet yang sudah
-  // dipakai sebelumnya bisa mempunyai susunan/kolom tambahan yang berbeda.
-  // Jangan memaksa jumlah kolom harus identik; petakan berdasarkan nama header
-  // agar seed tidak merusak struktur sheet yang sudah ada.
-  const headers = sheet.getRange(1,1,1,sheet.getLastColumn()).getValues()[0].map(h => String(h || '').trim());
-  const canonical = PSB_HEADERS[Object.keys(PSB_SHEETS).find(k => PSB_SHEETS[k] === sheet.getName())] || [];
-  if (!canonical.length) throw new Error('Header dummy untuk sheet ' + sheet.getName() + ' belum tersedia.');
-
-  const canonicalIndex = {};
-  canonical.forEach((h, i) => { canonicalIndex[String(h).trim()] = i; });
-  const missing = canonical.filter(h => headers.indexOf(h) < 0);
-  if (missing.length) {
-    throw new Error('Struktur sheet ' + sheet.getName() + ' tidak sesuai. Header wajib yang belum ada: ' + missing.join(', '));
-  }
-
-  const normalized = rows.map(source => {
-    if (source.length !== canonical.length) {
-      throw new Error('Data dummy untuk sheet ' + sheet.getName() + ' tidak sesuai dengan PSB_HEADERS.');
-    }
-    return headers.map(h => {
-      const idx = canonicalIndex[h];
-      return idx === undefined ? '' : source[idx];
-    });
-  });
-
-  sheet.getRange(sheet.getLastRow() + 1, 1, normalized.length, headers.length).setValues(normalized);
-}
-
-function countTestRows_(sheet, idField) {
-  if (!sheet || sheet.getLastRow() < 2) return 0;
-  const headers = sheet.getRange(1,1,1,sheet.getLastColumn()).getValues()[0].map(String);
-  const idx = headers.indexOf(idField);
-  if (idx < 0) return 0;
-  return sheet.getRange(2,1,sheet.getLastRow()-1,sheet.getLastColumn()).getValues()
-    .filter(r => String(r[idx] || '').indexOf(PSB_TEST_DATA.PREFIX) === 0).length;
+  return { success: true, created: true, userId: userId, username: username };
 }
