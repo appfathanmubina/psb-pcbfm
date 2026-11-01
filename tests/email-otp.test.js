@@ -1,0 +1,32 @@
+'use strict';
+const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const code = fs.readFileSync('apps-script/Code.gs', 'utf8');
+const setup = fs.readFileSync('apps-script/SetupDatabase.gs', 'utf8');
+const pwa = fs.readFileSync('frontend/app.js', 'utf8');
+const html = fs.readFileSync('apps-script/Index.html', 'utf8');
+assert.match(code, /function startWaliRegistration\\(payload\\)/);
+assert.match(code, /function verifyWaliRegistration\\(verificationId, code\\)/);
+assert.match(code, /function resendWaliRegistrationEmailOtp\\(verificationId\\)/);
+assert.match(code, /function sendWaliEmailOtp_\\(email, otp\\)/);
+assert.match(code, /MailApp\\.sendEmail\\(options\\)/);
+assert.match(code, /MailApp\\.getRemainingDailyQuota\\(\\)/);
+assert.match(code, /sha256Hex_\\(otp\\+otpSalt\\)/);
+assert.match(code, /constantTimeEqual_\\(expected,String\\(row\\[8\\]\\|\\|''\\)\\)/);
+assert.match(code, /PSB_WALI_OTP_TTL_MS_ = 5 \\* 60 \\* 1000/);
+assert.match(code, /PSB_WALI_OTP_MAX_ATTEMPTS_ = 5/);
+assert.match(code, /PSB_WALI_OTP_DAILY_LIMIT_ = 5/);
+assert.match(code, /PSB_WALI_OTP_COOLDOWN_MS_ = 60 \\* 1000/);
+assert.match(code, /countRecentWaliEmailOtpSends_\\(otpSheet,input.emailNormalized,now\\)/);
+assert.match(code, /waliOtpEmailKey_\\(input.emailNormalized\\)/);
+assert.match(code, /'startWaliRegistration','resendWaliRegistrationEmailOtp','verifyWaliRegistration'/);
+assert.doesNotMatch(code, /graph\\.facebook\\.com|WA_ACCESS_TOKEN|WHATSAPP OTP/);
+assert.match(setup, /WALI_OTP: \\['verificationId'.*'emailMessageId'\\]/);
+for (const source of [pwa,html]) {
+ assert.match(source, /Email aktif \\*/);
+ assert.match(source, /No\\. HP \\(opsional\\)/);
+ assert.match(source, /resendWaliRegistrationEmailOtp/);
+ assert.match(source, /Verifikasi Email/);
+ assert.doesNotMatch(source, /regWhatsappConsent|No\\. HP WhatsApp \\*|Email \\(opsional\\)/);
+}
+console.log('Email OTP registration safeguards: OK');
