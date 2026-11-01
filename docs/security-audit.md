@@ -51,9 +51,17 @@
 ### Medium priority
 
 - **Public gallery Drive folder:** the folder configured in `getPublicGallery` is exposed by design. Confirm it contains only images approved for public display; do not place student documents, private family photos, or internal images there.
-- **Upload resource limits:** document, payment, and chat upload handlers decode base64 before fully bounding the encoded request size. Add an early encoded-size limit and server-side content-signature validation to reduce memory/CPU abuse and file-type spoofing.
+- **Upload resource limits:** the current repository source now checks encoded Base64 length before decoding, enforces server-side byte limits, and verifies PDF/JPEG/PNG/WEBP signatures for document, payment, and chat uploads. Chat attachments are capped at 10 MB even if configuration is higher; document uploads default to 10 MB and are capped at 20 MB. These controls still require Apps Script runtime testing with valid and deliberately mismatched files.
 - **Abuse throttling:** login lockout uses CacheService, which is best-effort and can be affected by concurrent requests or cache eviction. Add stronger server-side throttling for login and public registration if the service receives abusive traffic.
 - **Bootstrap password entry:** the trusted-editor bootstrap uses a standard Apps Script prompt; the password is not masked. Run it only in a private environment with the screen not visible to others.
+
+## Upload validation details
+
+- `decodeAndValidateUpload_()` rejects empty/malformed Base64 and checks the encoded length against the maximum byte size before calling `Utilities.base64Decode()`.
+- The decoded byte count is checked again, and the file signature must match the declared MIME type for PDF, JPEG, PNG, or WEBP.
+- Payment proof uploads are limited to 5 MB; chat attachments use the configured limit with a hard ceiling of 10 MB; document uploads use the document-type limit (or 10 MB when unset) with a hard ceiling of 20 MB.
+- The existing per-document MIME allowlist and ownership/role checks remain in place. This is defense-in-depth, not antivirus scanning; uploaded files should still be treated as untrusted content.
+- Verify actual browser payloads and Apps Script behavior in a test deployment before production sync.
 
 ## Password migration details
 
