@@ -41,3 +41,27 @@ jobs:
       - name: Ensure Apps Script manifests match
         run: |
           node -e "const fs=require('fs'); const {isDeepStrictEqual}=require('util'); const a=JSON.parse(fs.readFileSync('appsscript.json','utf8')); const b=JSON.parse(fs.readFileSync('apps-script/appsscript.json','utf8')); if(!isDeepStrictEqual(a,b)){ console.error('Manifest mismatch: root and Clasp manifests differ.'); process.exit(1); }"
+      - name: Block browser-callable internal maintenance and bootstrap functions
+        run: |
+          node - <<'NODE'
+          const fs = require('fs');
+          const checks = [
+            ['apps-script/Code.gs', ['cleanupPSBSessions_', 'runChatAutomation_'], ['cleanupPSBSessions', 'runChatAutomation']],
+            ['apps-script/SetupDatabase.gs', ['setupPSBDatabase_', 'installChatAutomationTrigger_', 'configureInitialSuperadmin_', 'createInitialSuperadmin_'], ['setupPSBDatabase', 'installChatAutomationTrigger', 'configureInitialSuperadmin', 'createInitialSuperadmin']]
+          ];
+          for (const [file, protectedNames, forbiddenNames] of checks) {
+            const source = fs.readFileSync(file, 'utf8');
+            for (const name of protectedNames) {
+              if (!new RegExp('^function\\s+' + name + '\\s*\\(', 'm').test(source)) {
+                console.error('Missing protected internal function ' + name + ' in ' + file);
+                process.exit(1);
+              }
+            }
+            for (const name of forbiddenNames) {
+              if (new RegExp('^function\\s+' + name + '\\s*\\(', 'm').test(source)) {
+                console.error('Unsafe browser-callable function name detected: ' + name);
+                process.exit(1);
+              }
+            }
+          }
+          NODE
