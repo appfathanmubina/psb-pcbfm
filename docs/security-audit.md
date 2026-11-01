@@ -65,7 +65,7 @@
 - Duplicate email checks occur only after OTP entry to avoid exposing account existence. Phone duplicate checking occurs only when a phone number was supplied.
 - MailApp quota is checked before sending. Quota depends on Google account / Apps Script execution context; MailApp acceptance does not guarantee inbox delivery. Recipients should check spam/promotions.
 - Optional Script Properties: `PSB_OTP_SENDER_NAME` and `PSB_OTP_REPLY_TO`. No external provider token is required.
-- The `WALI_OTP` sheet retains 19 columns; the final metadata column is renamed from `waMessageId` to `emailSendStatus`. Run updated database setup only in a test project / duplicate spreadsheet first.
+- The existing `WALI_OTP` sheet schema remains unchanged for compatibility; the legacy `waMessageId` metadata column is retained but left blank. Run updated database setup only in a test project / duplicate spreadsheet first.
 
 ## Upload validation details
 
