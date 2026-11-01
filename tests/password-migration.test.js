@@ -37,3 +37,6 @@ assert.match(source, /verifyPasswordForUser_\(String\(currentPassword \|\| ''\),
 assert.match(setup, /hashPassword_\(secret, salt\)/);
 
 console.log('Password migration checks passed.');
+
+assert.match(source, /const lock = LockService\.getScriptLock\(\);[\s\S]*?function changePassword/);
+assert.match(source, /function adminResetUserPassword[\s\S]*?const lock = LockService\.getScriptLock\(\)/);
