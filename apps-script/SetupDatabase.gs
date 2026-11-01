@@ -85,7 +85,7 @@ const PSB_HEADERS = {
   INCIDENTS: ['incidentId','category','priority','status','title','description','relatedModule','relatedRecordId','reportedBy','assignedTo','resolutionNote','createdAt','updatedAt','resolvedAt','closedAt'],
   CHAT_THREADS: ['threadId','registrationId','waliUserId','adminUserId','subject','status','lastMessageAt','lastMessageBy','createdAt','updatedAt','closedAt'],
   CHAT_MESSAGES: ['messageId','threadId','senderUserId','senderRole','message','attachmentFileId','attachmentName','attachmentMimeType','isRead','createdAt','readAt'],
-  WALI_OTP: ['verificationId','name','phone','phoneNormalized','email','emailNormalized','passwordHash','passwordSalt','otpHash','otpSalt','expiresAt','attempts','maxAttempts','sendCount','lastSentAt','status','createdAt','verifiedAt','emailMessageId']
+  WALI_OTP: ['verificationId','name','phone','phoneNormalized','email','emailNormalized','passwordHash','passwordSalt','otpHash','otpSalt','expiresAt','attempts','maxAttempts','sendCount','lastSentAt','status','createdAt','verifiedAt','emailSendStatus']
 };
 
 function setupPSBDatabase_() {
