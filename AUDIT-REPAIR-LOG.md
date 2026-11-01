@@ -210,3 +210,22 @@ Both obsolete workflows have now been removed. This also removes their stale ref
 - `PRODUCTION_DEPLOYMENT_ID` tidak lagi diperlukan oleh workflow Apps Script karena workflow DEPLOY otomatis telah dihapus.
 - PUSH otomatis melalui GitHub Actions masih membutuhkan autentikasi Google yang sah. Tidak ada token atau secret yang dibuat, dibaca, atau diubah dalam batch ini.
 - Tidak ada file source aplikasi Apps Script, spreadsheet produksi, atau deployment Web App produksi yang diubah.
+
+
+## Repair batch 12 — seluruh sinkronisasi Apps Script kembali manual
+
+| ID | Temuan | Perubahan | Status |
+|---|---|---|---|
+| CI-017 | Workflow PUSH Apps Script masih meminta tiga OAuth GitHub Secrets, bertentangan dengan keputusan untuk memakai alur manual seperti aplikasi lain. | Menghapus `.github/workflows/push-apps-script.yml`. | Selesai |
+| CI-018 | Helper API dan konfigurasi project hanya digunakan oleh workflow PUSH yang sudah dihapus. | Menghapus `.github/scripts/apps-script-api.mjs` dan `.github/apps-script-config.json`. | Selesai |
+| CI-019 | Workflow validasi masih mewajibkan helper dan konfigurasi otomatisasi Apps Script. | Menghapus pemeriksaan yang sudah tidak relevan; validasi tetap memeriksa file source Apps Script dan manifest. | Selesai |
+
+### Alur operasional final
+- GitHub Pages: otomatis melalui workflow `.github/workflows/pages.yml` tanpa GitHub Secrets tambahan.
+- Sinkronisasi source Apps Script: manual melalui editor Google Apps Script.
+- DEPLOY Web App Apps Script: manual melalui editor Google Apps Script. Pertahankan deployment produksi yang sudah ada dan URL `/exec`.
+- Tidak ada workflow GitHub Actions yang melakukan PUSH atau DEPLOY ke Apps Script.
+- Tidak ada kebutuhan GitHub Secrets OAuth khusus Apps Script untuk alur ini. Secret lama, jika pernah dibuat, tidak disentuh atau dihapus.
+- File source aplikasi Apps Script, spreadsheet produksi, project Apps Script, dan deployment produksi tidak diubah dalam batch ini.
+
+**Catatan koreksi:** Batch 11 sebelumnya menyatakan PUSH Apps Script tetap tersedia; keputusan batch 12 menggantikannya. Mulai batch ini, baik PUSH maupun DEPLOY Apps Script dilakukan manual.
