@@ -325,7 +325,7 @@ function getWhatsAppOtpSettings_() {
 
 function sendWhatsAppAuthenticationOtp_(phone, otp) {
   const cfg = getWhatsAppOtpSettings_();
-  if (!/^v\\d+\\.\\d+$/.test(cfg.version) || !cfg.phoneNumberId || !cfg.accessToken ||
+  if (!/^v\d+\\.\d+$/.test(cfg.version) || !cfg.phoneNumberId || !cfg.accessToken ||
       !/^[a-z0-9_]{2,512}$/i.test(cfg.templateName) || !cfg.language) {
     return { success:false, code:'WHATSAPP_NOT_CONFIGURED' };
   }
@@ -398,8 +398,8 @@ function validateWaliRegistrationPayload_(payload) {
   const phoneNormalized = normalizePhone_(phone);
   const emailNormalized = email.toLowerCase();
   if (!name || name.length > 120) return {success:false,message:'Nama lengkap wajib diisi (maksimal 120 karakter).'};
-  if (!phone || !/^62\\d{8,13}$/.test(phoneNormalized)) return {success:false,message:'Nomor WhatsApp tidak valid. Gunakan nomor aktif dengan kode negara Indonesia.'};
-  if (email && (email.length > 254 || !/^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(email))) return {success:false,message:'Format email tidak valid.'};
+  if (!phone || !/^62\d{8,13}$/.test(phoneNormalized)) return {success:false,message:'Nomor WhatsApp tidak valid. Gunakan nomor aktif dengan kode negara Indonesia.'};
+  if (email && (email.length > 254 || !/^[^\s@]+@[^\s@]+\\.[^\s@]+$/.test(email))) return {success:false,message:'Format email tidak valid.'};
   if (password.length < 6 || password.length > 128) return {success:false,message:'Password harus terdiri dari 6 sampai 128 karakter.'};
   if (password !== confirmPassword) return {success:false,message:'Konfirmasi password tidak sama.'};
   return {success:true,name:name,phone:phone,phoneNormalized:phoneNormalized,email:email,emailNormalized:emailNormalized,password:password};
@@ -459,7 +459,7 @@ function startWaliRegistration(payload) {
     ]);
     cache.put(phoneKey+'_COOLDOWN','1',Math.ceil(PSB_WALI_OTP_COOLDOWN_MS_/1000));
     writeAudit_('','WALI_OTP_SENT','AUTH',verificationId,'','', 'OTP verifikasi pendaftaran Wali dikirim melalui WhatsApp');
-    return {success:true,verificationId:verificationId,maskedPhone:input.phoneNormalized.replace(/^(\\d{4})\\d+(\\d{3})$/,'$1••••$2'),expiresInSeconds:300};
+    return {success:true,verificationId:verificationId,maskedPhone:input.phoneNormalized.replace(/^(\d{4})\d+(\d{3})$/,'$1••••$2'),expiresInSeconds:300};
   } finally {
     lock.releaseLock();
   }
@@ -476,7 +476,7 @@ function resendWaliRegistrationOtp(verificationId) {
     const rows = sheet.getRange(2,1,sheet.getLastRow()-1,19).getValues();
     let rowNumber = 0, row = null;
     rows.forEach(function(r,i){if(String(r[0])===id){rowNumber=i+2;row=r;}});
-    if (!row || String(row[15]) !== 'PENDING') return fail_('Permintaan verifikasi tidak aktif. Silakan mulai pendaftaran kembali.');
+    if (!row || !['PENDING','EXPIRED'].includes(String(row[15]))) return fail_('Permintaan verifikasi tidak aktif. Silakan mulai pendaftaran kembali.');
     const phone = String(row[3] || '');
     const key = waliOtpPhoneKey_(phone);
     const cache = CacheService.getScriptCache();
@@ -502,7 +502,7 @@ function resendWaliRegistrationOtp(verificationId) {
 function verifyWaliRegistration(verificationId, code) {
   const id = String(verificationId || '').trim();
   const otp = String(code || '').trim();
-  if (!id || !/^\\d{6}$/.test(otp)) return fail_('Masukkan kode verifikasi 6 digit.');
+  if (!id || !/^\d{6}$/.test(otp)) return fail_('Masukkan kode verifikasi 6 digit.');
   const lock = LockService.getScriptLock();
   lock.waitLock(15000);
   try {
