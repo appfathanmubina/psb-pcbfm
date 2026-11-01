@@ -1,7 +1,7 @@
 # PSB Fathan Mubina — Security Audit
 
 **Repository:** `appfathanmubina/psb-pcbfm`  
-**Branch audited:** `security/batch-3-whatsapp-otp` (proposed changes; review before merge)  
+**Branch audited:** `security/batch-3-whatsapp-otp (Email OTP revision)` (proposed changes; review before merge)  
 **Repository visibility:** Public  
 **Audit type:** Static source review and GitHub repository hygiene review  
 **Runtime status:** Google Apps Script production runtime was not tested; repository changes have not been copied to or deployed in production.
@@ -30,7 +30,7 @@
 7. Existing spreadsheet headers are checked and mismatches cause a safe stop rather than overwriting headers.
 8. Added CI checks to prevent the protected setup/maintenance functions from being reintroduced as browser-callable public functions, and to parse-check Apps Script JavaScript files.
 9. Earlier repository checks found no matches for common Google API keys, GitHub tokens, OAuth client secrets, private-key markers, or Google access-token patterns in the scanned source. A pattern scan is not proof that no secret exists anywhere.
-10. Added WhatsApp OTP verification to Wali registration; the old direct registration endpoint is disabled.
+10. Added Email OTP verification to Wali registration; the old direct registration endpoint is disabled.
 
 ## Controls observed in reviewed application paths
 
@@ -56,23 +56,17 @@
 - **Abuse throttling:** login lockout uses CacheService, which is best-effort and can be affected by concurrent requests or cache eviction. Add stronger server-side throttling for login and public registration if the service receives abusive traffic.
 - **Bootstrap password entry:** the trusted-editor bootstrap uses a standard Apps Script prompt; the password is not masked. Run it only in a private environment with the screen not visible to others.
 
-## WhatsApp OTP registration
+## Email OTP registration
 
-- `startWaliRegistration()` validates the Wali form and sends a six-digit OTP using the Meta WhatsApp Cloud API. `verifyWaliRegistration()` creates the WALI account and session only after the OTP is correct. The old `registerWali()` endpoint now fails closed and cannot create accounts.
-- WhatsApp phone number is mandatory; email is optional. The registration UI requires explicit consent to receive the verification message.
-- OTP expires after 5 minutes, permits at most 5 attempts, has a 60-second resend cooldown, and is limited to 5 sends per phone in a rolling 24-hour window. Old OTP records are removed after 24 hours.
-- OTP values are never stored or returned. Only SHA-256(OTP + per-request random salt) is stored and checked with constant-time comparison. The pending record stores a PBKDF2 password hash and salt, never the plaintext password. Pending rows are protected by a ScriptLock during send/verify and account creation.
-- Duplicate phone/email checks happen only after OTP entry to avoid exposing whether an account already exists through the public start endpoint. Public responses do not return provider error bodies or access tokens.
-- The backend uses an approved Meta AUTHENTICATION template. The send request fills the OTP in both the body variable and the first URL button parameter (`sub_type: url`, `index: 0`); the configured template must match that structure and language.
-- Configure these Script Properties in the Apps Script project (not in the spreadsheet CONFIG tab and never in GitHub):
-  - `WA_GRAPH_API_VERSION` — a currently supported Graph API version such as `v26.0`.
-  - `WA_PHONE_NUMBER_ID` — Meta WhatsApp Business phone-number ID.
-  - `WA_ACCESS_TOKEN` — server-side token with `whatsapp_business_messaging` permission.
-  - `WA_AUTH_TEMPLATE_NAME` — exact approved Authentication template name.
-  - `WA_TEMPLATE_LANGUAGE` — exact approved language code (for example `id`).
-- Only trusted Apps Script project editors should be able to view Script Properties. Use a system-user token with the minimum required permission and rotate it according to Meta's token policy.
-- Setup adds the `WALI_OTP` sheet. Run the updated database setup in a test Apps Script project / duplicate spreadsheet first and verify sheet creation, sending, expiry, wrong-code lockout, resend cooldown, daily limits, duplicate-account handling, and successful account/session creation.
-- This repository change does not configure Meta Business Manager, approve the template, send a live message, or update the deployed Apps Script runtime.
+- `startWaliRegistration()` sends a six-digit OTP using Google Apps Script `MailApp.sendEmail()`. `verifyWaliRegistration()` creates the WALI account and session only after the OTP is correct. The old `registerWali()` endpoint fails closed.
+- Email is mandatory and is the sole verification channel. Phone number is optional contact data and is not used for OTP or resend throttling.
+- OTP expires after 5 minutes, permits at most 5 attempts, has a 60-second resend cooldown, and is limited to 5 sends per email address in a rolling 24-hour window. Old OTP records are removed after 24 hours.
+- OTP values are never stored or returned. Only SHA-256(OTP + per-request random salt) is stored and checked with constant-time comparison. Pending records store PBKDF2 password hashes, never plaintext passwords.
+- Duplicate email checks occur only after OTP entry to avoid exposing account existence. Phone duplicate checking occurs only when a phone number was supplied.
+- MailApp quota is checked before sending. Quota depends on Google account / Apps Script execution context; MailApp acceptance does not guarantee inbox delivery. Recipients should check spam/promotions.
+- Optional Script Properties: `PSB_OTP_SENDER_NAME` and `PSB_OTP_REPLY_TO`. No external provider token is required.
+- The `WALI_OTP` sheet retains 19 columns; the final metadata column is renamed from `waMessageId` to `emailMessageId`. Run updated database setup only in a test project / duplicate spreadsheet first.
+
 ## Upload validation details
 
 - `decodeAndValidateUpload_()` rejects empty/malformed Base64 and checks the encoded length against the maximum byte size before calling `Utilities.base64Decode()`.
