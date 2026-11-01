@@ -34,4 +34,4 @@ jobs:
         env:
           APPS_SCRIPT_ID: ${{ secrets.APPS_SCRIPT_ID }}
           CLASPRC_JSON: ${{ secrets.CLASPRC_JSON }}
-        run: bash .github/scripts/reconcile-app-script-readonly.sh
+        run: bash .github/scripts/reconcile-apps-script-readonly.sh
