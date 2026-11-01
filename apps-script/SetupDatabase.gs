@@ -21,9 +21,7 @@ const PSB_SETUP = {
   ACTIVE_YEAR: '2027/2028',
   TIMEZONE: 'Asia/Jakarta',
   ROOT_FOLDER_NAME: 'PSB Fathan Mubina',
-  YEAR_FOLDER_NAME: '2027-2028',
-  INITIAL_SUPERADMIN_USERNAME: 'Superadmin',
-  INITIAL_SUPERADMIN_NAME: 'Superadmin'
+  YEAR_FOLDER_NAME: '2027-2028'
 };
 
 const PSB_SHEETS = {
@@ -326,22 +324,12 @@ function createInitialSuperadmin_() {
   if (!sheet) throw new Error('Sheet USERS belum tersedia.');
 
   const props = PropertiesService.getScriptProperties();
-  const username = String(props.getProperty('PSB_INITIAL_SUPERADMIN_USERNAME') || PSB_SETUP.INITIAL_SUPERADMIN_USERNAME).trim();
-  const usernameNormalized = username.toLowerCase();
-  const data = sheet.getDataRange().getValues();
-
-  const exists = data.slice(1).some(row =>
-    String(row[2] || '').toLowerCase() === usernameNormalized ||
-    String(row[4] || '').toLowerCase() === usernameNormalized
-  );
-  if (exists) {
-    ['PSB_INITIAL_SUPERADMIN_HASH','PSB_INITIAL_SUPERADMIN_SALT','PSB_INITIAL_SUPERADMIN_USERNAME','PSB_INITIAL_SUPERADMIN_NAME'].forEach(key => props.deleteProperty(key));
-    return { success: true, created: false, message: 'Akun Superadmin sudah ada. Data bootstrap sementara dibersihkan.' };
-  }
-
+  const username = String(props.getProperty('PSB_INITIAL_SUPERADMIN_USERNAME') || '').trim();
+  const displayName = String(props.getProperty('PSB_INITIAL_SUPERADMIN_NAME') || '').trim();
   const hash = String(props.getProperty('PSB_INITIAL_SUPERADMIN_HASH') || '');
   const salt = String(props.getProperty('PSB_INITIAL_SUPERADMIN_SALT') || '');
-  if (!hash || !salt) {
+
+  if (!username || !displayName || !hash || !salt) {
     return {
       success: false,
       created: false,
@@ -350,11 +338,22 @@ function createInitialSuperadmin_() {
     };
   }
 
+  const usernameNormalized = username.toLowerCase();
+  const data = sheet.getDataRange().getValues();
+  const exists = data.slice(1).some(row =>
+    String(row[2] || '').toLowerCase() === usernameNormalized ||
+    String(row[4] || '').toLowerCase() === usernameNormalized
+  );
+  if (exists) {
+    ['PSB_INITIAL_SUPERADMIN_HASH','PSB_INITIAL_SUPERADMIN_SALT','PSB_INITIAL_SUPERADMIN_USERNAME','PSB_INITIAL_SUPERADMIN_NAME'].forEach(key => props.deleteProperty(key));
+    return { success: true, created: false, message: 'Akun dengan username tersebut sudah ada. Data bootstrap sementara dibersihkan.' };
+  }
+
   const userId = generateId_('USR');
   const now = new Date();
   sheet.appendRow([
     userId,
-    String(props.getProperty('PSB_INITIAL_SUPERADMIN_NAME') || PSB_SETUP.INITIAL_SUPERADMIN_NAME),
+    displayName,
     username,
     usernameNormalized,
     '',
