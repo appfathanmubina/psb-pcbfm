@@ -327,8 +327,8 @@ function sendWaliEmailOtp_(email, otp) {
     if (MailApp.getRemainingDailyQuota() < 1) return {success:false,code:'EMAIL_QUOTA_EXCEEDED'};
     const cfg = getWaliEmailOtpSettings_();
     const subject = 'Kode Verifikasi Pendaftaran Wali - PSB Fathan Mubina';
-    const body = 'Assalamu’alaikum.\\n\\nKode verifikasi pendaftaran akun Wali Santri PSB Fathan Mubina Anda adalah: ' + otp +
-      '\\n\\nKode berlaku selama 5 menit dan hanya dapat digunakan satu kali. Jangan bagikan kode ini kepada siapa pun. Jika Anda tidak merasa melakukan pendaftaran, abaikan email ini.\\n\\nWassalamu’alaikum.\\nPSB Fathan Mubina';
+    const body = 'Assalamu’alaikum.\n\nKode verifikasi pendaftaran akun Wali Santri PSB Fathan Mubina Anda adalah: ' + otp +
+      '\n\nKode berlaku selama 5 menit dan hanya dapat digunakan satu kali. Jangan bagikan kode ini kepada siapa pun. Jika Anda tidak merasa melakukan pendaftaran, abaikan email ini.\n\nWassalamu’alaikum.\nPSB Fathan Mubina';
     const htmlBody = '<div style="font-family:Arial,sans-serif;max-width:520px;margin:auto;color:#25213a;line-height:1.6">' +
       '<h2 style="color:#56318c">Verifikasi Pendaftaran Wali</h2><p>Assalamu’alaikum.</p><p>Kode verifikasi akun Wali Santri PSB Fathan Mubina:</p>' +
       '<div style="font-size:30px;font-weight:800;letter-spacing:8px;padding:16px;text-align:center;background:#f4effb;border-radius:12px;color:#56318c">' + otp + '</div>' +
