@@ -24,7 +24,7 @@ assert.match(code, /function\s+pwaBridgeCall\s*\(/, 'Backend bridge dispatcher m
 assert.match(code, /function\s+getPwaBridgeConfig\s*\(/, 'Backend bridge configuration endpoint must exist');
 assert.match(bridgeHtml, /\.pwaBridgeCall\(fn,args\)/, 'HTML bridge must dispatch through the allowlisted backend');
 assert.match(bridgeHtml, /\.getPwaBridgeConfig\(\)/, 'HTML bridge must load configured trusted origins');
-assert.match(bridgeHtml, /\\bPWA_SOURCE\\s*=\\s*['"]psb-fm-pwa['"]/, 'HTML bridge must verify the PWA message source');
+assert.match(bridgeHtml, /\bPWA_SOURCE\s*=\s*['"]psb-fm-pwa['"]/, 'HTML bridge must verify the PWA message source');
 assert.match(apiBridge, /const\s+PWA_SOURCE\s*=\s*['"]psb-fm-pwa['"]/, 'PWA transport source identifier must match');
 assert.match(apiBridge, /event\.source!==iframe\?\.contentWindow/, 'PWA must verify the message source window');
 assert.match(apiBridge, /isTrustedBridgeOrigin\(event\.origin\)/, 'PWA must validate bridge message origin');
