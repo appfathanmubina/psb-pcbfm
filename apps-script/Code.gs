@@ -325,7 +325,7 @@ function getWhatsAppOtpSettings_() {
 
 function sendWhatsAppAuthenticationOtp_(phone, otp) {
   const cfg = getWhatsAppOtpSettings_();
-  if (!/^v\d+\\.\d+$/.test(cfg.version) || !cfg.phoneNumberId || !cfg.accessToken ||
+  if (!/^v\d+\.\d+$/.test(cfg.version) || !cfg.phoneNumberId || !cfg.accessToken ||
       !/^[a-z0-9_]{2,512}$/i.test(cfg.templateName) || !cfg.language) {
     return { success:false, code:'WHATSAPP_NOT_CONFIGURED' };
   }
@@ -399,7 +399,7 @@ function validateWaliRegistrationPayload_(payload) {
   const emailNormalized = email.toLowerCase();
   if (!name || name.length > 120) return {success:false,message:'Nama lengkap wajib diisi (maksimal 120 karakter).'};
   if (!phone || !/^62\d{8,13}$/.test(phoneNormalized)) return {success:false,message:'Nomor WhatsApp tidak valid. Gunakan nomor aktif dengan kode negara Indonesia.'};
-  if (email && (email.length > 254 || !/^[^\s@]+@[^\s@]+\\.[^\s@]+$/.test(email))) return {success:false,message:'Format email tidak valid.'};
+  if (email && (email.length > 254 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))) return {success:false,message:'Format email tidak valid.'};
   if (password.length < 6 || password.length > 128) return {success:false,message:'Password harus terdiri dari 6 sampai 128 karakter.'};
   if (password !== confirmPassword) return {success:false,message:'Konfirmasi password tidak sama.'};
   return {success:true,name:name,phone:phone,phoneNormalized:phoneNormalized,email:email,emailNormalized:emailNormalized,password:password};
