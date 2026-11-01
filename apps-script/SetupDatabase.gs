@@ -264,10 +264,38 @@ function installChatAutomationTrigger() {
   return ensureChatAutomationTrigger_();
 }
 
-function configureInitialSuperadmin(username, name, password) {
-  const user = String(username || '').trim();
-  const displayName = String(name || '').trim();
-  const secret = String(password || '');
+function configureInitialSuperadmin() {
+  const ui = SpreadsheetApp.getUi();
+  const usernamePrompt = ui.prompt(
+    'Konfigurasi Superadmin awal',
+    'Masukkan username Superadmin (4-40 karakter).',
+    ui.ButtonSet.OK_CANCEL
+  );
+  if (usernamePrompt.getSelectedButton() !== ui.Button.OK) {
+    return { success: false, cancelled: true, message: 'Konfigurasi dibatalkan.' };
+  }
+
+  const namePrompt = ui.prompt(
+    'Konfigurasi Superadmin awal',
+    'Masukkan nama tampilan Superadmin.',
+    ui.ButtonSet.OK_CANCEL
+  );
+  if (namePrompt.getSelectedButton() !== ui.Button.OK) {
+    return { success: false, cancelled: true, message: 'Konfigurasi dibatalkan.' };
+  }
+
+  const passwordPrompt = ui.prompt(
+    'Konfigurasi Superadmin awal',
+    'Masukkan password kuat minimal 12 karakter. Jangan gunakan password yang dipakai di layanan lain.',
+    ui.ButtonSet.OK_CANCEL
+  );
+  if (passwordPrompt.getSelectedButton() !== ui.Button.OK) {
+    return { success: false, cancelled: true, message: 'Konfigurasi dibatalkan.' };
+  }
+
+  const user = String(usernamePrompt.getResponseText() || '').trim();
+  const displayName = String(namePrompt.getResponseText() || '').trim();
+  const secret = String(passwordPrompt.getResponseText() || '');
 
   if (!user || !displayName || secret.length < 12) {
     throw new Error('Username, nama, dan password minimal 12 karakter wajib diisi.');
