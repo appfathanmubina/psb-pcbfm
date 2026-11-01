@@ -905,7 +905,6 @@ function normalizePhone_(phone) {
 }
 
 // Password hashing: PBKDF2-HMAC-SHA256.
- // Iteration count is versioned in each stored hash so it can be increased later.
 const PSB_PASSWORD_HASH_SCHEME_ = 'pbkdf2_sha256';
 const PSB_PASSWORD_HASH_ITERATIONS_ = 60000;
 const PSB_PASSWORD_HASH_MIN_ITERATIONS_ = 10000;
@@ -5967,7 +5966,6 @@ function fail_(message) { return { success: false, message: message }; } + deriv
 }
 
 // Verifies both the new versioned format and the legacy SHA-256 format.
-// Legacy verification is read-only; migration occurs only after successful login.
 function verifyPasswordForUser_(password, user) {
   const stored = String(user && user.passwordHash || '');
   const salt = String(user && user.passwordSalt || '');
@@ -11037,16 +11035,12 @@ function fail_(message) { return { success: false, message: message }; });
     return { valid: constantTimeEqual_(actual, parts[2].toLowerCase()), needsUpgrade: false };
   }
 
-  // Compatibility path for accounts created before PBKDF2 migration.
   const legacy = sha256Hex_(String(password) + salt);
-  return {
-    valid: constantTimeEqual_(legacy, stored.toLowerCase()),
-    needsUpgrade: constantTimeEqual_(legacy, stored.toLowerCase())
-  };
+  const valid = constantTimeEqual_(legacy, stored.toLowerCase());
+  return { valid: valid, needsUpgrade: valid };
 }
 
-// PBKDF2-HMAC-SHA256, one 256-bit output block. Uses Apps Script's native
-// HMAC implementation; no external service, library download, or plaintext storage.
+// PBKDF2-HMAC-SHA256 with a 256-bit derived key.
 function pbkdf2Sha256Hex_(password, salt, iterations) {
   const keyBytes = Utilities.newBlob(String(password), 'text/plain').getBytes();
   const saltBytes = Utilities.newBlob(String(salt), 'text/plain').getBytes();
@@ -11060,19 +11054,16 @@ function pbkdf2Sha256Hex_(password, salt, iterations) {
   return output.map(b => (b < 0 ? b + 256 : b).toString(16).padStart(2, '0')).join('');
 }
 
-// Upgrade is guarded by a script lock and a fresh database read to avoid
-// overwriting a password changed/reset concurrently with the login request.
+// Upgrade under a lock and re-read the row to avoid overwriting a concurrent reset.
 function migrateLegacyPasswordAfterLogin_(verifiedUser, password) {
   const lock = LockService.getScriptLock();
   lock.waitLock(20000);
   try {
-    const current = findUserById_(verifiedUser.userId);
+    const current = findUserById_(verifiedUser.userId, true);
     if (!current || String(current.status).toUpperCase() !== 'ACTIVE') return false;
 
     if (current.passwordHash !== verifiedUser.passwordHash ||
         current.passwordSalt !== verifiedUser.passwordSalt) {
-      // Another request may already have migrated the same password. Accept
-      // only if the submitted password still matches the current stored hash.
       return verifyPasswordForUser_(password, current).valid;
     }
 
