@@ -42,6 +42,8 @@ jobs:
         run: node tests/upload-validation.test.js
       - name: Test Email OTP registration safeguards
         run: node tests/email-otp.test.js
+      - name: Test Script Properties preservation safeguards
+        run: node tests/setup-script-properties.test.js
       - name: Validate shell scripts
         run: |
           while IFS= read -r file; do
