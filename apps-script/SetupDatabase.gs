@@ -249,7 +249,7 @@ function ensureChatAutomationTrigger_() {
   try {
     const triggers = ScriptApp.getProjectTriggers();
     triggers.forEach(trigger => {
-      if (trigger.getHandlerFunction() === 'runChatAutomation_') ScriptApp.deleteTrigger(trigger);
+      if (['runChatAutomation', 'runChatAutomation_'].indexOf(trigger.getHandlerFunction()) >= 0) ScriptApp.deleteTrigger(trigger);
     });
     ScriptApp.newTrigger('runChatAutomation_').timeBased().everyMinutes(15).create();
     PropertiesService.getScriptProperties().setProperty('PSB_CHAT_AUTOMATION_TRIGGER', 'INSTALLED');
