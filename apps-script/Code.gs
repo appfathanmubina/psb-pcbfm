@@ -272,7 +272,7 @@ function finalizeLogin(sessionToken) {
  */
 function decodeAndValidateUpload_(base64Input, mimeTypeInput, maxBytes) {
   const mimeType = String(mimeTypeInput || '').trim().toLowerCase();
-  const encoded = String(base64Input || '').replace(/\\s+/g, '');
+  const encoded = String(base64Input || '').replace(/\s+/g, '');
   const limit = Math.max(1, Math.floor(Number(maxBytes) || 0));
   if (!encoded) return { success: false, message: 'File belum diterima server.' };
   if (!limit || encoded.length > Math.ceil(limit / 3) * 4) {
@@ -304,7 +304,7 @@ function decodeAndValidateUpload_(base64Input, mimeTypeInput, maxBytes) {
 
 // =====================================================
 // EMAIL OTP - REGISTRASI WALI
-// Kredensial Cloud API hanya boleh disimpan di Script Properties.
+// Pengaturan nama pengirim opsional disimpan di Script Properties.
 // Tidak ada OTP, token, atau password plaintext yang disimpan/log.
 // =====================================================
 const PSB_WALI_OTP_TTL_MS_ = 5 * 60 * 1000;
@@ -322,7 +322,7 @@ function getWaliEmailOtpSettings_() {
 
 function sendWaliEmailOtp_(email, otp) {
   const recipient = String(email || '').trim().toLowerCase();
-  if (!/^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(recipient)) return {success:false,code:'EMAIL_INVALID'};
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(recipient)) return {success:false,code:'EMAIL_INVALID'};
   try {
     if (MailApp.getRemainingDailyQuota() < 1) return {success:false,code:'EMAIL_QUOTA_EXCEEDED'};
     const cfg = getWaliEmailOtpSettings_();
@@ -334,7 +334,7 @@ function sendWaliEmailOtp_(email, otp) {
       '<div style="font-size:30px;font-weight:800;letter-spacing:8px;padding:16px;text-align:center;background:#f4effb;border-radius:12px;color:#56318c">' + otp + '</div>' +
       '<p>Kode berlaku selama <b>5 menit</b> dan hanya dapat digunakan satu kali.</p><p><b>Jangan bagikan kode ini kepada siapa pun.</b> Jika Anda tidak merasa melakukan pendaftaran, abaikan email ini.</p><p>Wassalamu’alaikum,<br>PSB Fathan Mubina</p></div>';
     const options = {to:recipient,subject:subject,body:body,htmlBody:htmlBody,name:cfg.senderName};
-    if (cfg.replyTo && /^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(cfg.replyTo)) options.replyTo = cfg.replyTo;
+    if (cfg.replyTo && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cfg.replyTo)) options.replyTo = cfg.replyTo;
     MailApp.sendEmail(options);
     return {success:true};
   } catch (e) {
@@ -391,8 +391,8 @@ function validateWaliRegistrationPayload_(payload) {
   const phoneNormalized = phone ? normalizePhone_(phone) : '';
   const emailNormalized = email.toLowerCase();
   if (!name || name.length > 120) return {success:false,message:'Nama lengkap wajib diisi (maksimal 120 karakter).'};
-  if (!email || email.length > 254 || !/^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(email)) return {success:false,message:'Alamat email aktif wajib diisi dengan format yang benar.'};
-  if (phone && !/^62\\d{8,13}$/.test(phoneNormalized)) return {success:false,message:'Nomor HP tidak valid. Gunakan nomor Indonesia atau kosongkan jika tidak ingin mengisi.'};
+  if (!email || email.length > 254 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return {success:false,message:'Alamat email aktif wajib diisi dengan format yang benar.'};
+  if (phone && !/^62\d{8,13}$/.test(phoneNormalized)) return {success:false,message:'Nomor HP tidak valid. Gunakan nomor Indonesia atau kosongkan jika tidak ingin mengisi.'};
   if (password.length < 6 || password.length > 128) return {success:false,message:'Password harus terdiri dari 6 sampai 128 karakter.'};
   if (password !== confirmPassword) return {success:false,message:'Konfirmasi password tidak sama.'};
   return {success:true,name:name,phone:phone,phoneNormalized:phoneNormalized,email:email,emailNormalized:emailNormalized,password:password};
@@ -437,7 +437,7 @@ function startWaliRegistration(payload) {
       verificationId,input.name,input.phone,input.phoneNormalized,input.email,input.emailNormalized,
       passwordHash,passwordSalt,sha256Hex_(otp+otpSalt),otpSalt,
       new Date(now.getTime()+PSB_WALI_OTP_TTL_MS_),0,PSB_WALI_OTP_MAX_ATTEMPTS_,1,now,
-      'PENDING',now,'',''
+      'PENDING',now,'','SUBMITTED'
     ]);
     cache.put(emailKey+'_COOLDOWN','1',Math.ceil(PSB_WALI_OTP_COOLDOWN_MS_/1000));
     writeAudit_('','WALI_OTP_SENT','AUTH',verificationId,'','', 'OTP verifikasi pendaftaran Wali dikirim melalui email');
@@ -474,7 +474,7 @@ function resendWaliRegistrationEmailOtp(verificationId) {
       : 'Kode verifikasi belum dapat dikirim. Silakan coba kembali.');
     sheet.getRange(rowNumber,9,1,11).setValues([[
       sha256Hex_(otp+otpSalt),otpSalt,new Date(now.getTime()+PSB_WALI_OTP_TTL_MS_),
-      0,PSB_WALI_OTP_MAX_ATTEMPTS_,Math.max(0,Number(row[13])||0)+1,now,'PENDING',row[16],'',''
+      0,PSB_WALI_OTP_MAX_ATTEMPTS_,Math.max(0,Number(row[13])||0)+1,now,'PENDING',row[16],'','SUBMITTED'
     ]]);
     cache.put(key+'_COOLDOWN','1',Math.ceil(PSB_WALI_OTP_COOLDOWN_MS_/1000));
     return {success:true,message:'Kode verifikasi baru telah dikirim ke email.'};
@@ -518,7 +518,7 @@ function verifyWaliRegistration(verificationId, code) {
     if (!usersSheet) return fail_('Database pengguna belum tersedia.');
     const users = usersSheet.getLastRow() >= 2 ? usersSheet.getRange(2,1,usersSheet.getLastRow()-1,15).getValues() : [];
     const duplicate = users.some(function(r) {
-      (String(row[3]||'') && String(r[3]||'')===String(row[3]||'')) ||
+      return (String(row[3]||'') && String(r[3]||'')===String(row[3]||'')) ||
         String(r[5]||'').toLowerCase()===String(row[5]||'').toLowerCase();
     });
     if (duplicate) {
@@ -3731,7 +3731,7 @@ function nextRegistrationNumber_(sheet, tahunAjaranId) {
   const rows = sheet.getLastRow() < 2 ? [] : sheet.getRange(2,1,sheet.getLastRow()-1,sheet.getLastColumn()).getValues();
   const idx = sheet.getRange(1,1,1,sheet.getLastColumn()).getValues()[0].map(String).indexOf('registrationNumber');
   let max = 0;
-  rows.forEach(r=>{const m=String(r[idx]||'').match(new RegExp('^PSB-'+prefix+'-(\\d+)$'));if(m)max=Math.max(max,Number(m[1])||0);});
+  rows.forEach(r=>{const m=String(r[idx]||'').match(new RegExp('^PSB-'+prefix+'-(\d+)$'));if(m)max=Math.max(max,Number(m[1])||0);});
   return 'PSB-'+prefix+'-'+String(max+1).padStart(4,'0');
 }
 
