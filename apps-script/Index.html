@@ -872,7 +872,7 @@ function toggleRegisterPassword(id,button){const i=$(id);i.type=i.type==='passwo
 async function submitRegisterWali(e){
   e.preventDefault();const btn=$('registerBtn');btn.disabled=true;btn.textContent='Mengirim kode...';loading(true,'Mengirim kode verifikasi email...');
   try{
-    const r=await server('startWaliRegistration',{name:$('regName').value,phone:$('regPhone').value,email:$('regEmail').value,password:$('regPassword').value,confirmPassword:$('regConfirmPassword').value,whatsappConsent:$('regEmailConsent').checked});
+    const r=await server('startWaliRegistration',{name:$('regName').value,phone:$('regPhone').value,email:$('regEmail').value,password:$('regPassword').value,confirmPassword:$('regConfirmPassword').value});
     if(r.success){state.waliOtpVerificationId=r.verificationId;state.waliOtpEmail=r.maskedEmail||'email Anda';renderWaliOtp();showToast('Kode verifikasi telah dikirim melalui email.','success');}
     else renderRegisterWali(r.message);
   }catch(err){renderRegisterWali('Kode email belum dapat dikirim. Periksa koneksi dan coba kembali.')}finally{loading(false)}
