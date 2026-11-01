@@ -60,7 +60,13 @@ Untuk memastikan source di kedua tempat sama, gunakan prosedur manual berikut:
 
 ### Batasan dan keamanan
 
-- Tidak ada workflow rekonsiliasi otomatis, OIDC, clasp, atau kredensial Google yang diperlukan untuk prosedur manual ini.
+- Repository tetap **Public** sesuai keputusan pengelola. Jangan pernah menyimpan password, hash/salt password, token, private key, atau kredensial layanan di source.
+- Fungsi pengisian dan penghapusan data dummy (`seedPSBTestData` dan `clearPSBTestData`) telah dihapus dari source produksi.
+- Kredensial bootstrap Superadmin tidak lagi ditanam di source. Untuk instalasi baru, editor Apps Script tepercaya harus menjalankan `configureInitialSuperadmin(username, nama, password)` dari editor Apps Script. Gunakan password kuat minimal 12 karakter. Fungsi ini menyimpan hash dan salt ke Script Properties, bukan mengembalikannya ke browser. Setelah akun dibuat oleh `setupPSBDatabase()`, properti bootstrap dihapus.
+- Jika akun Superadmin sudah ada, fungsi bootstrap tidak menimpa password atau akun yang ada.
+- `ensureSheet_()` tidak lagi menimpa header sheet yang berbeda. Proses setup berhenti dengan pesan kesalahan agar struktur dan data dapat diperiksa manual.
+- Error internal dari handler Bridge dicatat di execution log dan pesan yang dikirim ke pemanggil publik dibuat umum.
+- Tidak ada workflow rekonsiliasi otomatis, OIDC, clasp, atau kredensial Google yang diperlukan untuk prosedur sinkronisasi manual ini.
 - GitHub Pages hanya menerbitkan frontend PWA; ia tidak menjalankan backend Apps Script.
 - GitHub menjadi tempat pengelolaan source dan salinan backend; Google Apps Script tetap menjadi backend produksi.
 - Perubahan pada repository tidak boleh dianggap sudah diterapkan ke backend sebelum disalin dan disimpan di Apps Script.
