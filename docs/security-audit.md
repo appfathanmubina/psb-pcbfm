@@ -59,6 +59,7 @@
 
 - Stored new hash format: `pbkdf2_sha256$60000$<64-hex-character-derived-key>`; the existing `passwordSalt` column stores the per-user salt.
 - The login path accepts both legacy SHA-256 and the versioned PBKDF2 format. Only successful legacy authentication triggers migration.
+- Password change, administrator reset, and migration serialize through the Apps Script script lock; password change/reset re-read the user row without cache before updating the hash.
 - Migration uses a script lock, reloads the user row bypassing cache, and writes only the password hash and salt columns. If a concurrent password reset/change has occurred, the migration does not overwrite it.
 - New registrations, manual account creation, administrator password resets, password changes, and Superadmin bootstrap all use the new `hashPassword_` implementation.
 - A successful migration is recorded in the audit log without recording the password or derived hash.
