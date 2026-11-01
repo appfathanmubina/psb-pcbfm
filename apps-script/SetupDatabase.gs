@@ -12,7 +12,7 @@
  * Keamanan:
  * - Tidak menyimpan hash/salt/password Superadmin di source repository.
  * - Kredensial bootstrap disimpan di Script Properties melalui
- *   configureInitialSuperadmin() yang dijalankan manual oleh editor tepercaya.
+ *   configureInitialSuperadmin_() yang dijalankan manual oleh editor tepercaya.
  * - Tidak menyediakan fungsi seed/clear data dummy di source produksi.
  */
 
@@ -88,7 +88,7 @@ const PSB_HEADERS = {
   CHAT_MESSAGES: ['messageId','threadId','senderUserId','senderRole','message','attachmentFileId','attachmentName','attachmentMimeType','isRead','createdAt','readAt']
 };
 
-function setupPSBDatabase() {
+function setupPSBDatabase_() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   if (!ss) throw new Error('Spreadsheet aktif tidak ditemukan.');
 
@@ -102,7 +102,7 @@ function setupPSBDatabase() {
   ensureDefaultConfig_();
   ensureInitialMasterData_();
   setupDriveFolders_();
-  const superadminBootstrap = createInitialSuperadmin();
+  const superadminBootstrap = createInitialSuperadmin_();
   ensureChatAutomationTrigger_();
 
   return {
@@ -249,9 +249,9 @@ function ensureChatAutomationTrigger_() {
   try {
     const triggers = ScriptApp.getProjectTriggers();
     triggers.forEach(trigger => {
-      if (trigger.getHandlerFunction() === 'runChatAutomation') ScriptApp.deleteTrigger(trigger);
+      if (trigger.getHandlerFunction() === 'runChatAutomation_') ScriptApp.deleteTrigger(trigger);
     });
-    ScriptApp.newTrigger('runChatAutomation').timeBased().everyMinutes(15).create();
+    ScriptApp.newTrigger('runChatAutomation_').timeBased().everyMinutes(15).create();
     PropertiesService.getScriptProperties().setProperty('PSB_CHAT_AUTOMATION_TRIGGER', 'INSTALLED');
     return true;
   } catch (e) {
@@ -260,11 +260,11 @@ function ensureChatAutomationTrigger_() {
   }
 }
 
-function installChatAutomationTrigger() {
+function installChatAutomationTrigger_() {
   return ensureChatAutomationTrigger_();
 }
 
-function configureInitialSuperadmin() {
+function configureInitialSuperadmin_() {
   const ui = SpreadsheetApp.getUi();
   const usernamePrompt = ui.prompt(
     'Konfigurasi Superadmin awal',
@@ -315,11 +315,11 @@ function configureInitialSuperadmin() {
 
   return {
     success: true,
-    message: 'Kredensial bootstrap tersimpan di Script Properties. Jalankan setupPSBDatabase() untuk membuat akun jika belum ada.'
+    message: 'Kredensial bootstrap tersimpan di Script Properties. Jalankan setupPSBDatabase_() untuk membuat akun jika belum ada.'
   };
 }
 
-function createInitialSuperadmin() {
+function createInitialSuperadmin_() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   if (!ss) throw new Error('Spreadsheet aktif tidak ditemukan.');
   const sheet = ss.getSheetByName(PSB_SHEETS.USERS);
@@ -345,7 +345,7 @@ function createInitialSuperadmin() {
       success: false,
       created: false,
       code: 'SUPERADMIN_BOOTSTRAP_NOT_CONFIGURED',
-      message: 'Akun Superadmin belum dibuat. Editor tepercaya harus menjalankan configureInitialSuperadmin(username, nama, password) terlebih dahulu.'
+      message: 'Akun Superadmin belum dibuat. Editor tepercaya harus menjalankan configureInitialSuperadmin_() terlebih dahulu.'
     };
   }
 
