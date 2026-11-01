@@ -5,6 +5,26 @@ set +x
 : "${APPS_SCRIPT_ID:?Missing APPS_SCRIPT_ID GitHub Environment secret}"
 : "${CLASPRC_JSON:?Missing CLASPRC_JSON GitHub Environment secret}"
 
+# Validate the secret before clasp reads it. Never print or log credential contents.
+if ! printf '%s' "$CLASPRC_JSON" | node -e '
+  let raw = "";
+  process.stdin.setEncoding("utf8");
+  process.stdin.on("data", chunk => raw += chunk);
+  process.stdin.on("end", () => {
+    try {
+      const value = JSON.parse(raw);
+      if (!value || typeof value !== "object" || Array.isArray(value)) process.exit(1);
+    } catch (_) {
+      process.exit(1);
+    }
+  });
+'; then
+  echo "ERROR: CLASPRC_JSON is not valid JSON."
+  echo "Set it to the complete, unmodified contents of the clasp .clasprc.json file."
+  echo "Do not use a file path, placeholder, masked value, or manually quoted JSON."
+  exit 1
+fi
+
 ROOT_DIR="$(git rev-parse --show-toplevel)"
 TMP_DIR="$(mktemp -d)"
 trap 'rm -rf "$TMP_DIR"' EXIT
