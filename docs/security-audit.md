@@ -45,7 +45,7 @@
 
 ### High priority
 
-- **Password hashing:** passwords still use one-round SHA-256 with salt. This is not a password-hardening algorithm such as Argon2id, scrypt, bcrypt, or PBKDF2 with a suitably high work factor. Do not treat this as production-grade password storage. A migration must preserve existing users or require a controlled password reset; this audit did not change the hash format.
+- **Password hashing / work factor:** new and migrated passwords now use PBKDF2-HMAC-SHA256 with a per-user random salt and 60,000 iterations. Existing one-round SHA-256 accounts are verified using the legacy method only at successful login, then upgraded in place; the password, user ID, role, registration records, and other user data are preserved. This is a compatibility-preserving improvement, but 60,000 iterations is a transitional work factor and must be benchmarked on a test Apps Script deployment before production rollout. Increase the work factor only after measuring login latency and Apps Script execution limits. Argon2id/bcrypt/scrypt are not natively available through the current Apps Script Utilities interface.
 - **Wali identity verification:** `registerWali` accepts a new account without OTP or verified email/phone. This allows unverified accounts and potential registration spam. Introduce a verified contact flow or another suitable anti-abuse control before relying on contact details for identity.
 
 ### Medium priority
@@ -54,6 +54,14 @@
 - **Upload resource limits:** document, payment, and chat upload handlers decode base64 before fully bounding the encoded request size. Add an early encoded-size limit and server-side content-signature validation to reduce memory/CPU abuse and file-type spoofing.
 - **Abuse throttling:** login lockout uses CacheService, which is best-effort and can be affected by concurrent requests or cache eviction. Add stronger server-side throttling for login and public registration if the service receives abusive traffic.
 - **Bootstrap password entry:** the trusted-editor bootstrap uses a standard Apps Script prompt; the password is not masked. Run it only in a private environment with the screen not visible to others.
+
+## Password migration details
+
+- Stored new hash format: `pbkdf2_sha256$60000$<64-hex-character-derived-key>`; the existing `passwordSalt` column stores the per-user salt.
+- The login path accepts both legacy SHA-256 and the versioned PBKDF2 format. Only successful legacy authentication triggers migration.
+- Migration uses a script lock, reloads the user row bypassing cache, and writes only the password hash and salt columns. If a concurrent password reset/change has occurred, the migration does not overwrite it.
+- New registrations, manual account creation, administrator password resets, password changes, and Superadmin bootstrap all use the new `hashPassword_` implementation.
+- A successful migration is recorded in the audit log without recording the password or derived hash.
 
 ## Operational requirements before production sync
 
