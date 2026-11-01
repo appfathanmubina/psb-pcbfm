@@ -38,6 +38,8 @@ jobs:
           node -e "JSON.parse(require('fs').readFileSync('appsscript.json', 'utf8'))"
       - name: Test password hash compatibility and migration safeguards
         run: node tests/password-migration.test.js
+      - name: Test upload validation safeguards
+        run: node tests/upload-validation.test.js
       - name: Validate shell scripts
         run: |
           while IFS= read -r file; do
