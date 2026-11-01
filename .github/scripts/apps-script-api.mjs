@@ -95,43 +95,8 @@ async function pushContent(accessToken) {
   console.log(`PUSH berhasil: ${localFiles.length} file source dikirim ke Apps Script project ${SCRIPT_ID}.`);
 }
 
-async function deployExisting(accessToken) {
-  const deploymentId = process.env.PRODUCTION_DEPLOYMENT_ID;
-  if (!deploymentId) fail("Missing GitHub Actions secret: PRODUCTION_DEPLOYMENT_ID");
-
-  // Always upload the checked-in source first, so the version matches this commit.
-  await pushContent(accessToken);
-
-  const current = await api(accessToken, `/deployments/${encodeURIComponent(deploymentId)}`);
-  if (current.deploymentConfig?.scriptId && current.deploymentConfig.scriptId !== SCRIPT_ID) {
-    fail("Deployment ID belongs to a different Apps Script project. Deployment was not changed.");
-  }
-
-  const version = await api(accessToken, "/versions", {
-    method: "POST",
-    body: JSON.stringify({ description: `GitHub Actions ${process.env.GITHUB_SHA || "manual"}` })
-  });
-  if (!version.versionNumber) fail("Apps Script did not return a new version number.");
-
-  const updated = await api(accessToken, `/deployments/${encodeURIComponent(deploymentId)}`, {
-    method: "PUT",
-    body: JSON.stringify({
-      deploymentConfig: {
-        scriptId: SCRIPT_ID,
-        versionNumber: version.versionNumber,
-        description: `PSB production deployment from GitHub ${(process.env.GITHUB_SHA || "").slice(0, 7)}`
-      }
-    })
-  });
-  if (updated.deploymentId && updated.deploymentId !== deploymentId) {
-    fail("Apps Script returned an unexpected deployment ID. Verify deployment status before proceeding.");
-  }
-  console.log(`DEPLOY berhasil: versi ${version.versionNumber} diterapkan pada deployment ID yang sudah ada.`);
-  if (updated.entryPoints?.[0]?.webApp?.url) console.log(`Web App URL: ${updated.entryPoints[0].webApp.url}`);
-}
 
 const action = process.argv[2];
-if (!["push", "deploy"].includes(action)) fail("Usage: node .github/scripts/apps-script-api.mjs push|deploy");
+if (action !== "push") fail("Usage: node .github/scripts/apps-script-api.mjs push");
 const token = await refreshAccessToken();
-if (action === "push") await pushContent(token);
-else await deployExisting(token);
+await pushContent(token);
