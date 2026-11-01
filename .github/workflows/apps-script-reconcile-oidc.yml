@@ -15,8 +15,24 @@ jobs:
   reconcile:
     if: ${{ github.ref == 'refs/heads/main' }}
     runs-on: ubuntu-24.04
+    environment: production
     timeout-minutes: 10
     steps:
+      - name: Validate production environment variables
+        shell: bash
+        env:
+          APPS_SCRIPT_ID: ${{ vars.APPS_SCRIPT_ID }}
+          GCP_WORKLOAD_IDENTITY_PROVIDER: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          GCP_SERVICE_ACCOUNT: ${{ vars.GCP_SERVICE_ACCOUNT }}
+        run: |
+          set -euo pipefail
+          for name in APPS_SCRIPT_ID GCP_WORKLOAD_IDENTITY_PROVIDER GCP_SERVICE_ACCOUNT; do
+            if [[ -z "${!name}" ]]; then
+              echo "::error::GitHub Environment production belum memiliki variable $name"
+              exit 1
+            fi
+          done
+
       - name: Checkout repository
         uses: actions/checkout@v5
 
