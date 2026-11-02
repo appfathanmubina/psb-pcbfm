@@ -232,7 +232,7 @@ function login(identifier, password) {
   try {
     identifier = String(identifier || '').trim();
     password = String(password || '');
-    if (!identifier || !password) return fail_('No. HP/email dan password wajib diisi.');
+    if (!identifier || !password || password.length > 1024) return fail_('No. HP/email dan password wajib diisi dengan benar.');
 
     const key = normalizeIdentifier_(identifier);
     const lock = getLoginLock_(key);
@@ -409,7 +409,7 @@ function validateWaliRegistrationPayload_(payload) {
   if (!name || name.length > 120) return {success:false,message:'Nama lengkap wajib diisi (maksimal 120 karakter).'};
   if (!email || email.length > 254 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return {success:false,message:'Alamat email aktif wajib diisi dengan format yang benar.'};
   if (phone && !/^62\d{8,13}$/.test(phoneNormalized)) return {success:false,message:'Nomor HP tidak valid. Gunakan nomor Indonesia atau kosongkan jika tidak ingin mengisi.'};
-  if (password.length < 6 || password.length > 128) return {success:false,message:'Password harus terdiri dari 6 sampai 128 karakter.'};
+  if (password.trim().length === 0 || password.length < 6 || password.length > 128) return {success:false,message:'Password harus terdiri dari 6 sampai 128 karakter dan tidak boleh kosong.'};
   if (password !== confirmPassword) return {success:false,message:'Konfirmasi password tidak sama.'};
   return {success:true,name:name,phone:phone,phoneNormalized:phoneNormalized,email:email,emailNormalized:emailNormalized,password:password};
 }
@@ -465,7 +465,7 @@ function startWaliRegistration(payload) {
 
 function resendWaliRegistrationEmailOtp(verificationId) {
   const id = String(verificationId || '').trim();
-  if (!id) return fail_('Permintaan verifikasi tidak ditemukan.');
+  if (!id || id.length > 128) return fail_('Permintaan verifikasi tidak ditemukan.');
   const lock = LockService.getScriptLock();
   lock.waitLock(15000);
   try {
@@ -502,7 +502,7 @@ function resendWaliRegistrationEmailOtp(verificationId) {
 function verifyWaliRegistration(verificationId, code) {
   const id = String(verificationId || '').trim();
   const otp = String(code || '').trim();
-  if (!id || !/^\d{6}$/.test(otp)) return fail_('Masukkan kode verifikasi 6 digit.');
+  if (!id || id.length > 128 || !/^\d{6}$/.test(otp)) return fail_('Masukkan kode verifikasi 6 digit yang valid.');
   const lock = LockService.getScriptLock();
   lock.waitLock(15000);
   try {
@@ -605,8 +605,11 @@ function logout(sessionToken) {
 function changePassword(sessionToken, currentPassword, newPassword) {
   const result = getSessionUser_(sessionToken, true);
   if (!result.success) return result;
-  if (String(newPassword || '').length < 6) return fail_('Password baru minimal 6 karakter.');
-  if (String(newPassword) === String(currentPassword || '')) return fail_('Password baru harus berbeda dari password lama.');
+  const currentPasswordValue = String(currentPassword || '');
+  const newPasswordValue = String(newPassword || '');
+  if (currentPasswordValue.length > 1024) return fail_('Password lama tidak valid.');
+  if (newPasswordValue.trim().length === 0 || newPasswordValue.length < 6 || newPasswordValue.length > 128) return fail_('Password baru harus terdiri dari 6 sampai 128 karakter.');
+  if (newPasswordValue === currentPasswordValue) return fail_('Password baru harus berbeda dari password lama.');
 
   const lock = LockService.getScriptLock();
   lock.waitLock(20000);
@@ -615,11 +618,11 @@ function changePassword(sessionToken, currentPassword, newPassword) {
     if (!current || current.passwordHash !== result.user.passwordHash || current.passwordSalt !== result.user.passwordSalt) {
       return fail_('Data password telah berubah. Silakan masuk kembali sebelum mengganti password.');
     }
-    const oldPasswordCheck = verifyPasswordForUser_(String(currentPassword || ''), current);
+    const oldPasswordCheck = verifyPasswordForUser_(currentPasswordValue, current);
     if (!oldPasswordCheck.valid) return fail_('Password lama tidak sesuai.');
 
     const salt = Utilities.getUuid().replace(/-/g, '').substring(0, 32);
-    const hash = hashPassword_(String(newPassword), salt);
+    const hash = hashPassword_(newPasswordValue, salt);
     const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('USERS');
     sheet.getRange(current.rowNumber, 7, 1, 3).setValues([[hash, salt, current.role]]);
     sheet.getRange(current.rowNumber, 14, 1, 2).setValues([[new Date(), false]]);
@@ -1054,7 +1057,7 @@ function adminResetUserPassword(sessionToken, payload) {
   const newPassword = String(payload.newPassword || '');
   const confirmPassword = String(payload.confirmPassword || '');
   if (!userId) return fail_('User ID wajib diisi.');
-  if (newPassword.length < 6) return fail_('Password baru minimal 6 karakter.');
+  if (newPassword.trim().length === 0 || newPassword.length < 6 || newPassword.length > 128) return fail_('Password baru harus terdiri dari 6 sampai 128 karakter.');
   if (newPassword !== confirmPassword) return fail_('Konfirmasi password tidak sama.');
 
   const lock = LockService.getScriptLock();

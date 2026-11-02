@@ -52,6 +52,8 @@ jobs:
         run: node tests/authorization-ownership.test.js
       - name: Test Email OTP registration safeguards
         run: node tests/email-otp.test.js
+      - name: Test OTP, account recovery, and password input safeguards
+        run: node tests/auth-recovery-security.test.js
       - name: Test Script Properties preservation safeguards
         run: node tests/setup-script-properties.test.js
       - name: Test PWA icon metadata and dimensions
