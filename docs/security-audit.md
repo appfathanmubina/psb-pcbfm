@@ -102,3 +102,13 @@
 ## Audit conclusion
 
 The repository has received meaningful static hardening and the previously exposed setup/maintenance entry points have been made private to the Apps Script HTML-service client. The application is **not certified secure** and this is **not a penetration test**. The remaining high-priority issues above should be resolved before describing the authentication system as strongly secured. The repository can remain Public provided the listed public assets/endpoints contain only information intended for public access and no secrets are committed.
+
+
+## OTP, pemulihan akun, dan batas input password
+
+- OTP pendaftaran Wali dikirim melalui Email, berlaku 5 menit, maksimum 5 percobaan per verification ID, cooldown 60 detik, dan batas pengiriman harian per email.
+- Kode OTP disimpan sebagai hash dengan salt dan diverifikasi menggunakan perbandingan constant-time; OTP tidak dikirim dalam respons API.
+- Endpoint resend hanya menerima verification ID berstatus PENDING atau EXPIRED dan menerbitkan kode baru pada record verifikasi yang sama.
+- Input password login dibatasi maksimal 1.024 karakter sebelum verifikasi hash. Password baru pendaftaran, perubahan, dan reset admin dibatasi 6–128 karakter.
+- Perubahan password memerlukan password lama yang valid dan mencabut sesi lain. Reset oleh SUPERADMIN mencabut seluruh sesi target serta mewajibkan penggantian password saat login berikutnya.
+- Pengujian adalah pemeriksaan regresi statis; bukan uji runtime Apps Script, load test, atau penetration test.
