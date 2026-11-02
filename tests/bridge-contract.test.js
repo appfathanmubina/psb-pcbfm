@@ -25,12 +25,12 @@ assert.match(code, /function\s+getPwaBridgeConfig\s*\(/, 'Backend bridge configu
 assert.match(bridgeHtml, /\.pwaBridgeCall\(fn,args\)/, 'HTML bridge must dispatch through the allowlisted backend');
 assert.match(bridgeHtml, /\.getPwaBridgeConfig\(\)/, 'HTML bridge must load configured trusted origins');
 assert.match(bridgeHtml, /\bPWA_SOURCE\s*=\s*['"]psb-fm-pwa['"]/, 'HTML bridge must verify the PWA message source');
-assert.match(bridgeHtml, /event\\.source!==topWindow\\(\\)/, 'HTML bridge must accept messages only from the top-level PWA window');
-assert.match(apiBridge, /const BRIDGE_URL=["']https:\\/\\/script\\.google\\.com\\/macros\\/s\\/[^"']+\\/exec["']/, 'PWA must target a deployed Apps Script Web App /exec URL');
-assert.match(apiBridge, /iframe\\.src=BRIDGE_URL\\+'\\?bridge=1/, 'PWA must request the Apps Script bridge entry point');
-assert.match(apiBridge, /TIMEOUT_MS=30000/, 'PWA transport must bound handshake and RPC wait time');
-assert.match(apiBridge, /setInterval\\(\\(\\)=>\\{if\\(ready\\)/, 'PWA transport must retry the bridge handshake until ready');
-assert.match(bridgeHtml, /google\\.script\\.run\\.withSuccessHandler\\(result=>send\\(event\\.origin,\\{type:'response',id,ok:true,result\\}\\)\\)/, 'HTML bridge must relay backend RPC success to the requesting PWA origin');
+assert.ok(bridgeHtml.includes('event.source!==topWindow()'), 'HTML bridge must accept messages only from the top-level PWA window');
+assert.ok(apiBridge.includes('const BRIDGE_URL="https://script.google.com/macros/s/') && apiBridge.includes('/exec";'), 'PWA must target a deployed Apps Script Web App /exec URL');
+assert.ok(apiBridge.includes("iframe.src=BRIDGE_URL+'?bridge=1"), 'PWA must request the Apps Script bridge entry point');
+assert.ok(apiBridge.includes('TIMEOUT_MS=30000'), 'PWA transport must bound handshake and RPC wait time');
+assert.ok(apiBridge.includes('setInterval(()=>{if(ready)'), 'PWA transport must retry the bridge handshake until ready');
+assert.ok(bridgeHtml.includes("google.script.run.withSuccessHandler(result=>send(event.origin,{type:'response',id,ok:true,result}))"), 'HTML bridge must relay backend RPC success to the requesting PWA origin');
 assert.match(apiBridge, /const\s+PWA_SOURCE\s*=\s*['"]psb-fm-pwa['"]/, 'PWA transport source identifier must match');
 assert.match(apiBridge, /event\.source!==iframe\?\.contentWindow/, 'PWA must verify the message source window');
 assert.match(apiBridge, /isTrustedBridgeOrigin\(event\.origin\)/, 'PWA must validate bridge message origin');
