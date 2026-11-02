@@ -1,0 +1,24 @@
+'use strict';
+const assert=require('node:assert/strict');
+const fs=require('node:fs');
+const source=fs.readFileSync('apps-script/Code.gs','utf8');
+function fn(name){const start=source.indexOf('function '+name+'(');assert.notEqual(start,-1,'Function exists: '+name);const next=source.indexOf('\nfunction ',start+10);return source.slice(start,next<0?source.length:next);}
+assert.match(fn('login'),/password\.length > 1024/);
+assert.match(fn('validateWaliRegistrationPayload_'),/password\.trim\(\)\.length === 0/);
+assert.match(fn('validateWaliRegistrationPayload_'),/password\.length > 128/);
+assert.match(fn('verifyWaliRegistration'),/id\.length > 128/);
+assert.match(fn('verifyWaliRegistration'),/constantTimeEqual_\(/);
+assert.match(fn('verifyWaliRegistration'),/PSB_WALI_OTP_MAX_ATTEMPTS_/);
+assert.match(fn('verifyWaliRegistration'),/LockService\.getScriptLock\(\)/);
+assert.match(fn('resendWaliRegistrationEmailOtp'),/id\.length > 128/);
+assert.match(fn('resendWaliRegistrationEmailOtp'),/\['PENDING','EXPIRED'\]\.includes/);
+assert.match(fn('resendWaliRegistrationEmailOtp'),/PSB_WALI_OTP_DAILY_LIMIT_/);
+assert.match(fn('changePassword'),/currentPasswordValue\.length > 1024/);
+assert.match(fn('changePassword'),/newPasswordValue\.length > 128/);
+assert.match(fn('changePassword'),/verifyPasswordForUser_\(currentPasswordValue, current\)/);
+assert.match(fn('changePassword'),/revokeOtherSessionsForUser_\(/);
+assert.match(fn('adminResetUserPassword'),/requireRole_\(sessionToken, \['SUPERADMIN'\]\)/);
+assert.match(fn('adminResetUserPassword'),/newPassword\.length > 128/);
+assert.match(fn('adminResetUserPassword'),/revokeOtherSessionsForUser_\(target\.userId, 0\)/);
+assert.match(fn('adminResetUserPassword'),/mustChangePassword/);
+console.log('OTP, account recovery, and password input safeguards passed.');
