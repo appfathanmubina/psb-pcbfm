@@ -1,36 +1,41 @@
-<!DOCTYPE html><html lang="id"><head><base target="_top"><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>PSB Fathan Mubina API Bridge</title><style>html,body{margin:0;width:100%;height:100%;background:transparent}#status{position:fixed;left:-9999px}</style></head><body><div id="status">PSB API Bridge</div><script>
-(function(){
-'use strict';
-const SOURCE='psb-fm-api-bridge', PWA_SOURCE='psb-fm-pwa', VERSION='32.3.8';
-const DEFAULT_ALLOWED_ORIGINS=['https://appfathanmubina.github.io'];
-let allowedOrigins=DEFAULT_ALLOWED_ORIGINS.slice(), ready=false;
-const topWindow=()=>{try{return window.top||window.parent}catch(e){return window.parent}};
-const send=(origin,payload)=>{if(!origin||origin==='*')return;try{topWindow().postMessage(Object.assign({source:SOURCE},payload),origin)}catch(e){}};
-const allowed=o=>allowedOrigins.indexOf(o)>=0;
-const announce=()=>{if(!allowedOrigins.length)return;ready=true;allowedOrigins.forEach(o=>send(o,{type:'ready',bridgeVersion:VERSION}))};
-window.addEventListener('message',event=>{
-  // Hanya terima pesan langsung dari parent PWA, bukan iframe saudara pada origin yang sama.
-  if(!allowed(event.origin)||event.source!==topWindow())return;
-  const d=event.data||{};
-  if(d.source!==PWA_SOURCE)return;
-  if(d.type==='ping'){send(event.origin,{type:'ready',bridgeVersion:VERSION});return}
-  if(d.type!=='request')return;
-  const id=String(d.id||'').trim(), fn=String(d.fn||'').trim(), args=Array.isArray(d.args)?d.args:[];
-  if(!id||!fn)return;
-  if(!ready){send(event.origin,{type:'response',id,ok:false,error:{code:'BRIDGE_NOT_READY',message:'API bridge belum siap.'}});return}
-  google.script.run.withSuccessHandler(result=>send(event.origin,{type:'response',id,ok:true,result}))
-    .withFailureHandler(err=>send(event.origin,{type:'response',id,ok:false,error:{code:'RPC_ERROR',message:String(err&&err.message||'Terjadi kesalahan komunikasi dengan backend.')}}))
-    .pwaBridgeCall(fn,args);
-});
-// Umumkan kesiapan transport lebih dahulu dengan origin PWA resmi.
-// Pengambilan konfigurasi server dilakukan setelah handshake agar kegagalan
-// fungsi konfigurasi tidak membuat PWA menunggu hingga timeout.
-announce();
-google.script.run.withSuccessHandler(cfg=>{
-  const configured=Array.isArray(cfg&&cfg.allowedOrigins)?cfg.allowedOrigins.map(String).map(x=>x.trim()).filter(Boolean):[];
-  allowedOrigins=Array.from(new Set(DEFAULT_ALLOWED_ORIGINS.concat(configured)));
-  announce();
-}).withFailureHandler(()=>{announce()}).getPwaBridgeConfig();
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <base target="_top">
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>PSB Fathan Mubina API Bridge</title>
+  <style>html,body{margin:0;width:100%;height:100%;background:transparent}#status{position:fixed;left:-9999px}</style>
+</head>
+<body>
+  <div id="status">PSB API Bridge</div>
+  <script>
+  (function () {
+    'use strict';
+    const SOURCE = 'psb-fm-api-bridge';
+    const VERSION = '32.5.0';
+    const TARGET_ORIGIN = '<?= bridgeOrigin ?>';
+    const CHALLENGE = '<?= bridgeChallenge ?>';
+    const TOKEN = '<?= bridgeToken ?>';
 
-})();
-</script></body></html>
+    // This is an outbound-only handshake. The PWA does not postMessage into
+    // this HTML Service frame because Apps Script Warden may drop that traffic.
+    if (!TARGET_ORIGIN || !/^[a-f0-9]{32}$/i.test(CHALLENGE) ||
+        !/^[a-f0-9]{64}$/i.test(TOKEN)) return;
+
+    try {
+      window.top.postMessage({
+        source: SOURCE,
+        type: 'ready',
+        version: VERSION,
+        challenge: CHALLENGE,
+        token: TOKEN
+      }, TARGET_ORIGIN);
+    } catch (error) {
+      // The parent transport will report a bounded timeout if the message
+      // cannot be delivered. Do not expose internal frame details.
+    }
+  })();
+  </script>
+</body>
+</html>
