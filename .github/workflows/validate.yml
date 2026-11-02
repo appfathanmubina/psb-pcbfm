@@ -44,6 +44,8 @@ jobs:
         run: node tests/upload-validation.test.js
       - name: Test Drive gallery and private document safeguards
         run: node tests/drive-gallery-security.test.js
+      - name: Test API response and audit data redaction
+        run: node tests/api-audit-redaction.test.js
       - name: Test authorization and resource ownership safeguards
         run: node tests/authorization-ownership.test.js
       - name: Test Email OTP registration safeguards
