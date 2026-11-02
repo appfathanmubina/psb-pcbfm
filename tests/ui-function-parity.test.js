@@ -5,9 +5,9 @@ const appsSource = fs.readFileSync('apps-script/Index.html', 'utf8');
 const pwaSource = fs.readFileSync('frontend/app.js', 'utf8');
 
 const onlyInAppsScript = ['installStaticBrandIcons', 'renderPublicVideo'];
-const onlyInPwa = ['goPublicVideo', 'refreshPublicConfig', 'renderPublicVideoSection', 'updatePublicVideo'];
+const onlyInPwa = ['goPublicVideo', 'refreshPublicConfig', 'renderPublicVideoSection', 'scheduleWarmNavigationData', 'updatePublicVideo'];
 const intentionallyDifferentBodies = [
-  'appLogoMarkup', 'applyAppIcon', 'boot', 'configAssetSources',
+  'appLogoMarkup', 'applyAppIcon', 'boot', 'configAssetSources', 'initializeAfterLogin', 'renderLogin',
   'hydrateSplashLogo', 'movePublicVideo', 'openChatForRegistration',
   'playPublicVideo', 'renderPublicHome', 'renderWaliHomeFlow', 'server', 'submitLogin'
 ];
