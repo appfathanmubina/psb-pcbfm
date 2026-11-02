@@ -19,12 +19,20 @@ function psbPwaBridgeAllowedOrigins_() {
   return Array.from(new Set(['https://appfathanmubina.github.io'].concat(configured)));
 }
 
+const PSB_PWA_BRIDGE_TOKEN_TTL_SECONDS_ = 180;
+const PSB_PWA_BRIDGE_TOKEN_MAX_USES_ = 20;
+
 function psbIssuePwaBridgeToken_(origin) {
   const requestedOrigin = String(origin || '').trim();
   if (psbPwaBridgeAllowedOrigins_().indexOf(requestedOrigin) < 0) return '';
   const token = Utilities.getUuid().replace(/-/g, '') + Utilities.getUuid().replace(/-/g, '');
   try {
-    CacheService.getScriptCache().put('PSB_PWA_BRIDGE_TOKEN_' + token, requestedOrigin, 180);
+    const expiresAt = Date.now() + PSB_PWA_BRIDGE_TOKEN_TTL_SECONDS_ * 1000;
+    CacheService.getScriptCache().put('PSB_PWA_BRIDGE_TOKEN_' + token, JSON.stringify({
+      origin: requestedOrigin,
+      remaining: PSB_PWA_BRIDGE_TOKEN_MAX_USES_,
+      expiresAt: expiresAt
+    }), PSB_PWA_BRIDGE_TOKEN_TTL_SECONDS_);
     return token;
   } catch (e) {
     console.error('PWA bridge token issue failed: ' + String(e && e.message || e));
@@ -41,10 +49,26 @@ function psbConsumePwaBridgeToken_(token, origin) {
     lock.waitLock(5000);
     const cache = CacheService.getScriptCache();
     const key = 'PSB_PWA_BRIDGE_TOKEN_' + value;
-    const storedOrigin = cache.get(key);
-    if (!storedOrigin || storedOrigin !== requestedOrigin) return false;
-    // One-use token: remove it while holding the script lock to prevent replay.
-    cache.remove(key);
+    const raw = cache.get(key);
+    if (!raw) return false;
+    let record;
+    try { record = JSON.parse(raw); } catch (e) { cache.remove(key); return false; }
+    if (!record || record.origin !== requestedOrigin ||
+        Number(record.expiresAt || 0) <= Date.now() ||
+        !Number.isFinite(Number(record.remaining)) ||
+        Number(record.remaining) < 1) {
+      cache.remove(key);
+      return false;
+    }
+    // Bounded-use token: serialize decrements so concurrent requests cannot
+    // exceed the fixed request budget. Expiry is never extended on use.
+    record.remaining = Math.floor(Number(record.remaining)) - 1;
+    if (record.remaining > 0) {
+      const ttl = Math.max(1, Math.ceil((Number(record.expiresAt) - Date.now()) / 1000));
+      cache.put(key, JSON.stringify(record), ttl);
+    } else {
+      cache.remove(key);
+    }
     return true;
   } catch (e) {
     console.warn('PWA bridge token validation failed: ' + String(e && e.message || e));
