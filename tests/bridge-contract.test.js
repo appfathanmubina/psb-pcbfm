@@ -29,7 +29,7 @@ assert.match(bridgeServer, /psbConsumePwaBridgeToken_\(payload\.token,\s*origin\
 assert.match(bridgeServer, /PSB_PWA_BRIDGE_TOKEN_MAX_USES_\s*=\s*20/, 'Bridge token must have a small fixed request budget');
 assert.match(bridgeServer, /PSB_PWA_BRIDGE_TOKEN_TTL_SECONDS_\s*=\s*180/, 'Bridge token must expire quickly');
 assert.match(bridgeServer, /record\.remaining\s*=\s*Math\.floor\(Number\(record\.remaining\)\)\s*-\s*1/, 'Token budget must be decremented atomically');
-assert.match(bridgeServer, /record\.expiresAt\).*Date\.now\(\)/, 'Token expiry must not be extended on use');
+assert.match(bridgeServer, /record\.expiresAt\s*\|\|\s*0\)\s*<=\s*Date\.now\(\)/, 'Token expiry must not be extended on use');
 assert.match(bridgeServer, /LockService\.getScriptLock\(\)/, 'Token budget decrement must be serialized');
 assert.match(bridgeServer, /cache\.remove\(key\)/, 'Exhausted or invalid tokens must be removed');
 assert.match(bridgeServer, /PSB_PWA_BRIDGE_ALLOWED_FUNCTIONS\.indexOf\(functionName\)/, 'POST must enforce the backend function allowlist');
