@@ -42,6 +42,14 @@
 - Session tokens are generated with UUID entropy and only token hashes are stored in the session sheet.
 - Password changes and administrator resets revoke existing sessions.
 
+## Audit log and API data minimization
+
+- `writeAudit_()` now redacts credential, token, OTP, file-reference, contact, address, and identity-number fields from structured old/new values before they are stored.
+- Historical audit rows are sanitized again when returned by `getAuditLogPageData()`, so previously recorded values are not sent to the browser verbatim.
+- Free-text audit descriptions receive email, Indonesian mobile-number, bearer-token, and JWT masking. Keep descriptions action-oriented; do not include raw request payloads.
+- Audit write failures and login exceptions use generic execution-log markers rather than serializing exception objects that could contain request details.
+- The audit viewer remains restricted to `SUPERADMIN` and `ADMIN_PSB`. These controls reduce accidental disclosure; they do not replace runtime access testing or a review of every endpoint's returned fields.
+
 ## Remaining risks — not closed by this audit
 
 ### High priority

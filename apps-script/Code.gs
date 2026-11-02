@@ -269,7 +269,7 @@ function login(identifier, password) {
       mustChangePassword: user.mustChangePassword === true || String(user.mustChangePassword).toUpperCase() === 'TRUE'
     };
   } catch (e) {
-    console.error(e);
+    console.error('AUTH_LOGIN_FAILED');
     return fail_('Terjadi kesalahan saat login. Silakan coba lagi.');
   }
 }
@@ -1306,17 +1306,51 @@ function auditCell_(value) {
   return /^[=+\-@]/.test(s) ? "'"+s : s;
 }
 
+// Redact personal data and credentials before values enter the audit sheet or API response.
+function sanitizeAuditValue_(value) {
+  const sensitiveKey = /password|passhash|salt|token|otp|secret|authorization|cookie|base64|fileid|fileurl|attachment(name|url)?|email|phone|mobile|address|nik|nisn|birth|guardian|parent|mother|father|fullname|candidateName|waliName|photo/i;
+  function cleanNode_(node) {
+    if (node === null || node === undefined) return node;
+    if (Array.isArray(node)) return node.map(cleanNode_);
+    if (node instanceof Date) return node.toISOString();
+    if (typeof node === 'object') {
+      const out = {};
+      Object.keys(node).forEach(function(key) {
+        out[key] = sensitiveKey.test(key) ? '[REDACTED]' : cleanNode_(node[key]);
+      });
+      return out;
+    }
+    if (typeof node === 'string') return redactAuditText_(node);
+    return node;
+  }
+  if (typeof value === 'string') {
+    const raw = value;
+    try { return JSON.stringify(cleanNode_(JSON.parse(raw))); }
+    catch (e) { return redactAuditText_(raw); }
+  }
+  if (value === null || value === undefined || typeof value !== 'object') return redactAuditText_(String(value == null ? '' : value));
+  return JSON.stringify(cleanNode_(value));
+}
+
+function redactAuditText_(value) {
+  return String(value == null ? '' : value)
+    .replace(/([A-Z0-9._%+-]+)@([A-Z0-9.-]+\.[A-Z]{2,})/gi, '[REDACTED_EMAIL]')
+    .replace(/\b(?:\+?62|0)8[0-9\s-]{7,13}\b/g, '[REDACTED_PHONE]')
+    .replace(/\bBearer\s+[A-Za-z0-9._~+\/-]+=*/gi, 'Bearer [REDACTED]')
+    .replace(/\beyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\b/g, '[REDACTED_TOKEN]');
+}
+
 function writeAudit_(userId, action, module, recordId, oldValue, newValue, description) {
   try {
-    const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('AUDIT_LOG');    if (!sheet) return;
+    const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('AUDIT_LOG');
+    if (!sheet) return;
     // Jangan mengambil ScriptLock di sini karena writeAudit_ dipanggil dari
     // beberapa transaksi yang memang sudah memegang ScriptLock. appendRow
     // tetap atomik di level Spreadsheet; audit tidak boleh menggagalkan transaksi utama.
-    sheet.appendRow([generateId_('AUD'), new Date(), auditCell_(userId), auditCell_(action), auditCell_(module), auditCell_(recordId), auditCell_(oldValue), auditCell_(newValue), auditCell_(description), '']);
+    sheet.appendRow([generateId_('AUD'), new Date(), auditCell_(userId), auditCell_(action), auditCell_(module), auditCell_(recordId), auditCell_(sanitizeAuditValue_(oldValue)), auditCell_(sanitizeAuditValue_(newValue)), auditCell_(sanitizeAuditValue_(description)), '']);
   } catch (e) {
-    // Audit adalah jejak tambahan; kegagalan menulis audit tidak boleh
-    // membuat transaksi utama yang sudah tersimpan dilaporkan sebagai gagal.
-    console.error('AUDIT_LOG write failed: ' + e);
+    // Hindari memasukkan isi exception (yang mungkin memuat data request) ke log.
+    console.error('AUDIT_LOG_WRITE_FAILED');
   }
 }
 
@@ -1349,7 +1383,7 @@ function getAuditLogPageData(sessionToken, filters) {
     const d=ts?new Date(ts):null;
     if(from && (!d || d<new Date(from+'T00:00:00')))return;
     if(to && (!d || d>new Date(to+'T23:59:59')))return;
-    items.push({auditId:r[idx.auditId],timestamp:ts,userId:r[idx.userId],action:r[idx.action],module:r[idx.module],recordId:r[idx.recordId],oldValue:r[idx.oldValue],newValue:r[idx.newValue],description:r[idx.description]});
+    items.push({auditId:r[idx.auditId],timestamp:ts,userId:r[idx.userId],action:r[idx.action],module:r[idx.module],recordId:r[idx.recordId],oldValue:sanitizeAuditValue_(r[idx.oldValue]),newValue:sanitizeAuditValue_(r[idx.newValue]),description:sanitizeAuditValue_(r[idx.description])});
   });
   items.sort((a,b)=>new Date(b.timestamp||0)-new Date(a.timestamp||0));
   const start=(page-1)*pageSize;
