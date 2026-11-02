@@ -52,8 +52,8 @@ function configAssetUrl(...keys){
   return '';
 }
 const BRAND_ASSET_FALLBACKS={
-  icon:'https://appfathanmubina.github.io/psb-pcbfm/assets/logo-fathan-mubina.png?v=32.4.3',
-  logo:'https://appfathanmubina.github.io/psb-pcbfm/assets/logo-fathan-mubina.png?v=32.4.3'
+  icon:'https://appfathanmubina.github.io/psb-pcbfm/assets/logo-fathan-mubina.png?v=32.6.0',
+  logo:'https://appfathanmubina.github.io/psb-pcbfm/assets/logo-fathan-mubina.png?v=32.6.0'
 };
 function configAssetSources(kind='logo'){
   // CONFIG Database adalah sumber kebenaran utama. Asset yang ditanam di script
@@ -96,7 +96,7 @@ function applyAppIcon(){
 function hydrateSplashLogo(){
   const splashLogo=$('splashLogo');
   if(!splashLogo)return;
-  const src='./assets/logo-fathan-mubina.png?v=32.4.18';
+  const src='./assets/logo-fathan-mubina.png?v=32.6.0';
   if(splashLogo.querySelector('img'))return;
   splashLogo.innerHTML='<img class="app-logo-img splash-app-logo" src="'+src+'" alt="PSB Fathan Mubina" loading="eager" fetchpriority="high" decoding="async" onerror="this.style.display=\'none\';this.nextElementSibling.style.display=\'grid\'"><span class="app-logo-fallback" aria-hidden="true"></span>';
 }
