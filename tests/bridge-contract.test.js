@@ -3,6 +3,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 
 const code = fs.readFileSync('apps-script/Code.gs', 'utf8');
+const bridgeServer = fs.readFileSync('apps-script/BridgeServer.gs', 'utf8');
 const app = fs.readFileSync('frontend/app.js', 'utf8');
 const apiBridge = fs.readFileSync('frontend/api-bridge.js', 'utf8');
 const bridgeHtml = fs.readFileSync('apps-script/Bridge.html', 'utf8');
@@ -22,21 +23,32 @@ assert.deepEqual(unresolved, [], 'Bridge allowlist names without backend functio
 
 assert.match(code, /function\s+pwaBridgeCall\s*\(/, 'Backend bridge dispatcher must exist');
 assert.match(code, /function\s+getPwaBridgeConfig\s*\(/, 'Backend bridge configuration endpoint must exist');
-assert.match(bridgeHtml, /\.pwaBridgeCall\(fn,args\)/, 'HTML bridge must dispatch through the allowlisted backend');
-assert.match(bridgeHtml, /\.getPwaBridgeConfig\(\)/, 'HTML bridge must load configured trusted origins');
-assert.match(bridgeHtml, /\bPWA_SOURCE\s*=\s*['"]psb-fm-pwa['"]/, 'HTML bridge must verify the PWA message source');
-assert.ok(bridgeHtml.includes('event.source!==topWindow()'), 'HTML bridge must accept messages only from the top-level PWA window');
-assert.ok(apiBridge.includes('const BRIDGE_URL="https://script.google.com/macros/s/') && apiBridge.includes('/exec";'), 'PWA must target a deployed Apps Script Web App /exec URL');
-assert.ok(apiBridge.includes("iframe.src=BRIDGE_URL+'?bridge=1"), 'PWA must request the Apps Script bridge entry point');
-assert.ok(apiBridge.includes('TIMEOUT_MS=30000'), 'PWA transport must bound handshake and RPC wait time');
-assert.ok(apiBridge.includes('setInterval(()=>{if(ready)'), 'PWA transport must retry the bridge handshake until ready');
-assert.ok(bridgeHtml.includes("google.script.run.withSuccessHandler(result=>send(event.origin,{type:'response',id,ok:true,result}))"), 'HTML bridge must relay backend RPC success to the requesting PWA origin');
-assert.match(apiBridge, /const\s+PWA_SOURCE\s*=\s*['"]psb-fm-pwa['"]/, 'PWA transport source identifier must match');
-assert.match(apiBridge, /event\.source!==iframe\?\.contentWindow/, 'PWA must verify the message source window');
-assert.match(apiBridge, /isTrustedBridgeOrigin\(event\.origin\)/, 'PWA must validate bridge message origin');
-assert.match(bridgeHtml, /const\s+DEFAULT_ALLOWED_ORIGINS\s*=\s*\[['"]https:\/\/appfathanmubina\.github\.io['"]\]/,
-  'HTML bridge default origin must match the deployed GitHub Pages origin');
-assert.match(code, /PWA_ALLOWED_ORIGINS/, 'Backend must support configured PWA origins');
+assert.match(code, /psbIssuePwaBridgeToken_\(origin\)/, 'Bridge GET must issue an origin-bound transport token');
+assert.match(bridgeServer, /function\s+doPost\s*\(/, 'Apps Script must expose the form POST transport endpoint');
+assert.match(bridgeServer, /psbConsumePwaBridgeToken_\(payload\.token,\s*origin\)/, 'POST must consume a one-use token bound to the PWA origin');
+assert.match(bridgeServer, /cache\.remove\(key\)/, 'Bridge tokens must be removed after use');
+assert.match(bridgeServer, /LockService\.getScriptLock\(\)/, 'One-use bridge token consumption must be serialized');
+assert.match(bridgeServer, /PSB_PWA_BRIDGE_ALLOWED_FUNCTIONS\.indexOf\(functionName\)/, 'POST must enforce the backend function allowlist');
+assert.match(bridgeServer, /pwaBridgeCall\(functionName,\s*payload\.args\)/, 'POST must dispatch only through the existing backend dispatcher');
+assert.match(bridgeServer, /window\.top\.postMessage\(message/, 'POST response must be relayed to the top-level PWA window');
+assert.match(bridgeHtml, /window\.top\.postMessage\(/, 'Bridge GET must send its one-time token outbound to the PWA');
+assert.match(bridgeHtml, /bridgeChallenge/, 'Bridge GET must echo the per-session challenge');
+assert.doesNotMatch(bridgeHtml, /google\.script\.run/, 'Bridge handshake must not depend on inbound google.script.run transport');
 
-console.log('PWA ↔ Apps Script bridge contract: OK (' + clientCalls.size +
+assert.ok(apiBridge.includes('const BRIDGE_URL = "https://script.google.com/macros/s/') && apiBridge.includes('/exec";'),
+  'PWA must target the configured Apps Script Web App /exec URL');
+assert.match(apiBridge, /iframe\.src\s*=\s*BRIDGE_URL\s*\+\s*'\?bridge=1/, 'PWA must request a tokenized bridge GET');
+assert.match(apiBridge, /form\.method\s*=\s*'POST'/, 'PWA RPC must use native form POST');
+assert.match(apiBridge, /form\.target\s*=\s*session\.frameName/, 'PWA POST must target its matching response iframe');
+assert.match(apiBridge, /form\.submit\(\)/, 'PWA must submit the RPC payload without iframe postMessage');
+assert.doesNotMatch(apiBridge, /contentWindow\.postMessage/, 'PWA must not send postMessage into the Apps Script iframe');
+assert.match(apiBridge, /host\.endsWith\('-script\.googleusercontent\.com'\)/,
+  'PWA must trust the actual Apps Script HTML Service host suffix');
+assert.match(apiBridge, /isTrustedBridgeOrigin\(event\.origin\)/, 'PWA must validate the response origin');
+assert.match(apiBridge, /sessions\.get\(challenge\)/, 'PWA must correlate bridge messages with an unpredictable challenge');
+assert.match(apiBridge, /MAX_PAYLOAD_CHARS/, 'PWA must bound the serialized request payload');
+assert.match(bridgeServer, /PWA_ALLOWED_ORIGINS/, 'Backend must support configured PWA origins');
+assert.match(bridgeServer, /PSB_PWA_BRIDGE_TOKEN_/, 'Bridge tokens must be stored under a dedicated cache namespace');
+
+console.log('PWA ↔ Apps Script form-POST bridge contract: OK (' + clientCalls.size +
   ' client RPC names checked against ' + allowed.size + ' allowlisted backend functions)');
