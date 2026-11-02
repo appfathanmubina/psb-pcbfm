@@ -62,6 +62,8 @@ jobs:
         run: node tests/ui-function-parity.test.js
       - name: Test PWA and Apps Script bridge contract
         run: node tests/bridge-contract.test.js
+      - name: Test loading and login critical-path safeguards
+        run: node tests/loading-login-performance.test.js
       - name: Validate shell scripts
         run: |
           while IFS= read -r file; do
