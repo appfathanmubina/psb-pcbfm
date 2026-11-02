@@ -829,7 +829,9 @@ function createSession_(userId) {
 
 function getSessionUser_(token, touch) {
   token = String(token || '');
-  if (!token) return fail_('Session tidak ditemukan. Silakan login kembali.');
+  // Token sesi yang diterbitkan createSession_ adalah dua UUID (72 karakter).
+  // Batas panjang mencegah input arbitrer diproses tanpa mengubah token lama.
+  if (!token || token.length < 32 || token.length > 256) return fail_('Session tidak ditemukan. Silakan login kembali.');
 
   // Baca sumber sesi secara langsung agar pencabutan sesi berlaku segera.
   const cache = CacheService.getScriptCache();
@@ -851,12 +853,21 @@ function getSessionUser_(token, touch) {
   if (!found) return fail_('Session tidak valid. Silakan login kembali.');
   const row = found.row;
   if (String(row[6] || '').toUpperCase() !== 'ACTIVE') return fail_('Session sudah berakhir. Silakan login kembali.');
-  if (row[4] && new Date(row[4]) <= now) {
+  const expiresAt = row[4] ? new Date(row[4]) : null;
+  if (!expiresAt || !Number.isFinite(expiresAt.getTime())) {
+    invalidateSession_(found, 'INVALID_EXPIRY');
+    return fail_('Session tidak valid. Silakan login kembali.');
+  }
+  if (expiresAt <= now) {
     invalidateSession_(found, 'EXPIRED');
     return fail_('Session sudah berakhir. Silakan login kembali.');
   }
   const idleMinutes = Number(getConfig_('SESSION_IDLE_MINUTES')) || PSB_AUTH.SESSION_IDLE_MINUTES;
-  const lastActivity = row[5] ? new Date(row[5]) : now;
+  const lastActivity = row[5] ? new Date(row[5]) : (row[3] ? new Date(row[3]) : null);
+  if (!lastActivity || !Number.isFinite(lastActivity.getTime()) || lastActivity.getTime() > now.getTime() + 5 * 60000) {
+    invalidateSession_(found, 'INVALID_ACTIVITY');
+    return fail_('Session tidak valid. Silakan login kembali.');
+  }
   if ((now.getTime() - lastActivity.getTime()) > idleMinutes * 60000) {
     invalidateSession_(found, 'IDLE_TIMEOUT');
     return fail_('Session berakhir karena tidak aktif. Silakan login kembali.');
@@ -872,7 +883,7 @@ function getSessionUser_(token, touch) {
     sheet.getRange(found.rowNumber, 6).setValue(touchedAt);
     row[5] = touchedAt;
   }
-  return { success: true, user: user, sessionRow: found, expiresAt: new Date(row[4]).toISOString() };
+  return { success: true, user: user, sessionRow: found, expiresAt: expiresAt.toISOString() };
 }
 
 function revokeOtherSessionsForUser_(userId, keepRowNumber) {
@@ -1260,12 +1271,24 @@ function constantTimeEqual_(a, b) {
 
 function registerLoginFailure_(key) {
   const cache = CacheService.getScriptCache();
-  const cacheKey = 'PSB_LOGIN_FAIL_V2_' + sha256Hex_(key).substring(0, 32);
-  const current = Number(cache.get(cacheKey) || 0) + 1;
+  const hash = sha256Hex_(key).substring(0, 32);
+  const cacheKey = 'PSB_LOGIN_FAIL_V2_' + hash;
   const max = Number(getConfig_('LOGIN_MAX_ATTEMPTS')) || PSB_AUTH.MAX_ATTEMPTS;
   const lockMin = Number(getConfig_('LOGIN_LOCK_MINUTES')) || PSB_AUTH.LOCK_MINUTES;
-  cache.put(cacheKey, String(current), lockMin * 60);
-  if (current >= max) cache.put('PSB_LOGIN_LOCK_V2_' + sha256Hex_(key).substring(0, 32), String(Date.now() + lockMin * 60000), lockMin * 60);
+  // CacheService tidak menyediakan increment atomik. Script Lock mencegah
+  // dua request login bersamaan menimpa penghitung percobaan satu sama lain.
+  const guard = LockService.getScriptLock();
+  guard.waitLock(5000);
+  try {
+    const current = Math.max(0, Number(cache.get(cacheKey) || 0)) + 1;
+    cache.put(cacheKey, String(current), lockMin * 60);
+    if (current >= max) {
+      cache.put('PSB_LOGIN_LOCK_V2_' + hash, String(Date.now() + lockMin * 60000), lockMin * 60);
+    }
+    return { attempts: current, locked: current >= max };
+  } finally {
+    guard.releaseLock();
+  }
 }
 
 function getLoginLock_(key) {
@@ -1279,8 +1302,14 @@ function getLoginLock_(key) {
 function clearLoginFailure_(key) {
   const cache = CacheService.getScriptCache();
   const h = sha256Hex_(key).substring(0, 32);
-  cache.remove('PSB_LOGIN_FAIL_V2_' + h);
-  cache.remove('PSB_LOGIN_LOCK_V2_' + h);
+  const guard = LockService.getScriptLock();
+  guard.waitLock(5000);
+  try {
+    cache.remove('PSB_LOGIN_FAIL_V2_' + h);
+    cache.remove('PSB_LOGIN_LOCK_V2_' + h);
+  } finally {
+    guard.releaseLock();
+  }
 }
 
 // =====================================================
