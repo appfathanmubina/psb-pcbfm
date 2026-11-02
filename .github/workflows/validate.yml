@@ -36,6 +36,8 @@ jobs:
           node -e "JSON.parse(require('fs').readFileSync('frontend/manifest.webmanifest', 'utf8'))"
           node -e "JSON.parse(require('fs').readFileSync('apps-script/appsscript.json', 'utf8'))"
           node -e "JSON.parse(require('fs').readFileSync('appsscript.json', 'utf8'))"
+      - name: Validate inline HTML and PWA bridge JavaScript syntax
+        run: node tests/html-javascript-syntax.test.js
       - name: Test password hash compatibility and migration safeguards
         run: node tests/password-migration.test.js
       - name: Test upload validation safeguards
