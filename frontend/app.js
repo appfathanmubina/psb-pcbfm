@@ -210,41 +210,21 @@ function showConfirm(title,text,onConfirm,confirmText='Lanjutkan'){const id='con
 function closeAlert(id){delete window[id];document.getElementById(id)?.remove()}
 
 function bootProgress(show,text='Menyiapkan aplikasi...',done=false){const el=$('bootProgress'),tx=$('bootProgressText');if(!el)return;if(!show){el.classList.add('hidden');el.classList.remove('done');return}if(tx)tx.textContent=text;el.classList.remove('hidden','done');if(done){el.classList.add('done');setTimeout(()=>el.classList.add('hidden'),650)}}
-async function initializeAfterLogin(){
-  if(state.appInitialized || state.preloadRunning)return;
+function initializeAfterLogin(){
+  // Login success must not wait for unrelated page preloads. The active page
+  // loads its own data; navigation data is warmed later during browser idle.
   state.appInitialized=true;
-  state.preloadRunning=true;
-  bootProgress(true,'Memuat data Pendaftaran (1/3)...');
-  try{
-    let reg=null;
-    try{reg=await server('getMyRegistrations',state.token);}catch(e){reg=null;}
-    if(reg?.success){state.registrationList=reg.registrations||[];state.cache.registration=state.registrationList;}
-    const firstId=String(state.registrationList?.[0]?.registrationId||'');
-    if(firstId){
-      bootProgress(true,'Memuat data Dokumen & Pembayaran (2/3)...');
-      const [doc,pay]=await Promise.allSettled([
-        server('getDocumentPageData',state.token,firstId),
-        server('getPaymentPageData',state.token,firstId)
-      ]);
-      if(doc.status==='fulfilled' && doc.value?.success){
-        state.documentRegistrationId=String(doc.value.documentData?.registration?.registrationId||firstId);
-        state.documentData=doc.value.documentData||null;
-        state.cache.documents[state.documentRegistrationId]=doc.value;
-      }
-      if(pay.status==='fulfilled' && pay.value?.success){
-        state.paymentRegistrationId=String(pay.value.paymentData?.registrationId||firstId);
-        state.paymentData=pay.value.paymentData||null;
-        state.paymentTypes=pay.value.paymentTypes||[];
-        state.cache.payments[state.paymentRegistrationId]=pay.value;
-      }
-    }
-    bootProgress(true,'Menyiapkan tampilan menu (3/3)...');
-    state.preloadReady=true;
-    bootProgress(true,'Data awal siap digunakan.',true);
-  }catch(e){
-    state.preloadReady=false;
-    bootProgress(true,'Beranda siap. Data menu akan dilanjutkan saat dibuka.',true);
-  }finally{state.preloadRunning=false;}
+  state.preloadRunning=false;
+  state.preloadReady=true;
+  bootProgress(false);
+}
+function scheduleWarmNavigationData(){
+  const run=()=>{if(document.visibilityState!=='hidden' && state.token)warmNavigationData();};
+  if(typeof window.requestIdleCallback==='function'){
+    window.requestIdleCallback(run,{timeout:4000});
+  }else{
+    setTimeout(run,1200);
+  }
 }
 async function boot(){
   hydrateSplashLogo();
@@ -415,11 +395,11 @@ function openRegistrationEntry(){
 function renderPublicInfo(title,desc){
   $('app').innerHTML=`<div class="public-wrap"><div class="public-shell"><header class="public-top"><div class="logo">${appLogoMarkup()}</div><div class="public-brand"><h1>PSB Fathan Mubina</h1><p>${esc(state.config.ACTIVE_YEAR||'2027/2028')}</p></div><button class="public-login" onclick="renderLogin()">Masuk</button></header><section class="hero"><h2>${esc(title)}</h2><p>${esc(desc)}</p></section><button class="btn btn-secondary" onclick="renderPublicHome()">Kembali ke Beranda</button></div></div>`;
 }
-function renderLogin(error=''){
+function renderLogin(error='',identifier=''){
   $('app').innerHTML=`<div class="login-wrap"><div class="login-card">
     <div class="logo login-logo center">${appLogoMarkup()}</div><div class="center"><h1 class="login-title">PSB Fathan Mubina</h1><div class="login-sub">Pendaftaran Santri Baru · ${esc(state.config.ACTIVE_YEAR||'2027/2028')}</div></div>
     ${error?showMessage(error):''}<form onsubmit="submitLogin(event)">
-      <div class="field"><label>Username, No. HP atau Email</label><input id="identifier" autocomplete="username" inputmode="text" placeholder="Superadmin, 08xxxxxxxxxx, atau email" required></div>
+      <div class="field"><label>Username, No. HP atau Email</label><input id="identifier" autocomplete="username" inputmode="text" placeholder="Superadmin, 08xxxxxxxxxx, atau email" value="${esc(identifier)}" required></div>
       <div class="field"><label>Password</label><div class="input-wrap"><input id="password" type="password" autocomplete="current-password" placeholder="Masukkan password" required><button class="toggle" type="button" onclick="togglePassword()">Lihat</button></div></div>
       <button class="btn btn-primary" id="loginBtn">Masuk</button>
     </form>
@@ -486,8 +466,44 @@ async function resendWaliOtp(){
 }
 function togglePassword(){const i=$('password');const b=i.nextElementSibling;i.type=i.type==='password'?'text':'password';b.textContent=i.type==='password'?'Lihat':'Sembunyikan'}
 async function submitLogin(e){
-  e.preventDefault();const btn=$('loginBtn');btn.disabled=true;btn.textContent='Memeriksa...';loading(true,'Memeriksa akun...');
-  try{const r=await server('login',$('identifier').value,$('password').value);if(r.success){state.token=r.sessionToken;state.user=r.user;state.appInitialized=false;state.preloadRunning=false;state.preloadReady=false;state.initialData=null;state.cache={registration:null,documents:{},payments:{},pages:{}};state.prefetchPromises={};state.pageSnapshots={};state.registrationList=[];state.documentData=null;state.paymentData=null;localStorage.setItem('psb_session',state.token);renderApp();loading(false);initializeAfterLogin();server('finalizeLogin',state.token).catch(()=>{});if(r.mustChangePassword)setTimeout(openChangePassword,200);}else renderLogin(r.message)}catch(err){console.error('PSB login transport error:',err);renderLogin('Koneksi ke server gagal: '+String(err?.message||'Periksa koneksi internet dan deployment Apps Script.'))}finally{if(!state.appInitialized)loading(false)}
+  e.preventDefault();
+  const identifier=String($('identifier')?.value||'').trim();
+  const password=String($('password')?.value||'');
+  const btn=$('loginBtn');
+  if(!identifier||!password)return;
+  if(btn){btn.disabled=true;btn.textContent='Memeriksa...';}
+  loading(true,'Memeriksa akun...');
+  try{
+    const r=await server('login',identifier,password);
+    if(r?.success){
+      state.token=r.sessionToken;
+      state.user=r.user;
+      state.appInitialized=false;
+      state.preloadRunning=false;
+      state.preloadReady=false;
+      state.initialData=null;
+      state.cache={registration:null,documents:{},payments:{},pages:{}};
+      state.prefetchPromises={};
+      state.pageSnapshots={};
+      state.registrationList=[];
+      state.documentData=null;
+      state.paymentData=null;
+      localStorage.setItem('psb_session',state.token);
+      renderApp();
+      loading(false);
+      initializeAfterLogin();
+      // Audit/last-login bookkeeping remains best-effort and never delays entry.
+      server('finalizeLogin',state.token).catch(()=>{});
+      if(r.mustChangePassword)setTimeout(openChangePassword,200);
+    }else{
+      renderLogin(r?.message||'Login gagal. Periksa kembali identitas dan password.',identifier);
+    }
+  }catch(err){
+    console.error('PSB login transport error:',err);
+    renderLogin('Koneksi ke server gagal: '+String(err?.message||'Periksa koneksi internet dan deployment Apps Script.'),identifier);
+  }finally{
+    if(!state.appInitialized)loading(false);
+  }
 }
 function buildRoleNav(){
   const wali=hasAnyRole(['WALI']);
@@ -607,7 +623,7 @@ async function renderHome(){
     const local=readDashboardLocal();
     $('content').innerHTML=`<section class="hero"><div style="display:flex;gap:10px;align-items:flex-start;justify-content:space-between;flex-wrap:wrap"><div><h2>Dashboard</h2><p>Ringkasan operasional PSB periode ${esc(state.config.ACTIVE_YEAR||'2027/2028')}.</p></div><span class="pill info">v${esc(state.config.APP_VERSION||'25.0')} · ${esc(state.config.RELEASE_STAGE||'PRODUCTION')}</span></div></section><div id="dashboardPanel"><div class="empty-state">${local?'Memperbarui ringkasan...':'Memuat dashboard...'}</div></div>`;
     if(local){state.cache.pages.dashboard={data:local,ts:Date.now()};renderAdminDashboard(local);}
-    try{const r=await server('getDashboardPageData',state.token);if(!r.success){if(!local)$('dashboardPanel').innerHTML=showMessage(r.message);return;}state.cache.pages.dashboard={data:r,ts:Date.now()};writeDashboardLocal(r);renderAdminDashboard(r);setTimeout(()=>warmNavigationData(),0);}catch(e){if(!local)$('dashboardPanel').innerHTML=showMessage('Gagal memuat dashboard.');}
+    try{const r=await server('getDashboardPageData',state.token);if(!r.success){if(!local)$('dashboardPanel').innerHTML=showMessage(r.message);return;}state.cache.pages.dashboard={data:r,ts:Date.now()};writeDashboardLocal(r);renderAdminDashboard(r);scheduleWarmNavigationData();}catch(e){if(!local)$('dashboardPanel').innerHTML=showMessage('Gagal memuat dashboard.');}
     return;
   }
   const maintenanceBanner=String(state.config.MAINTENANCE_MODE||'').toUpperCase()==='TRUE'?`<div class="status-card" style="margin-bottom:12px"><div class="status-row"><div><b>Sistem dalam pemeliharaan</b><div class="muted" style="font-size:10px;margin-top:3px">Akses informasi tetap tersedia, tetapi tindakan perubahan data sementara dinonaktifkan.</div></div><span class="pill warning">Maintenance</span></div></div>`:''; $('content').innerHTML=`<section class="hero"><h2>Selamat datang, ${esc(state.user.name)}</h2><p>Pantau tahapan setiap pendaftaran anak dan lanjutkan langkah yang masih harus dilakukan.</p></section>${maintenanceBanner}<div id="waliHomeFlow"><div class="empty-state">Memuat alur pendaftaran...</div></div>`;
