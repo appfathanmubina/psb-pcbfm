@@ -42,6 +42,8 @@ jobs:
         run: node tests/password-migration.test.js
       - name: Test upload validation safeguards
         run: node tests/upload-validation.test.js
+      - name: Test Drive gallery and private document safeguards
+        run: node tests/drive-gallery-security.test.js
       - name: Test authorization and resource ownership safeguards
         run: node tests/authorization-ownership.test.js
       - name: Test Email OTP registration safeguards
