@@ -41,14 +41,11 @@ const PSB_PWA_BRIDGE_ALLOWED_FUNCTIONS = Object.freeze([
 ]);
 
 function getPwaBridgeConfig() {
-  const raw = String(getConfig_('PWA_ALLOWED_ORIGINS') || '').trim();
-  const configured = raw.split(',').map(function(x){ return String(x || '').trim(); }).filter(Boolean);
-  const origins = configured.length ? configured : ['https://appfathanmubina.github.io'];
   return {
     success: true,
     bridgeVersion: PSB_PWA_BRIDGE_VERSION,
     appName: getConfig_('APP_NAME') || 'PSB Fathan Mubina',
-    allowedOrigins: origins
+    allowedOrigins: psbPwaBridgeAllowedOrigins_()
   };
 }
 
@@ -107,7 +104,15 @@ const PSB_CHAT_ADMIN_ROLES = ['SUPERADMIN','ADMIN_PSB'];
 function doGet(e) {
   const bridgeMode = e && e.parameter && String(e.parameter.bridge || '') === '1';
   if (bridgeMode) {
-    return HtmlService.createTemplateFromFile('Bridge').evaluate()
+    const origin = String(e && e.parameter && e.parameter.origin || '').trim();
+    const challenge = String(e && e.parameter && e.parameter.challenge || '');
+    const validChallenge = /^[a-f0-9]{32}$/i.test(challenge);
+    const token = validChallenge ? psbIssuePwaBridgeToken_(origin) : '';
+    const template = HtmlService.createTemplateFromFile('Bridge');
+    template.bridgeOrigin = token ? origin : '';
+    template.bridgeChallenge = token ? challenge : '';
+    template.bridgeToken = token;
+    return template.evaluate()
       .setTitle('PSB Fathan Mubina — API Bridge')
       .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
   }
