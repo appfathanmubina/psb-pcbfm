@@ -1303,7 +1303,7 @@ function rpcSafe_(value) {
 
 function auditCell_(value) {
   const s=String(value==null?'':value);
-  return /^[=+\\-@]/.test(s) ? "'"+s : s;
+  return /^[=+\-@]/.test(s) ? "'"+s : s;
 }
 
 // Redact personal data and credentials before values enter the audit sheet or API response.
@@ -1334,10 +1334,10 @@ function sanitizeAuditValue_(value) {
 
 function redactAuditText_(value) {
   return String(value == null ? '' : value)
-    .replace(/([A-Z0-9._%+-]+)@([A-Z0-9.-]+\\.[A-Z]{2,})/gi, '[REDACTED_EMAIL]')
-    .replace(/\\b(?:\\+?62|0)8[0-9\\s-]{7,13}\\b/g, '[REDACTED_PHONE]')
-    .replace(/\\bBearer\\s+[A-Za-z0-9._~+\\/-]+=*/gi, 'Bearer [REDACTED]')
-    .replace(/\\beyJ[A-Za-z0-9_-]{10,}\\.[A-Za-z0-9_-]{10,}\\.[A-Za-z0-9_-]{10,}\\b/g, '[REDACTED_TOKEN]');
+    .replace(/([A-Z0-9._%+-]+)@([A-Z0-9.-]+\.[A-Z]{2,})/gi, '[REDACTED_EMAIL]')
+    .replace(/\b(?:\+?62|0)8[0-9\s-]{7,13}\b/g, '[REDACTED_PHONE]')
+    .replace(/\bBearer\s+[A-Za-z0-9._~+\/-]+=*/gi, 'Bearer [REDACTED]')
+    .replace(/\beyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\b/g, '[REDACTED_TOKEN]');
 }
 
 function writeAudit_(userId, action, module, recordId, oldValue, newValue, description) {
