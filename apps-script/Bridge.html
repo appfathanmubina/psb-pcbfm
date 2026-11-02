@@ -9,7 +9,8 @@ const send=(origin,payload)=>{if(!origin||origin==='*')return;try{topWindow().po
 const allowed=o=>allowedOrigins.indexOf(o)>=0;
 const announce=()=>{if(!allowedOrigins.length)return;ready=true;allowedOrigins.forEach(o=>send(o,{type:'ready',bridgeVersion:VERSION}))};
 window.addEventListener('message',event=>{
-  if(!allowed(event.origin))return;
+  // Hanya terima pesan langsung dari parent PWA, bukan iframe saudara pada origin yang sama.
+  if(!allowed(event.origin)||event.source!==topWindow())return;
   const d=event.data||{};
   if(d.source!==PWA_SOURCE)return;
   if(d.type==='ping'){send(event.origin,{type:'ready',bridgeVersion:VERSION});return}
