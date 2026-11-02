@@ -25,6 +25,7 @@
 - [ ] Uji handshake iframe dan respons `ready` pada deployment uji.
 - [ ] Uji origin sah dari GitHub Pages dan pastikan origin asing ditolak.
 - [ ] Uji pesan dengan `source` atau `event.source` yang tidak sesuai; pesan harus diabaikan.
+- [ ] Bridge hanya menerima pesan dari `window.top` pada origin PWA yang diizinkan; pesan dari iframe saudara pada origin sama harus diabaikan.
 - [ ] Uji fungsi yang tidak ada dalam allowlist; backend harus menolak tanpa menjalankan handler.
 - [ ] Uji backend error; respons publik tidak boleh membocorkan detail internal.
 
