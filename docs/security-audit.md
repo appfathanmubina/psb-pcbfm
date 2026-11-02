@@ -51,7 +51,7 @@
 
 ### Medium priority
 
-- **Public gallery Drive folder:** the folder configured in `getPublicGallery` is exposed by design. Confirm it contains only images approved for public display; do not place student documents, private family photos, or internal images there.
+- **Public gallery Drive folder:** `getPublicGallery` now fails closed unless trusted administrators explicitly configure `PSB_PUBLIC_GALLERY_FILE_IDS`. Only up to 15 allowlisted JPEG/PNG/WEBP/GIF files that remain direct children of `PSB_PUBLIC_GALLERY_FOLDER_ID` (or the legacy folder fallback) are returned. Original Drive filenames are not exposed. Keep student documents and private family photos outside the gallery, and manually verify each approved image's sharing/access settings. The allowlist is a publication control, not a substitute for checking image consent.
 - **Upload resource limits:** the current repository source now checks encoded Base64 length before decoding, enforces server-side byte limits, and verifies PDF/JPEG/PNG/WEBP signatures for document, payment, and chat uploads. Chat attachments are capped at 10 MB even if configuration is higher; document uploads default to 10 MB and are capped at 20 MB. These controls still require Apps Script runtime testing with valid and deliberately mismatched files.
 - **Abuse throttling:** login lockout uses CacheService, which is best-effort and can be affected by concurrent requests or cache eviction. Add stronger server-side throttling for login and public registration if the service receives abusive traffic.
 - **Bootstrap password entry:** the trusted-editor bootstrap uses a standard Apps Script prompt; the password is not masked. Run it only in a private environment with the screen not visible to others.

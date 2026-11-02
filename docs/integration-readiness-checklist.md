@@ -74,8 +74,10 @@
 
 ## 7. Operasional dan keamanan
 
-- [ ] Folder galeri publik hanya berisi gambar yang memang disetujui untuk publik.
-- [ ] Folder dokumen internal tidak dapat diakses publik.
+- [ ] `PSB_PUBLIC_GALLERY_FILE_IDS` hanya memuat ID gambar yang telah disetujui untuk publik (maksimal 15); uji juga ID file di luar allowlist dan file yang bukan anak langsung folder galeri harus diabaikan.
+- [ ] `PSB_PUBLIC_GALLERY_FOLDER_ID` menunjuk folder galeri yang benar; nama file asli tidak tampil pada respons publik.
+- [ ] Folder `Dokumen Santri` dan `Bukti Pembayaran` beserta file di dalamnya tidak dapat diakses publik; uji dengan akun/peramban tanpa sesi PSB.
+- [ ] Pastikan setiap gambar galeri memiliki persetujuan publik yang sesuai; allowlist bukan pengganti persetujuan.
 - [ ] Kuota MailApp, waktu login PBKDF2, dan batas eksekusi Apps Script diukur pada proyek uji.
 - [ ] Trigger terjadwal pada proyek uji berjalan sekali dan tidak terduplikasi.
 - [ ] Log audit merekam aksi penting tanpa password, OTP, token, atau rahasia.

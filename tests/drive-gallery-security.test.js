@@ -1,0 +1,37 @@
+'use strict';
+const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const source = fs.readFileSync('apps-script/Code.gs', 'utf8');
+function functionSource(name) {
+  const start = source.indexOf('function ' + name + '(');
+  assert.notEqual(start, -1, 'Required backend function exists: ' + name);
+  const next = source.indexOf('\nfunction ', start + 10);
+  return source.slice(start, next < 0 ? source.length : next);
+}
+const gallery = functionSource('getPublicGallery');
+assert.match(gallery, /PSB_PUBLIC_GALLERY_FILE_IDS/);
+assert.match(gallery, /PSB_PUBLIC_GALLERY_FOLDER_ID/);
+assert.match(gallery, /DriveApp\.getFileById\(fileId\)/);
+assert.match(gallery, /file\.getParents\(\)/);
+assert.match(gallery, /image\/jpeg.*image\/png.*image\/webp.*image\/gif/);
+assert.match(gallery, /slice\(0,15\)/);
+assert.match(gallery, /Foto kegiatan /);
+assert.doesNotMatch(gallery, /folder\.getFiles\(\)/);
+assert.doesNotMatch(gallery, /file\.getName\(\)/);
+assert.match(gallery, /PSB_PUBLIC_GALLERY_V2/);
+const documentUpload = functionSource('uploadDocument');
+assert.match(documentUpload, /canAccessRegistration_\(actor,\s*found\.registration\)/);
+assert.match(documentUpload, /getRegistrationDocumentFolder_\(found\.registration\)/);
+assert.match(documentUpload, /folder\.createFile\(blob\)/);
+assert.match(documentUpload, /record\.fileId\s*=\s*file\.getId\(\)/);
+const documentRead = functionSource('getDocumentOptions');
+assert.match(documentRead, /canAccessRegistration_\(actor,\s*found\.registration\)/);
+assert.ok(documentRead.indexOf('canAccessRegistration_') < documentRead.indexOf('getCurrentDocuments_'));
+const documentPage = functionSource('getDocumentPageData');
+assert.match(documentPage, /if\s*\(isWali\)\s*items\s*=\s*items\.filter\(x\s*=>\s*String\(x\.userId\)\s*===\s*String\(actor\.userId\)\)/);
+const paymentUpload = functionSource('submitPayment');
+assert.match(paymentUpload, /canAccessRegistration_\(actor,found\.registration\)/);
+assert.match(paymentUpload, /getOrCreateFolderInParent_\(yearFolder,'Bukti Pembayaran'\)/);
+assert.match(paymentUpload, /regFolder\.createFile\(/);
+assert.doesNotMatch(source, /DriveApp\.Access\.ANYONE_WITH_LINK|DriveApp\.Access\.ANYONE/);
+console.log('Drive gallery and private document safeguards passed.');

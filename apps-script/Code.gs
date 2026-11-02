@@ -143,33 +143,49 @@ function getAppInfo() {
 
 function getPublicGallery(forceRefresh){
   const cache=CacheService.getScriptCache();
-  const cacheKey='PSB_PUBLIC_GALLERY_V1';
+  const cacheKey='PSB_PUBLIC_GALLERY_V2';
   if(!forceRefresh){
     const cached=cache.get(cacheKey);
     if(cached){try{return JSON.parse(cached)}catch(e){}}
   }
-  const folderId='1DPb4HhDmfzrdxUy7rdU56U0xCARc7yGJ';
+  // Fail closed: only explicitly approved image IDs may enter the public gallery.
+  const props=PropertiesService.getScriptProperties();
+  const folderId=String(props.getProperty('PSB_PUBLIC_GALLERY_FOLDER_ID')||'1DPb4HhDmfzrdxUy7rdU56U0xCARc7yGJ').trim();
+  const approvedIds=String(props.getProperty('PSB_PUBLIC_GALLERY_FILE_IDS')||'')
+    .split(',').map(x=>String(x||'').trim()).filter((x,i,a)=>/^[A-Za-z0-9_-]{20,}$/.test(x)&&a.indexOf(x)===i).slice(0,15);
+  const items=[];
+  if(!folderId || !approvedIds.length){
+    const empty={success:true,items:[]};
+    try{cache.put(cacheKey,JSON.stringify(empty),300)}catch(e){}
+    return empty;
+  }
   try{
     const folder=DriveApp.getFolderById(folderId);
-    const it=folder.getFiles();
-    const items=[];
-    while(it.hasNext()){
-      const file=it.next();
-      const mime=String(file.getMimeType()||'').toLowerCase();
-      if(mime.indexOf('image/')!==0) continue;
-      items.push({
-        id:String(file.getId()),
-        name:String(file.getName()||'Foto Fathan Mubina'),
-        url:'https://drive.google.com/thumbnail?id='+encodeURIComponent(file.getId())+'&sz=w1200'
-      });
-      if(items.length>=15) break;
-    }
-    items.sort((a,b)=>a.name.localeCompare(b.name,'id',{numeric:true,sensitivity:'base'}));
-    const result={success:true,items};
+    approvedIds.forEach(function(fileId){
+      try{
+        const file=DriveApp.getFileById(fileId);
+        const mime=String(file.getMimeType()||'').toLowerCase();
+        if(['image/jpeg','image/png','image/webp','image/gif'].indexOf(mime)<0) return;
+        const parents=file.getParents();
+        let inGallery=false;
+        while(parents.hasNext()){
+          if(String(parents.next().getId())===String(folder.getId())){inGallery=true;break;}
+        }
+        if(!inGallery) return;
+        items.push({
+          id:fileId,
+          name:'Foto kegiatan '+String(items.length+1),
+          url:'https://drive.google.com/thumbnail?id='+encodeURIComponent(fileId)+'&sz=w1200'
+        });
+      }catch(fileError){
+        console.warn('Public gallery item skipped: '+String(fileError&&fileError.message||fileError));
+      }
+    });
+    const result={success:true,items:items};
     try{cache.put(cacheKey,JSON.stringify(result),300)}catch(e){}
     return result;
   }catch(e){
-    console.error(e);
+    console.error('Public gallery load failed: '+String(e&&e.message||e));
     return {success:false,items:[],message:'Galeri belum dapat dimuat.'};
   }
 }
