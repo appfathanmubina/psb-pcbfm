@@ -1,18 +1,18 @@
-// PSB PWA 32.4.19 — network-first navigation prevents stale cached entry pages.
-const CACHE='psb-pwa-shell-v32-4-19';
+// PSB PWA 32.5.0 — network-first navigation prevents stale cached entry pages.
+const CACHE='psb-pwa-shell-v32-5-0';
 const ASSETS=[
   './',
   './index.html',
-  './manifest.webmanifest?v=32.4.19',
-  './styles.css?v=32.4.19',
-  './api-bridge.js?v=32.4.19',
-  './app.js?v=32.4.19',
-  './assets/logo-fathanmubina.svg?v=32.4.19',
-  './assets/logo-fathan-mubina.png?v=32.4.19',
-  './icons/favicon-32.svg?v=32.4.19',
-  './icons/favicon-48.svg?v=32.4.19',
-  './icons/icon-512.svg?v=32.4.19',
-  './icons/icon-maskable-512.svg?v=32.4.19'
+  './manifest.webmanifest?v=32.5.0',
+  './styles.css?v=32.5.0',
+  './api-bridge.js?v=32.5.0',
+  './app.js?v=32.5.0',
+  './assets/logo-fathanmubina.svg?v=32.5.0',
+  './assets/logo-fathan-mubina.png?v=32.5.0',
+  './icons/favicon-32.svg?v=32.5.0',
+  './icons/favicon-48.svg?v=32.5.0',
+  './icons/icon-512.svg?v=32.5.0',
+  './icons/icon-maskable-512.svg?v=32.5.0'
 ];
 self.addEventListener('install',event=>event.waitUntil(caches.open(CACHE).then(cache=>cache.addAll(ASSETS)).then(()=>self.skipWaiting())));
 self.addEventListener('activate',event=>event.waitUntil(caches.keys().then(keys=>Promise.all(keys.filter(key=>key!==CACHE).map(key=>caches.delete(key)))).then(()=>self.clients.claim())));
