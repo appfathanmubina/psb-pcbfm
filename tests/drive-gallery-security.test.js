@@ -8,17 +8,8 @@ function functionSource(name) {
   const next = source.indexOf('\nfunction ', start + 10);
   return source.slice(start, next < 0 ? source.length : next);
 }
-const gallery = functionSource('getPublicGallery');
-assert.match(gallery, /PSB_PUBLIC_GALLERY_FILE_IDS/);
-assert.match(gallery, /PSB_PUBLIC_GALLERY_FOLDER_ID/);
-assert.match(gallery, /DriveApp\.getFileById\(fileId\)/);
-assert.match(gallery, /file\.getParents\(\)/);
-assert.match(gallery, /image\/jpeg.*image\/png.*image\/webp.*image\/gif/);
-assert.match(gallery, /slice\(0,15\)/);
-assert.match(gallery, /Foto kegiatan /);
-assert.doesNotMatch(gallery, /folder\.getFiles\(\)/);
-assert.doesNotMatch(gallery, /file\.getName\(\)/);
-assert.match(gallery, /PSB_PUBLIC_GALLERY_V2/);
+assert.doesNotMatch(source, /function\s+getPublicGallery\s*\(/, 'Google Drive public gallery backend must be removed');
+assert.doesNotMatch(source, /PSB_PUBLIC_GALLERY_(?:FILE_IDS|FOLDER_ID)|drive\.google\.com\/thumbnail/i, 'No Google Drive gallery configuration or thumbnail URLs may remain');
 const documentUpload = functionSource('uploadDocument');
 assert.match(documentUpload, /canAccessRegistration_\(actor,\s*found\.registration\)/);
 assert.match(documentUpload, /getRegistrationDocumentFolder_\(found\.registration\)/);
@@ -34,4 +25,4 @@ assert.match(paymentUpload, /canAccessRegistration_\(actor,found\.registration\)
 assert.match(paymentUpload, /getOrCreateFolderInParent_\(yearFolder,'Bukti Pembayaran'\)/);
 assert.match(paymentUpload, /regFolder\.createFile\(/);
 assert.doesNotMatch(source, /DriveApp\.Access\.ANYONE_WITH_LINK|DriveApp\.Access\.ANYONE/);
-console.log('Drive gallery and private document safeguards passed.');
+console.log('Drive private document safeguards passed; Google Drive gallery backend is absent.');
