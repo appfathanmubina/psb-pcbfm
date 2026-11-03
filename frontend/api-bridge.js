@@ -131,7 +131,7 @@
 
       iframe.src = BRIDGE_URL + '?bridge=1&origin=' +
         encodeURIComponent(location.origin) + '&challenge=' +
-        encodeURIComponent(challenge) + '&v=32.6.0';
+        encodeURIComponent(challenge) + '&v=32.7.0';
       document.body.appendChild(iframe);
     });
   }
