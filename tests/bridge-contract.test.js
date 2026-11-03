@@ -12,6 +12,7 @@ const allowlistMatch = code.match(/const PSB_PWA_BRIDGE_ALLOWED_FUNCTIONS = Obje
 assert.ok(allowlistMatch, 'Backend PWA bridge allowlist must exist');
 const allowed = new Set(Array.from(allowlistMatch[1].matchAll(/['"]([A-Za-z_$][\w$]*)['"]/g), m => m[1]));
 assert.ok(allowed.size > 0, 'Backend PWA bridge allowlist must not be empty');
+assert.ok(!allowed.has('getPublicGallery'), 'Public gallery must not be exposed through the Apps Script bridge');
 
 const clientCalls = new Set(Array.from(app.matchAll(/\bserver\(\s*['"]([A-Za-z_$][\w$]*)['"]/g), m => m[1]));
 const missing = [...clientCalls].filter(name => !allowed.has(name)).sort();
