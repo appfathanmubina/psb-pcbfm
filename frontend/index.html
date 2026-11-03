@@ -30,11 +30,11 @@
   </div>
 </section>
 <script src="./api-bridge.js?v=32.7.0"></script>
-<script src="./app.js?v=32.7.0"></script>
+<script src="./app.js?v=32.10.0"></script>
 <script>
 (function(){
   'use strict';
-  if('serviceWorker' in navigator)window.addEventListener('load',function(){navigator.serviceWorker.register('./sw.js?v=32.7.0',{updateViaCache:'none'}).then(function(reg){return reg.update().catch(function(e){console.warn('Service worker update:',e);});}).catch(function(e){console.warn('Service worker:',e);});});
+  if('serviceWorker' in navigator)window.addEventListener('load',function(){navigator.serviceWorker.register('./sw.js?v=32.10.0',{updateViaCache:'none'}).then(function(reg){return reg.update().catch(function(e){console.warn('Service worker update:',e);});}).catch(function(e){console.warn('Service worker:',e);});});
   let deferredInstallPrompt=null;
   const overlay=document.getElementById('installOverlay'),btn=document.getElementById('installBtn'),later=document.getElementById('installLater'),info=document.getElementById('installText'),steps=document.getElementById('installSteps');
   const installMode=new URLSearchParams(location.search).has('install');
