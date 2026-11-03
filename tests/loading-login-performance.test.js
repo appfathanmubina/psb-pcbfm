@@ -60,7 +60,7 @@ assert.match(app, /setTimeout\(loadGalleryWhenIdle,1200\)/,
 const galleryLoader = functionSource('loadPublicGallery');
 assert.match(galleryLoader, /PSB_PUBLIC_GALLERY_FILES/,
   'Gallery must be built from the static GitHub Pages image manifest');
-assert.doesNotMatch(galleryLoader, /server\\(|getPublicGallery|DriveApp|drive\\.google\\.com/i,
+assert.doesNotMatch(galleryLoader, /server\(|getPublicGallery|DriveApp|drive\.google\.com/i,
   'Gallery loading must not call Apps Script or Google Drive');
 
 console.log('PSB loading and login critical-path safeguards: OK');
