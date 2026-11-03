@@ -14,11 +14,9 @@ assert.match(css, /\.public-shell\s*\{[^}]*display:\s*flex;[^}]*flex-direction:\
   'Desktop public shell must use a vertical flex layout so sections cannot sit side by side');
 assert.match(css, /\.public-gallery,\s*\.public-video\s*\{[^}]*width:\s*100%;[^}]*flex:\s*0\s*0\s*auto;/s,
   'Gallery and video must each occupy a full-width vertical row');
-assert.match(css, /\.public-top,\s*\.public-shell > \.message,\s*\.public-hero,\s*\.public-social\s*\{\s*grid-column:\s*1\s*\/\s*-1/s,
-  'Header, hero, and social links must span the desktop layout');
 assert.match(css, /@media\s*\(min-width:\s*900px\)\s*and\s*\(max-width:\s*1100px\)/,
   'Desktop layout must also adapt to narrower laptop screens');
-assert.match(html, /styles\.css\?v=32\.8\.0/,
+assert.match(html, /styles\.css\?v=32\.9\.0/,
   'HTML must request the updated responsive stylesheet');
 assert.match(fs.readFileSync('frontend/sw.js', 'utf8'), /psb-pwa-shell-v32-9-0/,
   'Service worker cache must be versioned for the new stylesheet');
