@@ -47,9 +47,15 @@ assert.match(apiBridge, /form\.method\s*=\s*'POST'/, 'PWA RPC must use native fo
 assert.match(apiBridge, /form\.target\s*=\s*frameName/, 'Each RPC response must have an isolated iframe target');
 assert.match(apiBridge, /form\.submit\(\)/, 'PWA must submit the RPC payload without iframe postMessage');
 assert.doesNotMatch(apiBridge, /contentWindow\.postMessage/, 'PWA must not send postMessage into the Apps Script iframe');
+assert.match(apiBridge, /host === 'script\.google\.com'/, 'PWA must accept the Apps Script web app response origin');
 assert.match(apiBridge, /host\.endsWith\('-script\.googleusercontent\.com'\)/,
   'PWA must trust the actual Apps Script HTML Service host suffix');
 assert.match(apiBridge, /isTrustedBridgeOrigin\(event\.origin\)/, 'PWA must validate the response origin');
+assert.match(apiBridge, /Pesan bridge diabaikan: origin tidak dikenal/, 'Rejected origins must be diagnosable');
+assert.match(apiBridge, /Timeout menunggu respons Apps Script/, 'RPC timeout must log safe transport diagnostics');
+assert.match(h, /api-bridge\\.js\\?v=32\\.11\\.0/, 'PWA HTML must cache-bust the updated bridge client');
+assert.match(sw, /psb-pwa-shell-v32-11-0/, 'PWA shell cache must be versioned with bridge update');
+
 assert.match(apiBridge, /pending\.get\(challenge\)/, 'PWA must correlate every response with its unpredictable challenge');
 assert.match(apiBridge, /let tokenSession = null/, 'PWA must retain the short-lived token session in memory');
 assert.match(apiBridge, /let tokenPromise = null/, 'Concurrent RPCs must share a single token handshake');
