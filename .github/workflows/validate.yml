@@ -42,7 +42,7 @@ jobs:
         run: node tests/password-migration.test.js
       - name: Test upload validation safeguards
         run: node tests/upload-validation.test.js
-      - name: Test Drive gallery and private document safeguards
+      - name: Test Drive private document safeguards
         run: node tests/drive-gallery-security.test.js
       - name: Test GitHub-only public gallery assets and source
         run: node tests/github-gallery.test.js
