@@ -10,8 +10,10 @@ assert.match(css, /@media\s*\(min-width:\s*900px\)/,
   'Desktop landing page rules must be isolated to wide viewports');
 assert.match(css, /\.public-shell\s*\{[^}]*max-width:\s*1240px/s,
   'Public landing page must expand to a professional desktop content width');
-assert.match(css, /\.public-gallery,\s*\.public-video\s*\{/,
-  'Gallery and video should be composed as desktop columns');
+assert.match(css, /grid-template-columns:\s*minmax\(0,\s*1fr\)/,
+  'Desktop public home must use a single main content column');
+assert.match(css, /\.public-gallery,\s*\.public-video\s*\{\s*grid-column:\s*1\s*\/\s*-1/s,
+  'Gallery and video must stack vertically and span the desktop content width');
 assert.match(css, /\.public-top,\s*\.public-shell > \.message,\s*\.public-hero,\s*\.public-social\s*\{\s*grid-column:\s*1\s*\/\s*-1/s,
   'Header, hero, and social links must span the desktop layout');
 assert.match(css, /@media\s*\(min-width:\s*900px\)\s*and\s*\(max-width:\s*1100px\)/,
