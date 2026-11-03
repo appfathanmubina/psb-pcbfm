@@ -64,6 +64,8 @@ jobs:
         run: node tests/bridge-contract.test.js
       - name: Test loading and login critical-path safeguards
         run: node tests/loading-login-performance.test.js
+      - name: Test desktop public landing responsive safeguards
+        run: node tests/public-home-responsive.test.js
       - name: Validate shell scripts
         run: |
           while IFS= read -r file; do
