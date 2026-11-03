@@ -1,11 +1,11 @@
-// PSB PWA 32.10.0 — network-first navigation prevents stale cached entry pages.
-const CACHE='psb-pwa-shell-v32-10-0';
+// PSB PWA 32.11.0 — network-first navigation prevents stale cached entry pages.
+const CACHE='psb-pwa-shell-v32-11-0';
 const ASSETS=[
   './',
   './index.html',
   './manifest.webmanifest?v=32.7.0',
   './styles.css?v=32.9.0',
-  './api-bridge.js?v=32.7.0',
+  './api-bridge.js?v=32.11.0',
   './app.js?v=32.10.0',
   './assets/logo-fathanmubina.svg?v=32.7.0',
   './assets/logo-fathan-mubina.png?v=32.7.0',
