@@ -480,10 +480,10 @@ input:focus,select:focus,textarea:focus{background:#fff!important;box-shadow:0 0
     width: min(100%, 1240px);
     max-width: 1240px;
     margin: 0 auto;
-    display: grid;
-    grid-template-columns: minmax(0, 1.08fr) minmax(0, .92fr);
-    align-items: start;
-    gap: 22px 26px;
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 22px;
   }
   .public-top,
   .public-shell > .message,
@@ -540,7 +540,9 @@ input:focus,select:focus,textarea:focus{background:#fff!important;box-shadow:0 0
   .public-hero p { max-width: 760px; margin-top: 12px; font-size: 15px; line-height: 1.7; }
   .public-gallery,
   .public-video {
+    width: 100%;
     min-width: 0;
+    flex: 0 0 auto;
     margin: 0;
     padding: 20px;
     border: 1px solid #e9e3f0;
