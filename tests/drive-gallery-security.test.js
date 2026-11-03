@@ -34,4 +34,4 @@ assert.match(paymentUpload, /canAccessRegistration_\(actor,found\.registration\)
 assert.match(paymentUpload, /getOrCreateFolderInParent_\(yearFolder,'Bukti Pembayaran'\)/);
 assert.match(paymentUpload, /regFolder\.createFile\(/);
 assert.doesNotMatch(source, /DriveApp\.Access\.ANYONE_WITH_LINK|DriveApp\.Access\.ANYONE/);
-console.log('Drive gallery and private document safeguards passed.');
+console.log('Drive private document safeguards passed; Google Drive gallery backend is absent.');
