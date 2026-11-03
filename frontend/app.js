@@ -295,8 +295,8 @@ function renderPublicHome(message=''){
       </div>
     </section>
   </div></div>`;
-  // Keep the login path clear: public Drive gallery is optional and loads
-  // only when the public home remains visible and the browser is idle.
+  // Keep gallery image requests off the initial critical path. Images are served
+  // directly by GitHub Pages; no Apps Script or Google Drive request is made.
   if(!state.publicGalleryLoadScheduled){
     state.publicGalleryLoadScheduled=true;
     const loadGalleryWhenIdle=()=>{
@@ -369,6 +369,31 @@ function playPublicVideo(index){
   if(caption)caption.style.display='none';
   slide.appendChild(iframe);
 }
+const PSB_PUBLIC_GALLERY_BASE_URL = 'https://appfathanmubina.github.io/psb-pcbfm/gallery/';
+const PSB_PUBLIC_GALLERY_FILES = Object.freeze([
+  "0. Abby KH. Chairuman Kamal, Lc.M.jpg",
+  "1. Gerbang Depan.jpg",
+  "2. Masjid Asmawi Jasim.jpg",
+  "3. Ruang Kelas Putra.jpg",
+  "4. Ruang Kelas Putri.jpg",
+  "5. Gor Putra.jpg",
+  "7. Masjid Putra.jpg",
+  "8. Masjid Putri.jpg",
+  "9. Asrama Putra.jpg",
+  "10. Asrama Putri.jpg",
+  "11. Kolam Renang Putra.jpg",
+  "12. Kolam Renang Putri.jpg",
+  "13. Pilar 9 FM.jpg",
+  "14. Kelok Cipalayangan FM.jpg",
+  "15. Kali Cipalayangan.jpg",
+  "16. Outbound.jpg",
+  "17. Flyfox.jpg",
+  "18. Barisan Upacara Putra.jpg",
+  "19. Barisan Upacara Putri.jpg",
+  "20. Barisan Dewan Asatidz.jpg",
+  "21. Barisan Dewan Asatidzah.jpg"
+]);
+
 function resetPublicGallery(){
   if(state.publicGalleryTimer){clearInterval(state.publicGalleryTimer);state.publicGalleryTimer=null;}
   state.publicGalleryItems=[];state.publicGalleryIndex=0;
@@ -399,12 +424,12 @@ function goPublicGallery(index){
   state.publicGalleryIndex=(index+total)%total;updatePublicGallery();
 }
 function movePublicGallery(delta){goPublicGallery((state.publicGalleryIndex||0)+delta)}
-async function loadPublicGallery(){
-  try{
-    const result=await server('getPublicGallery',false);
-    if(result?.success) renderPublicGallery(result.items||[]);
-    else renderPublicGallery([]);
-  }catch(e){renderPublicGallery([]);}
+function loadPublicGallery(){
+  const items=PSB_PUBLIC_GALLERY_FILES.map(file=>({
+    name:file.replace(/^\\d+\\.\\s*/, '').replace(/\\.jpe?g$/i, ''),
+    url:PSB_PUBLIC_GALLERY_BASE_URL+encodeURIComponent(file)
+  }));
+  renderPublicGallery(items);
 }
 
 function openRegistrationEntry(){
