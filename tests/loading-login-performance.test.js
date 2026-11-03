@@ -46,4 +46,15 @@ assert.match(app, /function warmNavigationData\(\)/,
 assert.match(app, /scheduleWarmNavigationData\(\);/,
   'Navigation prefetch must be scheduled outside the initial render path');
 
+assert.match(app, /state\.page==='home'\)warmNavigationData\(\)/,
+  'Background navigation prefetch must only start while Home remains active');
+assert.match(app, /state\.page!=='home' \|\| !state\.token\)return/,
+  'Background navigation prefetch must stop when the user navigates away');
+assert.match(app, /state\.publicGalleryLoadScheduled=false;[\s\S]{0,120}if\(document\.getElementById\('galleryTrack'\)\)loadPublicGallery\(\)/,
+  'Public gallery request must be deferred and skipped after leaving the public home');
+assert.match(app, /requestIdleCallback\(loadGalleryWhenIdle,\{timeout:3000\}\)/,
+  'Public gallery should use browser idle time when available');
+assert.match(app, /setTimeout\(loadGalleryWhenIdle,1200\)/,
+  'Public gallery must retain a delayed fallback for browsers without idle callbacks');
+
 console.log('PSB loading and login critical-path safeguards: OK');
