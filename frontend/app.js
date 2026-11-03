@@ -426,7 +426,7 @@ function goPublicGallery(index){
 function movePublicGallery(delta){goPublicGallery((state.publicGalleryIndex||0)+delta)}
 function loadPublicGallery(){
   const items=PSB_PUBLIC_GALLERY_FILES.map(file=>({
-    name:file.replace(/^\\d+\\.\\s*/, '').replace(/\\.jpe?g$/i, ''),
+    name:file.replace(/^\d+\.\s*/, '').replace(/\.jpe?g$/i, ''),
     url:PSB_PUBLIC_GALLERY_BASE_URL+encodeURIComponent(file)
   }));
   renderPublicGallery(items);
