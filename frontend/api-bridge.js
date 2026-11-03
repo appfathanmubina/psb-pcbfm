@@ -21,6 +21,7 @@
       const url = new URL(origin);
       const host = url.hostname.toLowerCase();
       return url.protocol === 'https:' && (
+        host === 'script.google.com' ||
         host === 'script.googleusercontent.com' ||
         host.endsWith('.script.googleusercontent.com') ||
         host.endsWith('-script.googleusercontent.com')
@@ -44,9 +45,15 @@
   }
 
   function handleMessage(event) {
-    if (!isTrustedBridgeOrigin(event.origin)) return;
     const data = event.data || {};
     if (data.source !== BRIDGE_SOURCE) return;
+    if (!isTrustedBridgeOrigin(event.origin)) {
+      console.warn('[PSB Bridge] Pesan bridge diabaikan: origin tidak dikenal.', {
+        origin: event.origin,
+        type: data.type || 'unknown'
+      });
+      return;
+    }
 
     if (data.type === 'ready' && tokenHandshake &&
         String(data.challenge || '') === tokenHandshake.challenge) {
@@ -74,7 +81,20 @@
     if (data.type !== 'response') return;
     const challenge = String(data.challenge || '');
     const item = pending.get(challenge);
-    if (!item || String(data.id || '') !== item.requestId) return;
+    if (!item) {
+      console.warn('[PSB Bridge] Respons diterima tetapi challenge tidak lagi terdaftar.', {
+        challenge: challenge.slice(0, 8),
+        origin: event.origin
+      });
+      return;
+    }
+    if (String(data.id || '') !== item.requestId) {
+      console.warn('[PSB Bridge] Respons diabaikan: request ID tidak cocok.', {
+        challenge: challenge.slice(0, 8),
+        origin: event.origin
+      });
+      return;
+    }
     pending.delete(challenge);
     clearTimeout(item.timer);
     removeFrame(item.iframe);
@@ -131,7 +151,7 @@
 
       iframe.src = BRIDGE_URL + '?bridge=1&origin=' +
         encodeURIComponent(location.origin) + '&challenge=' +
-        encodeURIComponent(challenge) + '&v=32.7.0';
+        encodeURIComponent(challenge) + '&v=32.11.0';
       document.body.appendChild(iframe);
     });
   }
@@ -168,9 +188,15 @@
       iframe.setAttribute('aria-hidden', 'true');
       iframe.tabIndex = -1;
       iframe.style.cssText = 'position:fixed;left:-10000px;top:-10000px;width:1px;height:1px;border:0;opacity:0;pointer-events:none;';
-      const item = { iframe: iframe, requestId: requestId, resolve: resolve, reject: reject, timer: null };
+      const item = { iframe: iframe, requestId: requestId, functionName: String(functionName || ''), startedAt: Date.now(), resolve: resolve, reject: reject, timer: null };
       pending.set(challenge, item);
       item.timer = setTimeout(() => {
+        console.error('[PSB Bridge] Timeout menunggu respons Apps Script.', {
+          functionName: item.functionName,
+          challenge: challenge.slice(0, 8),
+          elapsedMs: Date.now() - item.startedAt,
+          pendingCount: pending.size
+        });
         pending.delete(challenge);
         removeFrame(iframe);
         reject(new Error('Koneksi ke server timeout saat menunggu hasil permintaan.'));
