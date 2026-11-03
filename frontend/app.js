@@ -28,7 +28,7 @@
     root.style.setProperty('--app-viewport-height', (window.visualViewport?.height || window.innerHeight || root.clientHeight || 0) + 'px');
   }
 })();
-const state={token:localStorage.getItem('psb_session')||'',user:null,config:(()=>{try{return JSON.parse(localStorage.getItem('psb_public_config')||'{}')}catch(e){return {}}})(),page:'home',appInitialized:false,initialData:null,preloadRunning:false,preloadReady:false,cache:{registration:null,documents:{},payments:{},pages:{}},pageSnapshots:{},pageSnapshotTtlMs:180000,paymentRegistrationId:'',paymentData:null,paymentTypes:[],masterKey:'MASTER_TAHUN_AJARAN',masterItems:[],masterDefinitions:{},masterCache:{},academicYearLifecycle:null,auditData:null,registrationList:[],registrationOptions:null,registrationDetail:null,documentRegistrationId:'',documentData:null,selectionData:null,selectionTab:'overview',selectionRegistrationId:'',chatData:null,chatThread:null,chatThreadCache:{},chatPollTimer:null,chatLoading:false,detailLoadingLocks:{},waliOtpVerificationId:'',waliOtpEmail:''};
+const state={token:localStorage.getItem('psb_session')||'',user:null,config:(()=>{try{return JSON.parse(localStorage.getItem('psb_public_config')||'{}')}catch(e){return {}}})(),page:'home',appInitialized:false,initialData:null,preloadRunning:false,preloadReady:false,cache:{registration:null,documents:{},payments:{},pages:{}},pageSnapshots:{},pageSnapshotTtlMs:180000,publicGalleryLoadScheduled:false,paymentRegistrationId:'',paymentData:null,paymentTypes:[],masterKey:'MASTER_TAHUN_AJARAN',masterItems:[],masterDefinitions:{},masterCache:{},academicYearLifecycle:null,auditData:null,registrationList:[],registrationOptions:null,registrationDetail:null,documentRegistrationId:'',documentData:null,selectionData:null,selectionTab:'overview',selectionRegistrationId:'',chatData:null,chatThread:null,chatThreadCache:{},chatPollTimer:null,chatLoading:false,detailLoadingLocks:{},waliOtpVerificationId:'',waliOtpEmail:''};
 const $=id=>document.getElementById(id);
 function esc(v){return String(v??'').replace(/[&<>'"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c]));}
 function normalizeAssetUrl(raw){
@@ -168,7 +168,13 @@ async function warmNavigationData(){
   if(hasAnyRole(['SUPERADMIN','ADMIN_PSB']))tasks.push(['master',async()=>{const [defs,items,lifecycle]=await Promise.all([server('getMasterDefinitions',state.token),server('getMasterData',state.token,state.masterKey,true),server('getAcademicYearLifecycleData',state.token)]);return {success:!!(defs?.success&&items?.success),definitions:defs?.definitions||{},items:items?.items||[],lifecycle:lifecycle?.success?lifecycle:null};}]);
   if(hasAnyRole(['WALI','SUPERADMIN','ADMIN_PSB']))tasks.push(['chat',()=>server('getChatPageData',state.token)]);
   // Sequential background warm-up avoids flooding Apps Script with simultaneous Spreadsheet reads.
-  for(const [page,loader] of tasks){if(pageDataCached(page))continue;await warmPageData(page,loader);}
+  // Stop as soon as the user leaves Home so background work never competes with
+  // the page they explicitly opened.
+  for(const [page,loader] of tasks){
+    if(document.visibilityState==='hidden' || state.page!=='home' || !state.token)return;
+    if(pageDataCached(page))continue;
+    await warmPageData(page,loader);
+  }
 }
 
 function showMessage(text,type='error'){return `<div class="message ${type}">${esc(text)}</div>`}
@@ -219,7 +225,7 @@ function initializeAfterLogin(){
   bootProgress(false);
 }
 function scheduleWarmNavigationData(){
-  const run=()=>{if(document.visibilityState!=='hidden' && state.token)warmNavigationData();};
+  const run=()=>{if(document.visibilityState!=='hidden' && state.token && state.page==='home')warmNavigationData();};
   if(typeof window.requestIdleCallback==='function'){
     window.requestIdleCallback(run,{timeout:4000});
   }else{
@@ -289,7 +295,20 @@ function renderPublicHome(message=''){
       </div>
     </section>
   </div></div>`;
-  loadPublicGallery();
+  // Keep the login path clear: public Drive gallery is optional and loads
+  // only when the public home remains visible and the browser is idle.
+  if(!state.publicGalleryLoadScheduled){
+    state.publicGalleryLoadScheduled=true;
+    const loadGalleryWhenIdle=()=>{
+      state.publicGalleryLoadScheduled=false;
+      if(document.getElementById('galleryTrack'))loadPublicGallery();
+    };
+    if(typeof window.requestIdleCallback==='function'){
+      window.requestIdleCallback(loadGalleryWhenIdle,{timeout:3000});
+    }else{
+      setTimeout(loadGalleryWhenIdle,1200);
+    }
+  }
   renderPublicVideoSection();
 }
 const PSB_PUBLIC_VIDEOS=[
@@ -630,7 +649,7 @@ async function renderHome(){
   try{
     const r=await server('getWaliHomeData',state.token);
     if(!r.success){$('waliHomeFlow').innerHTML=showMessage(r.message||'Alur pendaftaran belum dapat dimuat.');return}
-    renderWaliHomeFlow(r);setTimeout(()=>warmNavigationData(),0);
+    renderWaliHomeFlow(r);scheduleWarmNavigationData();
   }catch(e){$('waliHomeFlow').innerHTML=showMessage('Gagal memuat alur pendaftaran. Silakan coba lagi.');}
 }
 function waliFlowAction(key,id){
