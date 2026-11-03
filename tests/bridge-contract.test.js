@@ -7,6 +7,8 @@ const bridgeServer = fs.readFileSync('apps-script/BridgeServer.gs', 'utf8');
 const app = fs.readFileSync('frontend/app.js', 'utf8');
 const apiBridge = fs.readFileSync('frontend/api-bridge.js', 'utf8');
 const bridgeHtml = fs.readFileSync('apps-script/Bridge.html', 'utf8');
+const indexHtml = fs.readFileSync('frontend/index.html', 'utf8');
+const serviceWorker = fs.readFileSync('frontend/sw.js', 'utf8');
 
 const allowlistMatch = code.match(/const PSB_PWA_BRIDGE_ALLOWED_FUNCTIONS = Object\.freeze\(\[([\s\S]*?)\]\);/);
 assert.ok(allowlistMatch, 'Backend PWA bridge allowlist must exist');
@@ -53,8 +55,8 @@ assert.match(apiBridge, /host\.endsWith\('-script\.googleusercontent\.com'\)/,
 assert.match(apiBridge, /isTrustedBridgeOrigin\(event\.origin\)/, 'PWA must validate the response origin');
 assert.match(apiBridge, /Pesan bridge diabaikan: origin tidak dikenal/, 'Rejected origins must be diagnosable');
 assert.match(apiBridge, /Timeout menunggu respons Apps Script/, 'RPC timeout must log safe transport diagnostics');
-assert.match(h, /api-bridge\\.js\\?v=32\\.11\\.0/, 'PWA HTML must cache-bust the updated bridge client');
-assert.match(sw, /psb-pwa-shell-v32-11-0/, 'PWA shell cache must be versioned with bridge update');
+assert.match(indexHtml, /api-bridge\\.js\\?v=32\\.11\\.0/, 'PWA HTML must cache-bust the updated bridge client');
+assert.match(serviceWorker, /psb-pwa-shell-v32-11-0/, 'PWA shell cache must be versioned with bridge update');
 
 assert.match(apiBridge, /pending\.get\(challenge\)/, 'PWA must correlate every response with its unpredictable challenge');
 assert.match(apiBridge, /let tokenSession = null/, 'PWA must retain the short-lived token session in memory');
