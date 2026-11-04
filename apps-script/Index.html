@@ -20,7 +20,7 @@
   </script>
   <style>
 :root{
-  --primary:#7c3aed;--primary-dark:#5b21b6;--primary-soft:#f2edff;
+  --primary:#7c3aed;--primary-dark:#5b21b6;--primary-soft:#f2edff;--gold:#c9a23f;--gold-soft:#fbf5e6;
   --bg:#eee7ff;--surface:#fff;--text:#211c28;--muted:#756d7d;
   --line:#e8e3ee;--success:#15803d;--danger:#dc2626;
   --shadow:0 2px 12px rgba(45,31,75,.06);--radius:18px;
@@ -166,7 +166,7 @@ button,input{font:inherit}button{border:0;cursor:pointer}button:disabled{opacity
 @media(max-width:390px){.public-grid{grid-template-columns:1fr}.public-card{min-height:120px}}
 .login-wrap{min-height:100dvh;width:100%;display:flex;align-items:flex-start;justify-content:center;padding:0;background:linear-gradient(180deg,#eee7ff 0,#f7f6fb 43%,#f7f6fb 100%)}
 .login-card{width:100%;max-width:480px;min-height:100svh;padding:calc(48px + env(safe-area-inset-top)) 16px 28px;background:transparent;border:0;border-radius:0;box-shadow:none}
-.login-logo{width:76px;height:76px;border-radius:22px;margin:0 auto 15px}
+.login-logo{width:76px;height:76px;border-radius:22px;margin:0 auto 15px;border:2px solid var(--gold);box-shadow:0 0 0 5px var(--gold-soft),0 8px 20px rgba(124,58,237,.12)}
 .center{text-align:center}.login-title{font-size:25px;line-height:1.2;margin:0;font-weight:900}
 .login-sub{font-size:13px;line-height:1.55;margin:8px 0 24px;color:var(--muted)}
 .login-card form{background:#fff;border:1px solid var(--line);border-radius:22px;padding:17px 15px;box-shadow:var(--shadow)}
@@ -333,7 +333,7 @@ button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-vis
 .link-btn{color:var(--primary-dark)}
 
 .pill,.announcement-status,.doc-required,.doc-status,.selection-status,.wali-flow-badge{border-radius:999px;font-weight:800;letter-spacing:.01em}
-.pill{padding:5px 9px;background:#f1ecfb;color:var(--primary-dark);border:1px solid #e4daf5}
+.pill{padding:5px 9px;background:#f1ecfb;color:var(--primary-dark);border:1px solid #e4daf5}.pill.info{background:var(--gold-soft);color:#80621b;border-color:rgba(201,162,63,.45)}
 .pill.ok{background:#ecfdf3;color:#166534;border-color:#bbf7d0}
 
 .field{margin:16px 0}.field label{font-size:12px;font-weight:800;color:#443c4a;margin-bottom:7px}
@@ -399,7 +399,7 @@ button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-vis
 }
 body{background:linear-gradient(180deg,#f8f7fa 0%,#f6f5f8 100%)}
 .shell{padding-top:calc(80px + env(safe-area-inset-top))}
-.hero{position:relative;overflow:hidden;box-shadow:0 10px 28px rgba(109,40,217,.13);border:1px solid rgba(255,255,255,.22)}
+.hero{position:relative;overflow:hidden;box-shadow:0 10px 28px rgba(109,40,217,.13);border:1px solid rgba(255,255,255,.22);border-bottom:3px solid var(--gold)}
 .hero:after{content:"";position:absolute;width:180px;height:180px;border-radius:50%;right:-65px;top:-95px;background:rgba(255,255,255,.10);pointer-events:none}
 .section-title{margin:24px 2px 10px;font-size:12px;text-transform:uppercase;letter-spacing:.08em;color:#716779}
 /* Let content sections breathe instead of making every block look equally heavy. */
