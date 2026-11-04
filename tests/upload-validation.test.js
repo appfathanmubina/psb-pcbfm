@@ -17,7 +17,7 @@ assert.match(helper, /signatures\[mimeType\]\(bytes\)/);
 assert.ok(helper.indexOf('encoded.length >') < helper.indexOf('Utilities.base64Decode'));
 
 assert.match(source, /decodeAndValidateUpload_\(base64,mimeType,5\*1024\*1024\)/);
-assert.match(source, /Math\.min\(configuredMaxMb,10\)/);
+// Chat attachment upload handling was retired with the PSB Chat module.
 assert.match(source, /Math\.min\(configuredMaxSizeMb > 0 \? configuredMaxSizeMb : 10, 20\)/);
 assert.equal((source.match(/Utilities\.base64Decode\(/g) || []).length, 1,
   'raw Base64 decoding should be centralized in the bounded validation helper');
