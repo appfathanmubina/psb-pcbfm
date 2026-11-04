@@ -34,7 +34,7 @@ assert.match(source, /function migrateLegacyPasswordAfterLogin_\(/);
 assert.match(source, /findUserById_\(verifiedUser\.userId, true\)/);
 assert.match(source, /passwordCheck\.needsUpgrade && !migrateLegacyPasswordAfterLogin_\(user, password\)/);
 assert.match(source, /const currentPasswordValue = String\(currentPassword \|\| ''\)/);
-assert.match(source, /verifyPasswordForUser_\(currentPasswordValue, current\)/);
+assert.match(source, /verifyPasswordForUser_\(currentPasswordValue, result\.user\)/);
 assert.match(setup, /hashPassword_\(secret, salt\)/);
 
 console.log('Password migration checks passed.');
