@@ -579,9 +579,12 @@ async function warmNavigationData(){
   }
 }
 function scheduleWarmNavigationData(){
-  const run=()=>{if(document.visibilityState!=='hidden'&&state.token&&state.page==='home')warmNavigationData();};
-  if(typeof window.requestIdleCallback==='function')window.requestIdleCallback(run,{timeout:4000});
-  else setTimeout(run,1200);
+  const run=()=>{if(document.visibilityState!=='hidden' && state.token && state.page==='home')warmNavigationData();};
+  if(typeof window.requestIdleCallback==='function'){
+    window.requestIdleCallback(run,{timeout:4000});
+  }else{
+    setTimeout(run,1200);
+  }
 }
 
 function showMessage(text,type='error'){return `<div class="message ${type}">${esc(text)}</div>`}
