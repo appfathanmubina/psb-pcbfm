@@ -33,8 +33,9 @@ self.addEventListener('fetch',event=>{
   event.respondWith(
     fetch(request,{cache:'no-cache'}).then(response=>{
       if(response&&response.ok&&response.type==='basic'){
-        const copy=response.clone();
-        event.waitUntil(caches.open(CACHE).then(cache=>cache.put(request,copy)));
+        return caches.open(CACHE)
+          .then(cache=>cache.put(request,response.clone()))
+          .then(()=>response);
       }
       return response;
     }).catch(()=>caches.match(request).then(cached=>{
