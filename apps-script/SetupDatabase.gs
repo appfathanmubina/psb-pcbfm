@@ -458,3 +458,19 @@ function cleanupLegacyChatAutomationTriggers() {
   }
   return removeLegacyChatAutomationTriggers_();
 }
+
+/**
+ * Public entry point for initializing the PSB database from the Apps Script editor.
+ * Internal setup implementation remains private (underscore suffix).
+ */
+function RUN_SETUP_DATABASE() {
+  return setupPSBDatabase_();
+}
+
+/**
+ * Public entry point for setting up PSB Drive folders from the Apps Script editor.
+ * Internal setup implementation remains private (underscore suffix).
+ */
+function RUN_SETUP_DRIVE() {
+  return setupDriveFolders_();
+}
