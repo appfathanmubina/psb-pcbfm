@@ -64,7 +64,7 @@ for (const [label, source] of [['Apps Script', appsSource], ['PWA', pwaSource]])
     label + ' dashboard fallback version must match backend production version');
   assert.ok(source.includes("state.config.RELEASE_STAGE||'PRODUCTION'"),
     label + ' dashboard must show the configured release stage');
-  assert.ok(!/Stage\\s*\\d+/.test(source.slice(source.indexOf('function renderMore'), source.indexOf('function hasAnyRole'))),
+  assert.ok(!/Stage\s*\d+/.test(source.slice(source.indexOf('function renderMore'), source.indexOf('function hasAnyRole'))),
     label + ' user-facing More menu must not expose internal stage numbers');
   assert.ok(!source.includes('<span class="pill"></span>'),
     label + ' must not render empty metadata badges');
