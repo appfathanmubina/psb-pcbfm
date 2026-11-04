@@ -53,6 +53,7 @@ const PSB_SHEETS = {
   SELECTION_RESULTS: 'SELECTION_RESULTS',
   REREGISTRATIONS: 'REREGISTRATIONS',
   INCIDENTS: 'INCIDENTS',
+  MIGRATION_LOG: 'MIGRATION_LOG',
 };
 
 const PSB_HEADERS = {
@@ -82,33 +83,84 @@ const PSB_HEADERS = {
   SELECTION_RESULTS: ['resultId','registrationId','status','announcementDate','note','createdAt','updatedAt'],
   REREGISTRATIONS: ['reregistrationId','registrationId','status','completedAt','note','createdAt','updatedAt'],
   INCIDENTS: ['incidentId','category','priority','status','title','description','relatedModule','relatedRecordId','reportedBy','assignedTo','resolutionNote','createdAt','updatedAt','resolvedAt','closedAt'],
+  MIGRATION_LOG: ['migrationId','appliedAt','schemaVersion','description'],
 };
 
 function setupPSBDatabase_() {
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
-  if (!ss) throw new Error('Spreadsheet aktif tidak ditemukan.');
+  const lock = LockService.getScriptLock();
+  lock.waitLock(30000);
+  try {
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    if (!ss) throw new Error('Spreadsheet aktif tidak ditemukan.');
 
-  PropertiesService.getScriptProperties().setProperties({
-    PSB_SPREADSHEET_ID: ss.getId(),
-    PSB_ROOT_FOLDER_ID: getOrCreateFolder_(PSB_SETUP.ROOT_FOLDER_NAME).getId()
-  }, false);
+    // Validasi seluruh sheet yang sudah ada sebelum membuat sheet/properti/folder.
+    validateExistingDatabaseSheets_(ss);
 
-  Object.keys(PSB_SHEETS).forEach(key => ensureSheet_(ss, PSB_SHEETS[key], PSB_HEADERS[key]));
+    const root = getOrCreateFolder_(PSB_SETUP.ROOT_FOLDER_NAME);
+    PropertiesService.getScriptProperties().setProperties({
+      PSB_SPREADSHEET_ID: ss.getId(),
+      PSB_DRIVE_ROOT_ID: root.getId()
+    }, false);
 
-  ensureDefaultConfig_();
-  ensureInitialMasterData_();
-  setupDriveFolders_();
-  const superadminBootstrap = createInitialSuperadmin_();
+    Object.keys(PSB_SHEETS).forEach(key => ensureSheet_(ss, PSB_SHEETS[key], PSB_HEADERS[key]));
 
-  return {
-    success: true,
-    message: superadminBootstrap && superadminBootstrap.created === false &&
-      superadminBootstrap.code === 'SUPERADMIN_BOOTSTRAP_NOT_CONFIGURED'
-      ? 'Foundation PSB disiapkan. Akun Superadmin belum dibuat; konfigurasi kredensial melalui editor Apps Script tepercaya.'
-      : 'Foundation PSB berhasil disiapkan.',
-    spreadsheetId: ss.getId(),
-    superadminBootstrap: superadminBootstrap
-  };
+    ensureDefaultConfig_();
+    ensureInitialMasterData_();
+    setupDriveFolders_();
+    recordDatabaseMigration_('BASELINE-1', 'Inisialisasi struktur database PSB');
+    const superadminBootstrap = createInitialSuperadmin_();
+
+    return {
+      success: true,
+      message: superadminBootstrap && superadminBootstrap.created === false &&
+        superadminBootstrap.code === 'SUPERADMIN_BOOTSTRAP_NOT_CONFIGURED'
+        ? 'Foundation PSB disiapkan. Akun Superadmin belum dibuat; konfigurasi kredensial melalui editor Apps Script tepercaya.'
+        : 'Foundation PSB berhasil disiapkan.',
+      spreadsheetId: ss.getId(),
+      superadminBootstrap: superadminBootstrap
+    };
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+function validateExistingDatabaseSheets_(ss) {
+  Object.keys(PSB_SHEETS).forEach(key => {
+    const name = PSB_SHEETS[key];
+    const headers = PSB_HEADERS[key];
+    const sheet = ss.getSheetByName(name);
+    if (!sheet || sheet.getLastRow() === 0) return;
+    if (sheet.getLastColumn() < headers.length) {
+      throw new Error('Pemeriksaan awal gagal: sheet "' + name + '" memiliki kolom lebih sedikit dari schema. Tidak ada perubahan dilakukan.');
+    }
+    const current = sheet.getRange(1, 1, 1, headers.length).getDisplayValues()[0]
+      .map(value => String(value || '').trim());
+    const mismatches = headers.map((expected, index) => current[index] === expected ? '' :
+      (index + 1) + ': seharusnya "' + expected + '", ditemukan "' + current[index] + '"').filter(Boolean);
+    if (mismatches.length) {
+      throw new Error('Pemeriksaan awal gagal pada sheet "' + name + '": ' + mismatches.join('; ') + '. Tidak ada perubahan dilakukan.');
+    }
+  });
+}
+
+function recordDatabaseMigration_(migrationId, description) {
+  const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(PSB_SHEETS.MIGRATION_LOG);
+  if (!sheet) throw new Error('Sheet MIGRATION_LOG belum tersedia.');
+  const lastRow = sheet.getLastRow();
+  if (lastRow >= 2) {
+    const ids = sheet.getRange(2, 1, lastRow - 1, 1).getDisplayValues().flat();
+    if (ids.indexOf(migrationId) >= 0) return false;
+  }
+  sheet.appendRow([migrationId, new Date(), String(getConfigValueForSetup_('DB_SCHEMA_VERSION') || '1'), description]);
+  return true;
+}
+
+function getConfigValueForSetup_(key) {
+  const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(PSB_SHEETS.CONFIG);
+  if (!sheet || sheet.getLastRow() < 2) return '';
+  const rows = sheet.getRange(2, 1, sheet.getLastRow() - 1, 2).getValues();
+  const found = rows.find(row => String(row[0] || '') === key);
+  return found ? found[1] : '';
 }
 
 function ensureSheet_(ss, name, headers) {
@@ -160,6 +212,7 @@ function ensureDefaultConfig_() {
     ['APP_LOGO_URL', '', 'URL logo utama aplikasi (HTTPS). Kosongkan untuk menggunakan logo default.', now],
     ['APP_ICON_URL', '', 'URL ikon utama aplikasi/favicon (HTTPS). Kosongkan untuk menggunakan ikon default.', now],
     ['APP_VERSION', '30.14', 'Versi aplikasi produksi', now],
+    ['DB_SCHEMA_VERSION', '1', 'Versi struktur database; dikelola melalui migrasi', now],
     ['RELEASE_STAGE', 'PRODUCTION', 'Tahap rilis aplikasi', now],
     ['ACTIVE_YEAR', PSB_SETUP.ACTIVE_YEAR, 'Tahun ajaran aktif', now],
     ['ACTIVE_YEAR_ID', 'TA-2027-2028', 'ID tahun ajaran aktif; dikelola oleh lifecycle tahun ajaran', now],
@@ -178,27 +231,30 @@ function ensureDefaultConfig_() {
 
   const rows = defaults.filter(r => !keys.has(r[0]));
   if (rows.length) sheet.getRange(sheet.getLastRow() + 1, 1, rows.length, 4).setValues(rows);
-  const refreshed = sheet.getDataRange().getValues();
-  const versionRow = refreshed.findIndex(r => String(r[0] || '') === 'APP_VERSION');
-  if (versionRow >= 1 && String(refreshed[versionRow][1] || '') !== '30.14') {
-    sheet.getRange(versionRow + 1, 2, 1, 2).setValues([['30.14', 'Versi aplikasi produksi']]);
-    sheet.getRange(versionRow + 1, 4).setValue(now);
-  }
 }
 
 function ensureInitialMasterData_() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const now = new Date();
+
   const yearSheet = ss.getSheetByName(PSB_SHEETS.MASTER_TAHUN_AJARAN);
-  if (yearSheet.getLastRow() === 1) {
-    yearSheet.appendRow(['TA-2027-2028', PSB_SETUP.ACTIVE_YEAR, true, new Date(), new Date()]);
+  const yearRows = yearSheet.getLastRow() >= 2
+    ? yearSheet.getRange(2, 1, yearSheet.getLastRow() - 1, 1).getDisplayValues().flat()
+    : [];
+  if (yearRows.indexOf('TA-2027-2028') < 0) {
+    yearSheet.appendRow(['TA-2027-2028', PSB_SETUP.ACTIVE_YEAR, true, now, now]);
   }
 
   const jenjangSheet = ss.getSheetByName(PSB_SHEETS.MASTER_JENJANG);
-  if (jenjangSheet.getLastRow() === 1) {
-    jenjangSheet.getRange(2,1,2,4).setValues([
-      ['JEN-SMP', 'SMP', true, new Date()],
-      ['JEN-SMA', 'SMA', true, new Date()]
-    ]);
+  const existingIds = jenjangSheet.getLastRow() >= 2
+    ? jenjangSheet.getRange(2, 1, jenjangSheet.getLastRow() - 1, 1).getDisplayValues().flat()
+    : [];
+  const missing = [
+    ['JEN-SMP', 'SMP', true, now, now],
+    ['JEN-SMA', 'SMA', true, now, now]
+  ].filter(row => existingIds.indexOf(row[0]) < 0);
+  if (missing.length) {
+    jenjangSheet.getRange(jenjangSheet.getLastRow() + 1, 1, missing.length, 5).setValues(missing);
   }
 }
 
@@ -219,17 +275,31 @@ function getOrCreateFolder_(name) {
   const props = PropertiesService.getScriptProperties();
   const savedId = props.getProperty('PSB_DRIVE_ROOT_ID');
   if (savedId) {
-    try { return DriveApp.getFolderById(savedId); } catch (e) {}
+    try {
+      const savedFolder = DriveApp.getFolderById(savedId);
+      if (savedFolder.getName() === name) return savedFolder;
+    } catch (e) {
+      // ID lama tidak valid/akses hilang; lanjutkan pencarian folder bernama sama.
+    }
   }
 
   const folders = DriveApp.getFoldersByName(name);
-  if (folders.hasNext()) return folders.next();
-  return DriveApp.createFolder(name);
+  if (!folders.hasNext()) return DriveApp.createFolder(name);
+  const folder = folders.next();
+  if (folders.hasNext()) {
+    throw new Error('Ditemukan lebih dari satu folder Drive bernama "' + name + '". Tetapkan PSB_DRIVE_ROOT_ID yang benar di Script Properties sebelum setup dijalankan.');
+  }
+  return folder;
 }
 
 function getOrCreateFolderInParent_(parent, name) {
   const folders = parent.getFoldersByName(name);
-  return folders.hasNext() ? folders.next() : parent.createFolder(name);
+  if (!folders.hasNext()) return parent.createFolder(name);
+  const folder = folders.next();
+  if (folders.hasNext()) {
+    throw new Error('Ditemukan lebih dari satu subfolder "' + name + '" di folder "' + parent.getName() + '". Periksa Drive secara manual.');
+  }
+  return folder;
 }
 
 function removeLegacyChatAutomationTriggers_() {
