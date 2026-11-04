@@ -8,7 +8,7 @@ const onlyInAppsScript = ['installStaticBrandIcons', 'renderPublicVideo'];
 const onlyInPwa = ['goPublicVideo', 'refreshPublicConfig', 'renderPublicVideoSection', 'scheduleWarmNavigationData', 'updatePublicVideo'];
 const intentionallyDifferentBodies = [
   'appLogoMarkup', 'applyAppIcon', 'boot', 'configAssetSources', 'initializeAfterLogin', 'renderLogin',
-  'hydrateSplashLogo', 'movePublicVideo', 'openChatForRegistration',
+  'hydrateSplashLogo', 'movePublicVideo',
   'playPublicVideo', 'renderHome', 'renderPublicHome', 'renderWaliHomeFlow', 'server', 'submitLogin', 'warmNavigationData'
 ];
 
