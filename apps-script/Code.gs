@@ -397,18 +397,22 @@ function changePassword(sessionToken, currentPassword, newPassword) {
   if (newPasswordValue.trim().length === 0 || newPasswordValue.length < 6 || newPasswordValue.length > 128) return fail_('Password baru harus terdiri dari 6 sampai 128 karakter.');
   if (newPasswordValue === currentPasswordValue) return fail_('Password baru harus berbeda dari password lama.');
 
+  // Verify and derive hashes before taking the global ScriptLock.
+  // Recheck the stored hash and status under lock before committing the change.
+  const oldPasswordCheck = verifyPasswordForUser_(currentPasswordValue, result.user);
+  if (!oldPasswordCheck.valid) return fail_('Password lama tidak sesuai.');
+  const salt = Utilities.getUuid().replace(/-/g, '').substring(0, 32);
+  const hash = hashPassword_(newPasswordValue, salt);
+
   const lock = LockService.getScriptLock();
   lock.waitLock(20000);
   try {
     const current = findUserById_(result.user.userId, true);
-    if (!current || current.passwordHash !== result.user.passwordHash || current.passwordSalt !== result.user.passwordSalt) {
+    if (!current || String(current.status).toUpperCase() !== 'ACTIVE' ||
+        current.passwordHash !== result.user.passwordHash ||
+        current.passwordSalt !== result.user.passwordSalt) {
       return fail_('Data password telah berubah. Silakan masuk kembali sebelum mengganti password.');
     }
-    const oldPasswordCheck = verifyPasswordForUser_(currentPasswordValue, current);
-    if (!oldPasswordCheck.valid) return fail_('Password lama tidak sesuai.');
-
-    const salt = Utilities.getUuid().replace(/-/g, '').substring(0, 32);
-    const hash = hashPassword_(newPasswordValue, salt);
     const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('USERS');
     sheet.getRange(current.rowNumber, 7, 1, 3).setValues([[hash, salt, current.role]]);
     sheet.getRange(current.rowNumber, 14, 1, 2).setValues([[new Date(), false]]);
@@ -1062,19 +1066,24 @@ function pbkdf2Sha256Hex_(password, salt, iterations) {
 }
 
 function migrateLegacyPasswordAfterLogin_(verifiedUser, password) {
+  // PBKDF2 is deliberately computed outside ScriptLock: its 60,000 HMAC rounds
+  // are CPU intensive and must not block unrelated bridge requests.
+  const beforeLock = findUserById_(verifiedUser.userId, true);
+  if (!beforeLock || String(beforeLock.status).toUpperCase() !== 'ACTIVE' ||
+      beforeLock.passwordHash !== verifiedUser.passwordHash ||
+      beforeLock.passwordSalt !== verifiedUser.passwordSalt) return false;
+
+  const salt = Utilities.getUuid().replace(/-/g, '').substring(0, 32);
+  const hash = hashPassword_(String(password), salt);
   const lock = LockService.getScriptLock();
   lock.waitLock(20000);
   try {
+    // Recheck under lock so a concurrent password or status change is never overwritten.
     const current = findUserById_(verifiedUser.userId, true);
-    if (!current || String(current.status).toUpperCase() !== 'ACTIVE') return false;
+    if (!current || String(current.status).toUpperCase() !== 'ACTIVE' ||
+        current.passwordHash !== verifiedUser.passwordHash ||
+        current.passwordSalt !== verifiedUser.passwordSalt) return false;
 
-    if (current.passwordHash !== verifiedUser.passwordHash ||
-        current.passwordSalt !== verifiedUser.passwordSalt) {
-      return verifyPasswordForUser_(password, current).valid;
-    }
-
-    const salt = Utilities.getUuid().replace(/-/g, '').substring(0, 32);
-    const hash = hashPassword_(String(password), salt);
     const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('USERS');
     if (!sheet) return false;
     sheet.getRange(current.rowNumber, 7, 1, 2).setValues([[hash, salt]]);
