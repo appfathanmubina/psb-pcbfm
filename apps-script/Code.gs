@@ -270,11 +270,11 @@ function login(identifier, password) {
       return finishLoginTiming_(fail_('Login gagal. Periksa No. HP/email dan password.'), 'password_rejected');
     }
 
-    // Migrasi akun lama secara otomatis setelah password lama berhasil diverifikasi.
-    // Tidak mengubah identitas, role, atau data pendaftaran pengguna.
+    // Konversi satu kali untuk akun PBKDF2 lama setelah verifikasi berhasil.
+    // Akun SHA-256 lama tidak dimigrasikan dan tetap memakai format awal PSB.
     if (passwordCheck.needsUpgrade) {
       enterTimingStage_('legacyPasswordMigration');
-      if (!migrateLegacyPasswordAfterLogin_(user, password)) {
+      if (!migratePbkdf2PasswordToLegacySha256AfterLogin_(user, password)) {
         registerLoginFailure_(key);
         return finishLoginTiming_(fail_('Login belum dapat diselesaikan. Silakan coba kembali.'), 'migration_failed');
       }
@@ -1089,15 +1089,14 @@ function normalizePhone_(phone) {
   return p;
 }
 
-// Password hashing: PBKDF2-HMAC-SHA256.
+// Password hashing: kompatibilitas format awal PSB, SHA-256(password + salt).
 const PSB_PASSWORD_HASH_SCHEME_ = 'pbkdf2_sha256';
 const PSB_PASSWORD_HASH_ITERATIONS_ = 60000;
 const PSB_PASSWORD_HASH_MIN_ITERATIONS_ = 10000;
 const PSB_PASSWORD_HASH_MAX_ITERATIONS_ = 250000;
 
 function hashPassword_(password, salt) {
-  const derived = pbkdf2Sha256Hex_(String(password), String(salt), PSB_PASSWORD_HASH_ITERATIONS_);
-  return PSB_PASSWORD_HASH_SCHEME_ + '$' + PSB_PASSWORD_HASH_ITERATIONS_ + '$' + derived;
+  return sha256Hex_(String(password) + String(salt));
 }
 
 function verifyPasswordForUser_(password, user) {
@@ -1116,12 +1115,12 @@ function verifyPasswordForUser_(password, user) {
       return { valid: false, needsUpgrade: false };
     }
     const actual = pbkdf2Sha256Hex_(String(password), salt, iterations);
-    return { valid: constantTimeEqual_(actual, parts[2].toLowerCase()), needsUpgrade: false };
+    return { valid: constantTimeEqual_(actual, parts[2].toLowerCase()), needsUpgrade: true };
   }
 
   const legacy = sha256Hex_(String(password) + salt);
   const valid = constantTimeEqual_(legacy, stored.toLowerCase());
-  return { valid: valid, needsUpgrade: valid };
+  return { valid: valid, needsUpgrade: false };
 }
 
 function pbkdf2Sha256Hex_(password, salt, iterations) {
@@ -1137,9 +1136,9 @@ function pbkdf2Sha256Hex_(password, salt, iterations) {
   return output.map(b => (b < 0 ? b + 256 : b).toString(16).padStart(2, '0')).join('');
 }
 
-function migrateLegacyPasswordAfterLogin_(verifiedUser, password) {
-  // PBKDF2 is deliberately computed outside ScriptLock: its 60,000 HMAC rounds
-  // are CPU intensive and must not block unrelated bridge requests.
+function migratePbkdf2PasswordToLegacySha256AfterLogin_(verifiedUser, password) {
+  // PBKDF2 lama diverifikasi sekali saat login. Setelah berhasil, simpan ulang
+  // ke format SHA-256 awal PSB agar login berikutnya jauh lebih cepat.
   const beforeLock = findUserById_(verifiedUser.userId, true);
   if (!beforeLock || String(beforeLock.status).toUpperCase() !== 'ACTIVE' ||
       beforeLock.passwordHash !== verifiedUser.passwordHash ||
@@ -1165,7 +1164,7 @@ function migrateLegacyPasswordAfterLogin_(verifiedUser, password) {
       CacheService.getScriptCache().remove('PSB_USER_ID_' + sha256Hex_(String(current.userId)).substring(0, 32));
     } catch (e) {}
     try {
-      writeAudit_(current.userId, 'PASSWORD_HASH_MIGRATED', 'AUTH', current.userId, 'LEGACY_SHA256', PSB_PASSWORD_HASH_SCHEME_.toUpperCase(), 'Hash password ditingkatkan otomatis saat login tanpa mengganti password pengguna');
+      writeAudit_(current.userId, 'PASSWORD_HASH_MIGRATED', 'AUTH', current.userId, PSB_PASSWORD_HASH_SCHEME_.toUpperCase(), 'SHA256', 'Hash PBKDF2 dikonversi ke format SHA-256 awal PSB setelah login berhasil');
     } catch (e) {}
     return true;
   } finally {
