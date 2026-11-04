@@ -1,119 +1,121 @@
-# PSB Fathan Mubina — Security Audit
+# PSB Fathan Mubina — Audit Keamanan dan Kesiapan Pra-Produksi
 
 **Repository:** `appfathanmubina/psb-pcbfm`  
-**Branch audited:** `main` (static review of the current repository source)  
-**Repository visibility:** Public  
-**Audit type:** Static source review and GitHub repository hygiene review  
-**Runtime status:** Google Apps Script production runtime was not tested; repository changes have not been copied to or deployed in production.
+**Branch:** `main`  
+**Commit yang diperiksa:** `1a4936881b1f395bff88810fc2c6f222fcef7db1`  
+**Tanggal pemeriksaan:** 4 November 2026  
+**Jenis audit:** pemeriksaan source statis, kontrak API, tes regresi GitHub Actions, dan konfigurasi repository.  
+**Batasan:** project Apps Script dan Spreadsheet produksi tidak diakses untuk pengujian runtime. Source di GitHub belum otomatis berarti source sudah tersalin atau ter-deploy pada Apps Script.
 
-## Scope
+## Ringkasan status
 
-- Apps Script backend: `Code.gs`, `SetupDatabase.gs`, `BridgeServer.gs`, and `Bridge.html`
-- PWA client: `frontend/app.js`, `frontend/api-bridge.js`, `frontend/index.html`, and `frontend/sw.js`
-- Apps Script manifests and GitHub Actions validation workflow
-- Authentication, session handling, role checks, registration ownership, payment, documents, chat, public endpoints, and browser-to-server bridge
+- Validasi GitHub Actions `Validate PSB PWA`: **berhasil** pada commit di atas.
+- Deploy GitHub Pages: **berhasil** pada commit di atas.
+- Repository tetap Public.
+- Branch `main` saat pemeriksaan belum dilindungi branch protection/ruleset.
+- Tidak ada perubahan database, akun, Spreadsheet, atau deployment Apps Script yang dilakukan dalam audit ini.
 
-## Changes applied in the repository
+## Ruang lingkup
 
-1. Removed hardcoded Superadmin hash/salt bootstrap values and dummy test-data seed/clear helpers in an earlier hardening batch.
-2. Replaced the old initial-account setup with a trusted-editor bootstrap stored temporarily in Apps Script Script Properties. Bootstrap properties are deleted after account creation; stale bootstrap properties are also cleared if the account already exists.
-3. Renamed setup/bootstrap functions to private Apps Script function names ending in underscore:
-   - `setupPSBDatabase_`
-   - `configureInitialSuperadmin_`
-   - `createInitialSuperadmin_`
-4. Renamed internal maintenance functions to private names:
-   - The session cleanup helper remains private as `cleanupPSBSessions_`; the redundant public wrapper was removed.
-5. The PSB Chat module and scheduled automation have been retired. `removeLegacyChatAutomationTriggers_()` removes legacy `runChatAutomation` and `runChatAutomation_` triggers without creating replacements.
-6. Bridge backend exceptions return a generic public error while details are written to the execution log.
-7. Existing spreadsheet headers are checked and mismatches cause a safe stop rather than overwriting headers.
-8. Added CI checks to prevent the protected setup/maintenance functions from being reintroduced as browser-callable public functions, and to parse-check Apps Script JavaScript files.
-9. Earlier repository checks found no matches for common Google API keys, GitHub tokens, OAuth client secrets, private-key markers, or Google access-token patterns in the scanned source. A pattern scan is not proof that no secret exists anywhere.
-10. Added Email OTP verification to Wali registration; the old direct registration endpoint is disabled.
+- Backend Apps Script: `Code.gs`, `Index.html`, `SetupDatabase.gs`, `BridgeServer.gs`, `Bridge.html`.
+- PWA: `frontend/index.html`, `app.js`, `api-bridge.js`, `styles.css`, manifest, dan service worker.
+- Tes kontrak bridge, autentikasi, sesi, ownership, upload, password migration, penghapusan chat, cache, dan kesesuaian API UI.
+- Workflow GitHub Actions dan sinkronisasi manual Apps Script.
 
-## Controls observed in reviewed application paths
+## Temuan yang telah dikonfirmasi dari source
 
-- The PWA bridge has an explicit function allowlist.
-- Authenticated data and mutation endpoints reviewed use session validation and role checks.
-- Wali registration, payment, and document paths reviewed include ownership checks against the authenticated user's registration.
-- Public configuration returns a narrow allowlist of browser-needed settings.
-- Public gallery is intentionally unauthenticated and reads images from a configured Drive folder.
-- Session tokens are generated with UUID entropy and only token hashes are stored in the session sheet.
-- Password changes and administrator resets revoke existing sessions.
+### 1. API dan bridge
 
-## Audit log and API data minimization
+- Ada 70 fungsi dalam allowlist bridge; semua nama tersebut memiliki deklarasi fungsi backend.
+- Semua pemanggilan RPC PWA yang diperiksa tercakup oleh allowlist.
+- Bridge menggunakan origin allowlist, challenge/request ID, token transport dengan masa berlaku 180 detik, dan batas 20 pemakaian per token.
+- Token transport dikonsumsi dengan penguncian Script Lock.
+- PWA menggunakan form POST menuju Web App Apps Script; response dikirim kembali ke origin yang diizinkan.
+- Tes kontrak bridge pada workflow lulus.
+- Metadata versi masih tidak seragam: `Code.gs` menyatakan bridge 32.6.0, `Bridge.html` 32.5.0, klien bridge memakai cache key 32.11.0, dan service worker 32.12.0. Tidak ditemukan pemeriksaan kesetaraan versi saat handshake; saat ini ini merupakan ketidakteraturan metadata/cache, bukan bukti penyebab kegagalan koneksi.
 
-- `writeAudit_()` now redacts credential, token, OTP, file-reference, contact, address, and identity-number fields from structured old/new values before they are stored.
-- Historical audit rows are sanitized again when returned by `getAuditLogPageData()`, so previously recorded values are not sent to the browser verbatim.
-- Free-text audit descriptions receive email, Indonesian mobile-number, bearer-token, and JWT masking. Keep descriptions action-oriented; do not include raw request payloads.
-- Audit write failures and login exceptions use generic execution-log markers rather than serializing exception objects that could contain request details.
-- The audit viewer remains restricted to `SUPERADMIN` and `ADMIN_PSB`. These controls reduce accidental disclosure; they do not replace runtime access testing or a review of every endpoint's returned fields.
+### 2. Pendaftaran Wali dan autentikasi
 
-## Remaining risks — not closed by this audit
+- Pendaftaran Wali saat ini tidak menggunakan Email OTP atau verifikasi email.
+- Email dan nomor HP opsional, tetapi minimal satu identitas login wajib diisi.
+- Akun dibuat aktif dengan role WALI dan sesi diterbitkan setelah validasi dan pemeriksaan duplikasi.
+- Password baru menggunakan PBKDF2-HMAC-SHA256 dengan salt per pengguna dan 60.000 iterasi.
+- Login masih mendukung hash SHA-256 lama; migrasi dilakukan setelah autentikasi lama berhasil dan hanya memperbarui hash/salt.
+- Perubahan password dan reset admin mencabut sesi sesuai kebijakan.
+- Login lockout menggunakan CacheService; mekanisme cache adalah best-effort dan bukan rate limiter yang kuat terhadap serangan terdistribusi.
 
-### High priority
+### 3. Validasi sesi dan risiko performa
 
-- **Password hashing / work factor:** new and migrated passwords now use PBKDF2-HMAC-SHA256 with a per-user random salt and 60,000 iterations. Existing one-round SHA-256 accounts are verified using the legacy method only at successful login, then upgraded in place; the password, user ID, role, registration records, and other user data are preserved. This is a compatibility-preserving improvement, but 60,000 iterations is a transitional work factor and must be benchmarked on a test Apps Script deployment before production rollout. Increase the work factor only after measuring login latency and Apps Script execution limits. Argon2id/bcrypt/scrypt are not natively available through the current Apps Script Utilities interface.
-- **Email delivery readiness:** Wali registration uses Email OTP through `MailApp.sendEmail()`. Delivery depends on the Apps Script execution account's remaining daily quota, sender reputation, recipient filtering, and Google Workspace/Gmail policy. Validate delivery and quota behavior in a test deployment; MailApp accepting a message does not guarantee inbox delivery.
+- `getSessionUser_()` membaca seluruh baris sheet `SESSIONS` untuk mencari hash token.
+- Validasi sesi kemudian memanggil `findUserById_()` dengan bypass cache, yang membaca seluruh baris `USERS`.
+- Jalur ini dapat memperlambat setiap RPC terautentikasi seiring bertambahnya jumlah sesi/pengguna.
+- Hash PBKDF2 60.000 iterasi perlu diukur pada runtime Apps Script yang sebenarnya. Belum ada benchmark produksi yang membuktikan durasi atau menyimpulkan bahwa hash merupakan penyebab timeout.
+- Beberapa operasi tulis memakai Script Lock global dengan waktu tunggu 5–15 detik. Pendaftaran Wali menghitung hash password ketika lock masih dipegang. Beban bersamaan dapat menambah antrean.
+- Jangan menurunkan iterasi hash hanya untuk mengejar kecepatan tanpa pengujian keamanan, kompatibilitas akun lama, dan benchmark.
 
-### Medium priority
+### 4. Kepemilikan, dokumen, dan pembayaran
 
-- **Public gallery Drive folder:** `getPublicGallery` now fails closed unless trusted administrators explicitly configure `PSB_PUBLIC_GALLERY_FILE_IDS`. Only up to 15 allowlisted JPEG/PNG/WEBP/GIF files that remain direct children of `PSB_PUBLIC_GALLERY_FOLDER_ID` (or the legacy folder fallback) are returned. Original Drive filenames are not exposed. Keep student documents and private family photos outside the gallery, and manually verify each approved image's sharing/access settings. The allowlist is a publication control, not a substitute for checking image consent.
-- **Upload resource limits:** the current repository source checks encoded Base64 length before decoding, enforces server-side byte limits, and verifies PDF/JPEG/PNG/WEBP signatures for document and payment uploads. Document uploads default to 10 MB and are capped at 20 MB. These controls still require Apps Script runtime testing with valid and deliberately mismatched files.
-- **Abuse throttling:** login lockout uses CacheService, which is best-effort and can be affected by concurrent requests or cache eviction. Add stronger server-side throttling for login and public registration if the service receives abusive traffic.
-- **Bootstrap password entry:** the trusted-editor bootstrap uses a standard Apps Script prompt; the password is not masked. Run it only in a private environment with the screen not visible to others.
+- Tes regresi memeriksa pembatasan akses Wali berdasarkan pemilik pendaftaran dan pembatasan role untuk dokumen serta pembayaran.
+- Upload dokumen memeriksa ukuran encoded sebelum decode, ukuran byte setelah decode, MIME, dan signature PDF/JPEG/PNG/WEBP.
+- Batas dokumen maksimal 20 MB (default 10 MB); bukti pembayaran maksimal 5 MB.
+- Upload file tetap memerlukan uji runtime dengan file benar, file palsu/mismatch, ukuran batas, dan kegagalan penyimpanan.
+- Transaksi Google Sheets/Drive bukan transaksi database atomik lintas layanan. Uji skenario kegagalan parsial diperlukan, misalnya file Drive berhasil dibuat tetapi pencatatan sheet gagal.
+- Pemeriksaan status dan penguncian pada verifikasi dokumen/pembayaran terlihat pada source dan tes statis; uji beban serentak masih diperlukan.
 
-## Retirement of PSB Chat
+### 5. Chat dan SetupDatabase
 
-- The Wali ↔ Admin PSB chat feature, chat APIs, chat UI, polling, retention cleanup, and scheduled automation have been removed from the current source.
-- Existing `CHAT_THREADS` and `CHAT_MESSAGES` spreadsheet tabs and their historical contents are intentionally left untouched. The revised setup no longer creates or modifies those tabs.
-- `removeLegacyChatAutomationTriggers_()` removes old triggers whose handler is `runChatAutomation` or `runChatAutomation_`; it never creates a new trigger. The same cleanup runs during `setupPSBDatabase_()`.
-- A repository-wide source scan of the current application files found no OneSignal SDK, endpoint, or configuration reference. The chat implementation present in this branch used the PSB spreadsheet and Apps Script notifications, not an active OneSignal integration.
+- Modul chat, UI, endpoint, polling, dan otomasi chat tidak ditemukan pada file runtime utama yang diperiksa.
+- `SetupDatabase.gs` tidak lagi mendeklarasikan sheet `WALI_OTP`.
+- Sheet `WALI_OTP` atau sheet chat yang mungkin sudah ada di Spreadsheet lama tidak dihapus oleh perubahan source ini.
+- `setupPSBDatabase_()` tidak lagi memanggil pembersihan trigger chat.
+- Fungsi publik `cleanupLegacyChatAutomationTriggers()` memanggil helper internal yang hanya menghapus trigger bernama `runChatAutomation` atau `runChatAutomation_` serta properti `PSB_CHAT_AUTOMATION_TRIGGER`.
+- Jalankan wrapper cleanup secara manual hanya jika diperlukan. Jangan menjalankan setup database untuk membersihkan trigger.
 
-## Email OTP registration
+### 6. PWA, cache, dan publikasi galeri
 
-- `startWaliRegistration()` sends a six-digit OTP using Google Apps Script `MailApp.sendEmail()`. `verifyWaliRegistration()` creates the WALI account and session only after the OTP is correct. The old `registerWali()` endpoint fails closed.
-- Email is mandatory and is the sole verification channel. Phone number is optional contact data and is not used for OTP or resend throttling.
-- OTP expires after 5 minutes, permits at most 5 attempts, has a 60-second resend cooldown, and is limited to 5 sends per email address in a rolling 24-hour window. Old OTP records are removed after 24 hours.
-- OTP values are never stored or returned. Only SHA-256(OTP + per-request random salt) is stored and checked with constant-time comparison. Pending records store PBKDF2 password hashes, never plaintext passwords.
-- Duplicate email checks occur only after OTP entry to avoid exposing account existence. Phone duplicate checking occurs only when a phone number was supplied.
-- MailApp quota is checked before sending. Quota depends on Google account / Apps Script execution context; MailApp acceptance does not guarantee inbox delivery. Recipients should check spam/promotions.
-- Optional Script Properties: `PSB_OTP_SENDER_NAME` and `PSB_OTP_REPLY_TO`. No external provider token is required.
-- The existing `WALI_OTP` sheet schema remains unchanged for compatibility; the legacy `waMessageId` metadata column is retained but left blank. Run updated database setup only in a test project / duplicate spreadsheet first.
+- Frontend PWA diterbitkan melalui GitHub Pages; Apps Script tetap backend produksi.
+- Service worker memakai strategi network-first untuk aset same-origin dan cache sebagai fallback offline.
+- Galeri frontend menggunakan aset statis GitHub; tes memverifikasi backend galeri Google Drive telah dihapus dan dokumen pribadi tetap disimpan melalui folder Drive privat.
+- Pastikan hanya foto yang memang disetujui untuk publik berada di `frontend/gallery/`. Repository bersifat Public, sehingga semua aset yang dikomit dapat diunduh publik.
 
-## Upload validation details
+## Temuan yang perlu ditindaklanjuti sebelum final produksi
 
-- `decodeAndValidateUpload_()` rejects empty/malformed Base64 and checks the encoded length against the maximum byte size before calling `Utilities.base64Decode()`.
-- The decoded byte count is checked again, and the file signature must match the declared MIME type for PDF, JPEG, PNG, or WEBP.
-- Payment proof uploads are limited to 5 MB; document uploads use the document-type limit (or 10 MB when unset) with a hard ceiling of 20 MB.
-- The existing per-document MIME allowlist and ownership/role checks remain in place. This is defense-in-depth, not antivirus scanning; uploaded files should still be treated as untrusted content.
-- Verify actual browser payloads and Apps Script behavior in a test deployment before production sync.
+<details>
+<summary>Prioritas tinggi</summary>
 
-## Password migration details
+1. **Benchmark autentikasi dan sesi pada Apps Script uji.** Ukur login PBKDF2, validasi sesi dengan jumlah akun/sesi realistis, dan beberapa RPC paralel. Catat durasi tiap fungsi dari Executions. Optimasi harus mempertahankan hash dan validasi kepemilikan.
+2. **Uji konkurensi dan kegagalan parsial.** Uji pendaftaran identitas sama secara bersamaan, verifikasi pembayaran ganda, verifikasi dokumen, dan kegagalan antara Drive write dan Sheet write.
+3. **Uji runtime end-to-end pada salinan project dan Spreadsheet.** Tes login/logout berulang, pendaftaran Wali langsung, semua role, pendaftaran, upload, verifikasi, tagihan, pembayaran, seleksi, pengumuman, dan daftar ulang.
+4. **Konfirmasi kesamaan source Apps Script.** Bandingkan kelima file runtime Apps Script di project produksi dengan commit kandidat GitHub; jangan menganggap merge GitHub otomatis menyinkronkan Apps Script.
 
-- Stored new hash format: `pbkdf2_sha256$60000$<64-hex-character-derived-key>`; the existing `passwordSalt` column stores the per-user salt.
-- The login path accepts both legacy SHA-256 and the versioned PBKDF2 format. Only successful legacy authentication triggers migration.
-- Password change, administrator reset, and migration serialize through the Apps Script script lock; password change/reset re-read the user row without cache before updating the hash.
-- Migration uses a script lock, reloads the user row bypassing cache, and writes only the password hash and salt columns. If a concurrent password reset/change has occurred, the migration does not overwrite it.
-- New registrations, manual account creation, administrator password resets, password changes, and Superadmin bootstrap all use the new `hashPassword_` implementation.
-- A successful migration is recorded in the audit log without recording the password or derived hash.
+</details>
 
-## Operational requirements before production sync
+<details>
+<summary>Prioritas menengah</summary>
 
-1. Do not assume GitHub changes automatically update the deployed Apps Script project. Copy the reviewed Apps Script source manually and deploy it only after a controlled backup and test.
-2. After copying the updated `SetupDatabase.gs` to Apps Script, run `removeLegacyChatAutomationTriggers_()` once from the trusted Apps Script editor. It deletes legacy chat automation triggers and does not install a replacement. The normal setup function also invokes this cleanup.
-3. Verify login, Wali registration, password change/reset, session expiry/logout, Wali ownership boundaries, payments, documents, notifications, and all active roles in a test deployment.
-4. Do not copy any source into the production Apps Script project until the source comparison and backup are complete.
+1. Aktifkan branch protection/ruleset untuk `main`: wajib PR, wajib status check `structure`, larang force-push dan penghapusan branch.
+2. Selaraskan dokumentasi dengan pendaftaran langsung tanpa OTP dan prosedur cleanup trigger yang sekarang terpisah dari setup database.
+3. Rapikan metadata versi bridge bila diperlukan; jangan menyamakan nomor versi tanpa memastikan arti setiap konstanta dan strategi cache.
+4. Uji kuota Apps Script, ukuran upload, dan pengalaman PWA pada Android serta desktop; uji iOS jika digunakan.
+5. Pastikan file galeri yang dikomit memang aman untuk publik dan mendapat persetujuan publikasi.
 
-## Audit conclusion
+</details>
 
-The repository has received meaningful static hardening and the previously exposed setup/maintenance entry points have been made private to the Apps Script HTML-service client. The application is **not certified secure** and this is **not a penetration test**. The remaining high-priority issues above should be resolved before describing the authentication system as strongly secured. The repository can remain Public provided the listed public assets/endpoints contain only information intended for public access and no secrets are committed.
+## Batasan audit
 
+- Tes GitHub Actions adalah tes regresi source statis dan pemeriksaan kontrak. Tes tersebut tidak menjalankan fungsi Apps Script terhadap Spreadsheet/Drive sebenarnya.
+- Tidak dilakukan load test, penetration test, audit akun Google, pemeriksaan seluruh isi data produksi, atau pemulihan backup.
+- Audit ini tidak menyatakan aplikasi telah tersertifikasi aman.
+- Status deploy GitHub Pages tidak membuktikan backend Apps Script sudah diperbarui.
 
-## OTP, pemulihan akun, dan batas input password
+## Gerbang final produksi
 
-- OTP pendaftaran Wali dikirim melalui Email, berlaku 5 menit, maksimum 5 percobaan per verification ID, cooldown 60 detik, dan batas pengiriman harian per email.
-- Kode OTP disimpan sebagai hash dengan salt dan diverifikasi menggunakan perbandingan constant-time; OTP tidak dikirim dalam respons API.
-- Endpoint resend hanya menerima verification ID berstatus PENDING atau EXPIRED dan menerbitkan kode baru pada record verifikasi yang sama.
-- Input password login dibatasi maksimal 1.024 karakter sebelum verifikasi hash. Password baru pendaftaran, perubahan, dan reset admin dibatasi 6–128 karakter.
-- Perubahan password memerlukan password lama yang valid dan mencabut sesi lain. Reset oleh SUPERADMIN mencabut seluruh sesi target serta mewajibkan penggantian password saat login berikutnya.
-- Pengujian adalah pemeriksaan regresi statis; bukan uji runtime Apps Script, load test, atau penetration test.
+1. Semua perubahan source disetujui dan digabung ke `main`; workflow validasi dan Pages harus sukses.
+2. Backup Spreadsheet, project Apps Script, dan konfigurasi Script Properties dilakukan dengan prosedur aman.
+3. Salin source Apps Script dari commit yang disetujui ke project uji dan perbarui deployment uji.
+4. Selesaikan checklist runtime integrasi; catat hasil, durasi, dan bukti.
+5. Bandingkan source project Apps Script produksi dengan source GitHub yang disetujui.
+6. Pemilik aplikasi menyetujui sinkronisasi manual dan pembaruan deployment Web App yang sudah ada.
+7. Setelah rilis, lakukan smoke test login, logout/login ulang, pendaftaran Wali, dan akses data berdasarkan role.
+
+**Kesimpulan:** repository telah melewati pemeriksaan source dan workflow otomatis pada commit yang diperiksa. Aplikasi **belum dapat dinyatakan final produksi** sampai risiko performa, uji transaksi/konkurensi, uji runtime pada lingkungan uji, dan kesamaan source Apps Script produksi dituntaskan.
