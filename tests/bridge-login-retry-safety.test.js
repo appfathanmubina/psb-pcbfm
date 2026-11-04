@@ -31,7 +31,11 @@ assert.match(retry, /if \(retry && safeToRetry\)/,
   'Transient retries must be limited to one attempt');
 assert.match(retry, /callWithToken\(fn, args, false\)/,
   'The retry must not loop indefinitely');
-assert.match(retry, /pwaBridgeCall/,
-  'Backend dispatch remains outside client retry classification');
+const requestCall = retry.indexOf('submitBridgeRequest(token, fn, args)');
+const retryCondition = retry.indexOf('if (retry && safeToRetry)');
+assert.ok(requestCall >= 0 && retryCondition > requestCall,
+  'Retry classification must only run after a failed transport request');
+assert.match(retry, /Backend is never invoked when token consumption fails/,
+  'Only failures known to occur before backend dispatch may be retried');
 
 console.log('Bridge lock contention retry safety: OK');
