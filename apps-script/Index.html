@@ -1978,7 +1978,7 @@ window.addEventListener('load',boot);
     var loading=document.getElementById('loading');
     if(loading)loading.classList.add('hidden');
   }
-  window.addEventListener('error',function(event){showStartupFailure(event.message||'script error');});
+  window.addEventListener('error',function(event){if(event.target===window)showStartupFailure(event.message||'script error');});
   window.addEventListener('unhandledrejection',function(event){showStartupFailure(event.reason||'unhandled rejection');});
   document.getElementById('bootFailureReload').addEventListener('click',function(){window.location.reload();});
   window.setTimeout(function(){showStartupFailure('startup timeout');},25000);
