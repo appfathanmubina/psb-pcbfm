@@ -91,7 +91,7 @@ Pemeriksaan status saat audit terakhir menunjukkan branch `main` belum protected
 
 ## Pembersihan trigger chat lama
 
-Setelah source `SetupDatabase.gs` terbaru disalin ke Apps Script, jalankan `cleanupLegacyChatAutomationTriggers()` satu kali dari editor Apps Script bila ingin menghapus trigger lama `runChatAutomation` atau `runChatAutomation_`. Fungsi ini hanya menghapus trigger dengan dua nama handler tersebut dan properti `PSB_CHAT_AUTOMATION_TRIGGER`. Fungsi `setupPSBDatabase_()` tidak lagi menjalankan pembersihan ini sebagai efek samping. Jangan jalankan setup database hanya untuk membersihkan trigger; sheet dan data lama tidak perlu dihapus.
+Setelah source `SetupDatabase.gs` terbaru disalin ke Apps Script, jalankan `cleanupLegacyChatAutomationTriggers()` satu kali dari editor Apps Script bila ingin menghapus trigger lama `runChatAutomation` atau `runChatAutomation_`. Fungsi ini meminta konfirmasi melalui UI Spreadsheet dan dibatasi untuk konteks editor Spreadsheet (bukan pemanggilan dari Web App/browser); fungsi hanya menghapus trigger dengan dua nama handler tersebut dan properti `PSB_CHAT_AUTOMATION_TRIGGER`. Fungsi `setupPSBDatabase_()` tidak lagi menjalankan pembersihan ini sebagai efek samping. Jangan jalankan setup database hanya untuk membersihkan trigger; sheet dan data lama tidak perlu dihapus.
 
 ## Validation
 
