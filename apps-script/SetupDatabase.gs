@@ -368,3 +368,11 @@ function createInitialSuperadmin_() {
 
   return { success: true, created: true, userId: userId, username: username };
 }
+
+/**
+ * Entry point publik untuk membersihkan trigger otomatisasi chat lama.
+ * Aman dijalankan tanpa menjalankan setup database.
+ */
+function cleanupLegacyChatAutomationTriggers() {
+  return removeLegacyChatAutomationTriggers_();
+}
