@@ -31,7 +31,6 @@ const PSB_PWA_BRIDGE_ALLOWED_FUNCTIONS = Object.freeze([
   'getSelectionPageData','createSelectionSchedule','updateSelectionScheduleStatus','addSelectionParticipant','addSelectionParticipantsBulk','updateSelectionParticipantStatus','saveSelectionScore','saveSelectionResult',
   'getAnnouncementPageData','publishAnnouncement',
   'getNotifications','markNotificationRead','markAllNotificationsRead',
-  'getChatPageData','getChatThread','openChatThread','sendChatMessage','markChatThreadRead','closeChatThread','cleanupChatRetention','runChatAutomationNow',
   'getCommunicationCenterData','sendCommunication',
   'getReregistrationPageData','openReregistration','finalizeReregistration',
   'getDashboardPageData','getProductionReadiness','getMonitoringPageData','getIncidentPageData','saveIncident','closeIncident',
@@ -98,8 +97,6 @@ const PSB_PRODUCTION_ADMIN_ROLES = ['SUPERADMIN','ADMIN_PSB'];
 const PSB_PRODUCTION_VERSION = '30.14';
 const PSB_COMMUNICATION_ROLES = ['SUPERADMIN','ADMIN_PSB'];
 const PSB_COMMUNICATION_RECIPIENT_ROLES = ['WALI','SUPERADMIN','ADMIN_PSB','VERIFIKATOR','SELEKSI','KEUANGAN'];
-const PSB_CHAT_ACCESS_ROLES = ['WALI','SUPERADMIN','ADMIN_PSB'];
-const PSB_CHAT_ADMIN_ROLES = ['SUPERADMIN','ADMIN_PSB'];
 
 function doGet(e) {
   const bridgeMode = e && e.parameter && String(e.parameter.bridge || '') === '1';
@@ -2352,160 +2349,6 @@ function markAllNotificationsRead(sessionToken) {
 }
 
 
-function getChatPageData(sessionToken) {
-  const actor = requireRole_(sessionToken, PSB_CHAT_ACCESS_ROLES);
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
-  const threadsSheet = ss.getSheetByName(PSB_SHEETS.CHAT_THREADS);
-  const registrationsSheet = ss.getSheetByName(PSB_SHEETS.REGISTRATIONS);
-  const candidatesSheet = ss.getSheetByName(PSB_SHEETS.CANDIDATES);
-  const usersSheet = ss.getSheetByName(PSB_SHEETS.USERS);
-  const years = sheetMapById_(ss.getSheetByName(PSB_SHEETS.MASTER_TAHUN_AJARAN), 'tahunAjaranId');
-  const waves = sheetMapById_(ss.getSheetByName(PSB_SHEETS.MASTER_GELOMBANG), 'gelombangId');
-  const levels = sheetMapById_(ss.getSheetByName(PSB_SHEETS.MASTER_JENJANG), 'jenjangId');
-  const candidates = sheetMapById_(candidatesSheet, 'candidateId');
-  const users = sheetMapById_(usersSheet, 'userId');
-  const registrations = registrationsSheet && registrationsSheet.getLastRow() >= 2 ? sheetRows_(registrationsSheet) : [];
-  const allThreads = threadsSheet && threadsSheet.getLastRow() >= 2 ? sheetRows_(threadsSheet) : [];
-  const decorateThread = t => {
-    const reg = registrations.find(r => String(r.registrationId) === String(t.registrationId));
-    const candidate = reg ? candidates[String(reg.candidateId)] : null;
-    const wali = reg ? users[String(reg.userId)] : null;
-    const level = reg ? levels[String(reg.jenjangId)] : null;
-    const year = reg ? years[String(reg.tahunAjaranId)] : null;
-    const wave = reg ? waves[String(reg.gelombangId)] : null;
-    return Object.assign({}, t, {candidateName:candidate?.fullName||candidate?.name||'-',waliName:wali?.name||'-',registrationNumber:reg?.registrationNumber||'-',jenjangName:level?.name||reg?.jenjangId||'-',tahunAjaranName:year?.name||reg?.tahunAjaranId||'-',gelombangName:wave?.name||reg?.gelombangId||'-',lastMessageAt:t.lastMessageAt||t.updatedAt||t.createdAt||''});
-  };
-  let visibleThreads = allThreads.map(decorateThread);
-  const isWali = hasRoleDirect_(actor, ['WALI']);
-  if (isWali) visibleThreads = visibleThreads.filter(t => String(t.waliUserId) === String(actor.userId));
-  visibleThreads.sort((a,b)=>new Date(b.lastMessageAt||b.updatedAt||b.createdAt||0)-new Date(a.lastMessageAt||a.updatedAt||a.createdAt||0));
-  const openThreadByRegistration = new Map();
-  visibleThreads.forEach(t=>{if(String(t.status||'').toUpperCase()==='OPEN')openThreadByRegistration.set(String(t.registrationId),t);});
-  const pageThreads = visibleThreads.slice(0,200);
-  let ownRegistrations=[];
-  if(isWali){ownRegistrations=registrations.filter(r=>String(r.userId)===String(actor.userId)).sort((a,b)=>new Date(b.updatedAt||b.createdAt||0)-new Date(a.updatedAt||a.createdAt||0)).map(r=>{const candidate=candidates[String(r.candidateId)],level=levels[String(r.jenjangId)],thread=openThreadByRegistration.get(String(r.registrationId));return {registrationId:r.registrationId,registrationNumber:r.registrationNumber||'-',candidateName:candidate?.fullName||candidate?.name||'-',jenjangName:level?.name||r.jenjangId||'-',status:r.status||'',threadId:thread?.threadId||'',hasOpenThread:!!thread};});}
-  const unread={};const pageThreadIds=new Set(pageThreads.map(t=>String(t.threadId)));pageThreads.forEach(t=>unread[t.threadId]=0);
-  const messagesSheet=ss.getSheetByName(PSB_SHEETS.CHAT_MESSAGES);
-  if(pageThreadIds.size&&messagesSheet&&messagesSheet.getLastRow()>=2){
-    const lastRow=messagesSheet.getLastRow(),headers=messagesSheet.getRange(1,1,1,messagesSheet.getLastColumn()).getValues()[0].map(String),threadIdx=headers.indexOf('threadId'),senderIdx=headers.indexOf('senderUserId'),readIdx=headers.indexOf('isRead');
-    if(threadIdx>=0&&senderIdx>=0&&readIdx>=0){
-      const rowCount=lastRow-1,threadValues=messagesSheet.getRange(2,threadIdx+1,rowCount,1).getValues(),senderValues=messagesSheet.getRange(2,senderIdx+1,rowCount,1).getValues(),readValues=messagesSheet.getRange(2,readIdx+1,rowCount,1).getValues();
-      for(let i=0;i<rowCount;i++){const tid=String(threadValues[i][0]||'');if(!pageThreadIds.has(tid))continue;if(String(readValues[i][0]).toUpperCase()!=='TRUE'&&String(senderValues[i][0])!==String(actor.userId))unread[tid]=Number(unread[tid]||0)+1;}
-    }
-  }
-  const pageThreadsWithUnread=pageThreads.map(t=>Object.assign({},t,{unreadCount:unread[t.threadId]||0}));
-  return {success:true,actorRole:actor.role,threads:pageThreadsWithUnread,registrations:ownRegistrations,retentionDays:Number(getConfig_('CHAT_RETENTION_DAYS'))||180,pollSeconds:Math.max(5,Number(getConfig_('CHAT_POLL_SECONDS'))||10),maxMessageLength:Number(getConfig_('CHAT_MESSAGE_MAX_LENGTH'))||1000,attachmentMaxSizeMb:Math.max(1,Number(getConfig_('CHAT_ATTACHMENT_MAX_SIZE_MB'))||5),canCleanup:hasRoleDirect_(actor,['SUPERADMIN']),canAutomate:hasRoleDirect_(actor,['SUPERADMIN']),automationEnabled:String(getConfig_('CHAT_AUTOMATION_ENABLED')||'TRUE').toUpperCase()==='TRUE',autoCloseDays:Math.max(1,Number(getConfig_('CHAT_AUTO_CLOSE_DAYS'))||7),adminReminderMinutes:Math.max(5,Number(getConfig_('CHAT_ADMIN_REMINDER_MINUTES'))||30)};
-}
-function getChatThread(sessionToken, threadId) {
-  const actor=requireRole_(sessionToken,PSB_CHAT_ACCESS_ROLES),id=String(threadId||'').trim();if(!id)return fail_('Percakapan tidak ditemukan.');
-  const ss=SpreadsheetApp.getActiveSpreadsheet(),threadFound=findRowById_(ss.getSheetByName(PSB_SHEETS.CHAT_THREADS),'threadId',id);if(!threadFound)return fail_('Percakapan tidak ditemukan.');
-  const thread=threadFound.object;if(!chatCanAccessThread_(actor,thread))return fail_('Anda tidak memiliki akses ke percakapan ini.');
-  const cache=CacheService.getScriptCache(),cacheKey='PSB_CHAT_THREAD_V1_'+sha256Hex_(id).substring(0,32);
-  try{const cached=cache.get(cacheKey);if(cached){const parsed=JSON.parse(cached);if(parsed&&parsed.success)return parsed;}}catch(e){}
-  const messagesSheet=ss.getSheetByName(PSB_SHEETS.CHAT_MESSAGES),messages=[];
-  if(messagesSheet&&messagesSheet.getLastRow()>=2){
-    // Batch-read the message table once. The previous implementation first found
-    // matching rows, then called getRange() again for every message; with an older
-    // conversation this created dozens/hundreds of Spreadsheet service calls.
-    const lastCol=messagesSheet.getLastColumn(),headers=messagesSheet.getRange(1,1,1,lastCol).getValues()[0].map(String),threadIdx=headers.indexOf('threadId');
-    if(threadIdx>=0){
-      const values=messagesSheet.getRange(2,1,messagesSheet.getLastRow()-1,lastCol).getValues(),matched=[];
-      for(let i=0;i<values.length;i++)if(String(values[i][threadIdx])===id)matched.push(values[i]);
-      const selected=matched.slice(Math.max(0,matched.length-200));
-      selected.forEach((row,i)=>{const obj=rowObject_(headers,row,0);obj.message=/^'[=+\-@]/.test(String(obj.message||''))?String(obj.message).substring(1):String(obj.message||'');messages.push(obj);});
-    }
-  }
-  messages.sort((a,b)=>new Date(a.createdAt||0)-new Date(b.createdAt||0));
-  const regs=sheetMapById_(ss.getSheetByName(PSB_SHEETS.REGISTRATIONS),'registrationId'),candidates=sheetMapById_(ss.getSheetByName(PSB_SHEETS.CANDIDATES),'candidateId'),users=sheetMapById_(ss.getSheetByName(PSB_SHEETS.USERS),'userId'),reg=regs[String(thread.registrationId)],candidate=reg?candidates[String(reg.candidateId)]:null,wali=users[String(thread.waliUserId)];
-  const enrichedThread=Object.assign({},thread,{candidateName:candidate?.fullName||candidate?.name||'-',waliName:wali?.name||'-',registrationNumber:reg?.registrationNumber||'-'});
-  const result={success:true,thread:enrichedThread,messages};
-  try{cache.put(cacheKey,JSON.stringify(result),30);}catch(e){}
-  return result;
-}
-function openChatThread(sessionToken, registrationId) {
-  const actor=requireRole_(sessionToken,PSB_CHAT_ACCESS_ROLES),id=String(registrationId||'').trim();if(!id)return fail_('Pendaftaran tidak ditemukan.');
-  const found=findRegistration_(id);if(!found)return fail_('Pendaftaran tidak ditemukan.');if(!canAccessRegistration_(actor,found.registration))return fail_('Anda tidak memiliki akses ke pendaftaran ini.');
-  if(!hasRoleDirect_(actor,['WALI'])&&!hasRoleDirect_(actor,PSB_CHAT_ADMIN_ROLES))return fail_('Anda tidak memiliki akses chat.');
-  return withScriptLock_(10000,()=>{const sheet=SpreadsheetApp.getActiveSpreadsheet().getSheetByName(PSB_SHEETS.CHAT_THREADS);if(!sheet)return fail_('Sheet CHAT_THREADS belum tersedia.');const existing=sheetRows_(sheet).filter(t=>String(t.registrationId)===id&&String(t.status).toUpperCase()==='OPEN').sort((a,b)=>new Date(b.updatedAt||b.createdAt||0)-new Date(a.updatedAt||a.createdAt||0))[0];if(existing)return getChatThread(sessionToken,String(existing.threadId));const candidateName=String(found.candidate?.fullName||found.candidate?.name||'Calon santri').trim(),now=new Date(),thread={threadId:generateId_('CHT'),registrationId:id,waliUserId:String(found.registration.userId||''),adminUserId:'',subject:'Komunikasi PSB - '+candidateName,status:'OPEN',lastMessageAt:now,lastMessageBy:'',createdAt:now,updatedAt:now,closedAt:''},headers=sheet.getRange(1,1,1,sheet.getLastColumn()).getValues()[0].map(String);sheet.appendRow(headers.map(h=>thread[h]===undefined?'':thread[h]));writeAudit_(actor.userId,'CHAT_THREAD_CREATED','CHAT',thread.threadId,'',JSON.stringify({registrationId:id,waliUserId:thread.waliUserId}),'Percakapan chat dibuat.');return getChatThread(sessionToken,thread.threadId);});
-}
-function sendChatMessage(sessionToken,threadId,rawMessage,attachmentPayload){
-  const actor=requireRole_(sessionToken,PSB_CHAT_ACCESS_ROLES);assertOperationalMutation_(actor);
-  const id=String(threadId||'').trim(),message=clean_(rawMessage),maxLength=Number(getConfig_('CHAT_MESSAGE_MAX_LENGTH'))||1000;
-  attachmentPayload=attachmentPayload||{};
-  if(!id)return fail_('Percakapan tidak ditemukan.');
-  if(message.length>maxLength)return fail_('Pesan maksimal '+maxLength+' karakter.');
-  const hasAttachment=!!String(attachmentPayload.base64||'').trim();
-  if(hasAttachment)return fail_('Fitur lampiran chat sudah dinonaktifkan. Silakan kirim pesan teks.');
-  if(!message)return fail_('Pesan wajib diisi.');
-  return withScriptLock_(10000,()=>{
-    const ss=SpreadsheetApp.getActiveSpreadsheet(),threadSheet=ss.getSheetByName(PSB_SHEETS.CHAT_THREADS),messageSheet=ss.getSheetByName(PSB_SHEETS.CHAT_MESSAGES);
-    if(!threadSheet||!messageSheet)return fail_('Database chat belum tersedia.');
-    const found=findRowById_(threadSheet,'threadId',id);if(!found)return fail_('Percakapan tidak ditemukan.');
-    const thread=found.object;if(!chatCanAccessThread_(actor,thread))return fail_('Anda tidak memiliki akses ke percakapan ini.');
-    if(String(thread.status).toUpperCase()!=='OPEN')return fail_('Percakapan sudah ditutup.');
-    const now=new Date(),senderRole=hasRoleDirect_(actor,['WALI'])?'WALI':'ADMIN_PSB';
-    let attachmentFile=null,attachmentName='',attachmentMimeType='',attachmentSize=0;
-    if(hasAttachment){
-      attachmentName=sanitizeFileName_(attachmentPayload.fileName||'lampiran');
-      attachmentMimeType=String(attachmentPayload.mimeType||'').trim().toLowerCase();
-      const allowed=String(getConfig_('CHAT_ATTACHMENT_ALLOWED_MIME_TYPES')||'image/jpeg,image/png,image/webp,application/pdf').split(',').map(x=>x.trim().toLowerCase()).filter(Boolean);
-      if(!attachmentMimeType||!allowed.includes(attachmentMimeType))return fail_('Tipe lampiran tidak diizinkan. Gunakan JPG, PNG, WEBP, atau PDF.');
-      const base64=String(attachmentPayload.base64||'').trim();
-      const configuredMaxMb=Math.max(1,Number(getConfig_('CHAT_ATTACHMENT_MAX_SIZE_MB'))||5);
-      const maxMb=Math.min(configuredMaxMb,10);
-      const upload=decodeAndValidateUpload_(base64,attachmentMimeType,maxMb*1024*1024);
-      if(!upload.success)return fail_(upload.message==='Ukuran file melebihi batas yang diizinkan.'?'Ukuran lampiran melebihi batas '+maxMb+' MB.':upload.message);
-      const bytes=upload.bytes;
-      attachmentSize=upload.size;
-      const clientSize=Number(attachmentPayload.fileSize||0);if(clientSize>0&&Math.abs(clientSize-attachmentSize)>1024)return fail_('Ukuran lampiran tidak sesuai. Silakan pilih file kembali.');
-      const reg=findRegistration_(String(thread.registrationId));if(!reg)return fail_('Pendaftaran terkait percakapan tidak ditemukan.');
-      const folder=getChatAttachmentFolder_(reg.registration,thread);
-      const blob=Utilities.newBlob(bytes,attachmentMimeType,attachmentName);attachmentFile=folder.createFile(blob);
-      const detected=String(attachmentFile.getMimeType()||'').toLowerCase();
-      if(detected&&detected!==attachmentMimeType){try{attachmentFile.setTrashed(true);}catch(e){}return fail_('Tipe file aktual tidak sesuai dengan tipe lampiran.');}
-    }
-    const headers=messageSheet.getRange(1,1,1,messageSheet.getLastColumn()).getValues()[0].map(String);
-    const msg={messageId:generateId_('MSG'),threadId:id,senderUserId:String(actor.userId),senderRole,message:auditCell_(message),attachmentFileId:attachmentFile?attachmentFile.getId():'',attachmentName:attachmentName,attachmentMimeType:attachmentMimeType,isRead:false,createdAt:now,readAt:''};
-    messageSheet.appendRow(headers.map(h=>msg[h]===undefined?'':msg[h]));
-    try{CacheService.getScriptCache().remove('PSB_CHAT_THREAD_V1_'+sha256Hex_(id).substring(0,32));}catch(e){}
-    const th=threadSheet.getRange(1,1,1,threadSheet.getLastColumn()).getValues()[0].map(String),updates={lastMessageAt:now,lastMessageBy:senderRole,updatedAt:now};
-    th.forEach((h,i)=>{if(updates[h]!==undefined)threadSheet.getRange(found.rowNumber,i+1).setValue(updates[h]);});
-    const reg=findRegistration_(String(thread.registrationId)),candidateName=String(reg?.candidate?.fullName||reg?.candidate?.name||'Calon santri');
-    const previewBase=message||(attachmentName?'Lampiran: '+attachmentName:'');const preview=previewBase.length>120?previewBase.substring(0,117)+'...':previewBase;
-    // Side-effects tidak boleh membatalkan transaksi utama. Pesan sudah tersimpan di CHAT_MESSAGES.
-    try{
-      if(senderRole==='WALI')notifyChatAdmins_(candidateName,preview);else if(thread.waliUserId)createNotification_(String(thread.waliUserId),'Balasan Admin PSB',candidateName+': '+preview,'INFO');
-    }catch(sideEffectError){/* Pesan tetap sukses walau notifikasi gagal. */}
-    try{
-      writeAudit_(actor.userId,'CHAT_MESSAGE_SENT','CHAT',id,'',JSON.stringify({messageId:msg.messageId,senderRole,messageLength:message.length,hasAttachment:!!attachmentFile,attachmentFileId:attachmentFile?attachmentFile.getId():'',attachmentName:attachmentName,attachmentMimeType:attachmentMimeType,attachmentSize:attachmentSize}),'Pesan chat dikirim.');
-    }catch(auditError){/* Audit bukan bagian dari commit pesan. */}
-    return {success:true,message:'Pesan berhasil dikirim.',chatMessage:{messageId:msg.messageId,threadId:msg.threadId,senderUserId:msg.senderUserId,senderRole:msg.senderRole,message:message,attachmentFileId:msg.attachmentFileId||'',attachmentName:msg.attachmentName||'',attachmentMimeType:msg.attachmentMimeType||'',isRead:!!msg.isRead,createdAt:now.toISOString(),readAt:msg.readAt||'',attachmentUrl:attachmentFile?attachmentFile.getUrl():'',attachmentSize:Number(attachmentSize)||0}};
-  });
-}
-
-function getChatAttachmentData(sessionToken,messageId){
-  const actor=requireRole_(sessionToken,PSB_CHAT_ACCESS_ROLES),id=String(messageId||'').trim();if(!id)return fail_('Lampiran tidak ditemukan.');
-  const ss=SpreadsheetApp.getActiveSpreadsheet(),sheet=ss.getSheetByName(PSB_SHEETS.CHAT_MESSAGES);if(!sheet||sheet.getLastRow()<2)return fail_('Lampiran tidak ditemukan.');
-  const found=findRowById_(sheet,'messageId',id);if(!found)return fail_('Lampiran tidak ditemukan.');
-  const msg=found.object,threadSheet=ss.getSheetByName(PSB_SHEETS.CHAT_THREADS),threadFound=findRowById_(threadSheet,'threadId',String(msg.threadId));if(!threadFound)return fail_('Percakapan tidak ditemukan.');
-  if(!chatCanAccessThread_(actor,threadFound.object))return fail_('Anda tidak memiliki akses ke lampiran ini.');
-  const fileId=String(msg.attachmentFileId||'').trim();if(!fileId)return fail_('Pesan ini tidak memiliki lampiran.');
-  try{const file=DriveApp.getFileById(fileId),blob=file.getBlob(),bytes=blob.getBytes(),maxMb=Math.max(1,Number(getConfig_('CHAT_ATTACHMENT_MAX_SIZE_MB'))||5);if(bytes.length>maxMb*1024*1024)return fail_('Lampiran terlalu besar untuk ditampilkan.');writeAudit_(actor.userId,'CHAT_ATTACHMENT_ACCESSED','CHAT',String(msg.threadId),'',JSON.stringify({messageId:id,fileId:fileId,fileName:msg.attachmentName||file.getName()}),'Lampiran chat diakses.');return {success:true,fileName:msg.attachmentName||file.getName(),mimeType:String(msg.attachmentMimeType||blob.getContentType()||'application/octet-stream'),base64:Utilities.base64Encode(bytes)};}catch(e){return fail_('Lampiran tidak dapat diakses.');}
-}
-function markChatThreadRead(sessionToken,threadId){
-  const actor=requireRole_(sessionToken,PSB_CHAT_ACCESS_ROLES),id=String(threadId||'').trim(),ss=SpreadsheetApp.getActiveSpreadsheet(),threadFound=findRowById_(ss.getSheetByName(PSB_SHEETS.CHAT_THREADS),'threadId',id);if(!threadFound)return fail_('Percakapan tidak ditemukan.');if(!chatCanAccessThread_(actor,threadFound.object))return fail_('Anda tidak memiliki akses ke percakapan ini.');const sheet=ss.getSheetByName(PSB_SHEETS.CHAT_MESSAGES);if(!sheet||sheet.getLastRow()<2)return {success:true};
-  const lastCol=sheet.getLastColumn(),headers=sheet.getRange(1,1,1,lastCol).getValues()[0].map(String),threadIdx=headers.indexOf('threadId'),senderIdx=headers.indexOf('senderUserId'),readIdx=headers.indexOf('isRead'),readAtIdx=headers.indexOf('readAt');if(threadIdx<0||senderIdx<0||readIdx<0)return {success:true};
-  const values=sheet.getRange(2,1,sheet.getLastRow()-1,lastCol).getValues(),rowsToRead=[];
-  for(let i=0;i<values.length;i++){const row=values[i];if(String(row[threadIdx])!==id)continue;if(String(row[senderIdx])===String(actor.userId)||String(row[readIdx]).toUpperCase()==='TRUE')continue;rowsToRead.push(i+2);}
-  const colLetter=n=>{let out='';while(n>0){const rem=(n-1)%26;out=String.fromCharCode(65+rem)+out;n=Math.floor((n-1)/26);}return out;};if(rowsToRead.length){sheet.getRangeList(rowsToRead.map(r=>colLetter(readIdx+1)+r)).setValue(true);if(readAtIdx>=0)sheet.getRangeList(rowsToRead.map(r=>colLetter(readAtIdx+1)+r)).setValue(new Date());try{writeAudit_(actor.userId,'CHAT_MESSAGE_READ','CHAT',id,'',JSON.stringify({count:rowsToRead.length}),'Pesan chat ditandai sudah dibaca.');}catch(e){}}return {success:true,changed:rowsToRead.length};
-}
-function closeChatThread(sessionToken,threadId){const actor=requireRole_(sessionToken,PSB_CHAT_ADMIN_ROLES);assertOperationalMutation_(actor);const id=String(threadId||'').trim();return withScriptLock_(10000,()=>{const sheet=SpreadsheetApp.getActiveSpreadsheet().getSheetByName(PSB_SHEETS.CHAT_THREADS),found=findRowById_(sheet,'threadId',id);if(!found)return fail_('Percakapan tidak ditemukan.');const now=new Date(),headers=sheet.getRange(1,1,1,sheet.getLastColumn()).getValues()[0].map(String),statusIdx=headers.indexOf('status'),updatedIdx=headers.indexOf('updatedAt'),closedIdx=headers.indexOf('closedAt');if(statusIdx>=0)sheet.getRange(found.rowNumber,statusIdx+1).setValue('CLOSED');if(updatedIdx>=0)sheet.getRange(found.rowNumber,updatedIdx+1).setValue(now);if(closedIdx>=0)sheet.getRange(found.rowNumber,closedIdx+1).setValue(now);if(found.object.waliUserId)createNotification_(String(found.object.waliUserId),'Percakapan ditutup','Percakapan dengan Admin PSB telah ditutup. Anda dapat membuka percakapan baru kapan saja.','INFO');try{CacheService.getScriptCache().remove('PSB_CHAT_THREAD_V1_'+sha256Hex_(id).substring(0,32));}catch(e){};writeAudit_(actor.userId,'CHAT_THREAD_CLOSED','CHAT',id,JSON.stringify({status:found.object.status}),JSON.stringify({status:'CLOSED'}),'Percakapan chat ditutup.');return {success:true,message:'Percakapan berhasil ditutup.'};});}
-function cleanupChatRetention(sessionToken){const actor=requireRole_(sessionToken,['SUPERADMIN']);assertOperationalMutation_(actor);return withScriptLock_(20000,()=>cleanupChatRetentionInternal_(actor.userId));}
-function cleanupChatRetentionInternal_(auditUserId){const retentionDays=Math.max(1,Number(getConfig_('CHAT_RETENTION_DAYS'))||180),cutoff=new Date(Date.now()-retentionDays*86400000),ss=SpreadsheetApp.getActiveSpreadsheet(),threadSheet=ss.getSheetByName(PSB_SHEETS.CHAT_THREADS),messageSheet=ss.getSheetByName(PSB_SHEETS.CHAT_MESSAGES);if(!threadSheet||!messageSheet)return {success:false,message:'Database chat belum tersedia.'};const threads=threadSheet.getLastRow()>=2?sheetRows_(threadSheet):[],oldIds=new Set(threads.filter(t=>String(t.status).toUpperCase()==='CLOSED'&&new Date(t.closedAt||t.updatedAt||t.createdAt||0)<cutoff).map(t=>String(t.threadId)));if(!oldIds.size)return {success:true,deletedThreads:0,deletedMessages:0,retentionDays};const removeRowsByIds=(sheet,idField,ids)=>{if(!sheet||sheet.getLastRow()<2)return 0;const headers=sheet.getRange(1,1,1,sheet.getLastColumn()).getValues()[0].map(String),idx=headers.indexOf(idField);if(idx<0)return 0;const values=sheet.getRange(2,1,sheet.getLastRow()-1,sheet.getLastColumn()).getValues();let removed=0;for(let i=values.length-1;i>=0;i--)if(ids.has(String(values[i][idx]))){sheet.deleteRow(i+2);removed++;}return removed;};const oldMessageRows=messageSheet.getLastRow()>=2?sheetRows_(messageSheet).filter(m=>oldIds.has(String(m.threadId))):[];oldMessageRows.forEach(m=>{const fid=String(m.attachmentFileId||'').trim();if(fid){try{DriveApp.getFileById(fid).setTrashed(true);}catch(e){}}});const deletedMessages=removeRowsByIds(messageSheet,'threadId',oldIds),deletedThreads=removeRowsByIds(threadSheet,'threadId',oldIds);writeAudit_(auditUserId||'SYSTEM','CHAT_RETENTION_CLEANUP','CHAT','','',JSON.stringify({deletedThreads,deletedMessages,retentionDays,automated:!auditUserId}),'Pembersihan chat yang melewati masa retensi.');return {success:true,deletedThreads,deletedMessages,retentionDays};}
-function runChatAutomation_(){const lock=LockService.getScriptLock();if(!lock.tryLock(5000))return {success:false,message:'Otomasi chat sedang berjalan.'};try{if(String(getConfig_('CHAT_AUTOMATION_ENABLED')||'TRUE').toUpperCase()!=='TRUE')return {success:true,skipped:true,reason:'DISABLED'};const ss=SpreadsheetApp.getActiveSpreadsheet(),threadSheet=ss.getSheetByName(PSB_SHEETS.CHAT_THREADS);if(!threadSheet||threadSheet.getLastRow()<2)return {success:true,closedThreads:0,reminders:0,cleanup:{deletedThreads:0,deletedMessages:0}};const now=new Date(),autoCloseDays=Math.max(1,Number(getConfig_('CHAT_AUTO_CLOSE_DAYS'))||7),reminderMinutes=Math.max(5,Number(getConfig_('CHAT_ADMIN_REMINDER_MINUTES'))||30),closeCutoff=new Date(now.getTime()-autoCloseDays*86400000),reminderCutoff=new Date(now.getTime()-reminderMinutes*60000),threads=sheetRows_(threadSheet),usersSheet=ss.getSheetByName(PSB_SHEETS.USERS),users=usersSheet&&usersSheet.getLastRow()>=2?sheetRows_(usersSheet):[],admins=users.filter(u=>!['INACTIVE','DISABLED'].includes(String(u.status||'ACTIVE').toUpperCase())&&String(u.role||'').toUpperCase().split(',').map(x=>x.trim()).includes('ADMIN_PSB')),notificationsSheet=ss.getSheetByName(PSB_SHEETS.NOTIFICATIONS),notifications=notificationsSheet&&notificationsSheet.getLastRow()>=2?sheetRows_(notificationsSheet):[];let closedThreads=0,reminders=0;threads.forEach(t=>{if(String(t.status).toUpperCase()!=='OPEN')return;const last=new Date(t.lastMessageAt||t.updatedAt||t.createdAt||0);if(String(t.lastMessageBy||'').toUpperCase()==='WALI'&&last.getTime()&&last<=reminderCutoff){const candidate=findRegistration_(String(t.registrationId||''));const name=String(candidate?.candidate?.fullName||'Calon santri').trim(),subject='Chat menunggu balasan';admins.forEach(u=>{const recent=notifications.some(n=>String(n.userId)===String(u.userId)&&String(n.title)===subject&&new Date(n.createdAt||0).getTime()>=last.getTime()&&new Date(n.createdAt||0).getTime()>=reminderCutoff.getTime()-reminderMinutes*60000&&String(n.message||'').includes(String(t.threadId)));if(!recent){createNotification_(String(u.userId),subject,name+' memiliki pesan chat yang belum dibalas. Thread: '+String(t.threadId),'INFO');reminders++;}});}if(last.getTime()&&last<=closeCutoff){const headers=threadSheet.getRange(1,1,1,threadSheet.getLastColumn()).getValues()[0].map(String),statusIdx=headers.indexOf('status'),updatedIdx=headers.indexOf('updatedAt'),closedIdx=headers.indexOf('closedAt');if(statusIdx>=0)threadSheet.getRange(threads.indexOf(t)+2,statusIdx+1).setValue('CLOSED');if(updatedIdx>=0)threadSheet.getRange(threads.indexOf(t)+2,updatedIdx+1).setValue(now);if(closedIdx>=0)threadSheet.getRange(threads.indexOf(t)+2,closedIdx+1).setValue(now);if(t.waliUserId)createNotification_(String(t.waliUserId),'Percakapan ditutup otomatis','Percakapan chat telah ditutup otomatis karena tidak ada aktivitas selama '+autoCloseDays+' hari. Anda dapat membuka percakapan baru kapan saja.','INFO');writeAudit_('SYSTEM','CHAT_THREAD_AUTO_CLOSED','CHAT',String(t.threadId),JSON.stringify({status:'OPEN'}),JSON.stringify({status:'CLOSED',autoCloseDays}),'Percakapan chat ditutup otomatis karena tidak aktif.');closedThreads++;}});const cleanup=cleanupChatRetentionInternal_('');writeAudit_('SYSTEM','CHAT_AUTOMATION_RUN','CHAT','',JSON.stringify({automationEnabled:true}),JSON.stringify({closedThreads,reminders,cleanup}),'Otomasi chat terjadwal selesai.');return {success:true,closedThreads,reminders,cleanup};}catch(e){writeAudit_('SYSTEM','CHAT_AUTOMATION_ERROR','CHAT','', '', JSON.stringify({message:String(e&&e.message||e)}),'Otomasi chat gagal dijalankan.');return {success:false,message:String(e&&e.message||e)};}finally{lock.releaseLock();}}
-function runChatAutomationNow(sessionToken){const actor=requireRole_(sessionToken,['SUPERADMIN']);assertOperationalMutation_(actor);return runChatAutomation_();}
-function chatCanAccessThread_(actor,thread){if(!actor||!thread)return false;if(hasRoleDirect_(actor,PSB_CHAT_ADMIN_ROLES))return true;return hasRoleDirect_(actor,['WALI'])&&String(thread.waliUserId)===String(actor.userId);}
-function notifyChatAdmins_(candidateName,preview){const sheet=SpreadsheetApp.getActiveSpreadsheet().getSheetByName(PSB_SHEETS.USERS);if(!sheet||sheet.getLastRow()<2)return 0;const users=sheetRows_(sheet);let count=0;users.forEach(u=>{const roles=String(u.role||'').toUpperCase().split(',').map(x=>x.trim()),status=String(u.status||'ACTIVE').toUpperCase();if(roles.includes('ADMIN_PSB')&&!['INACTIVE','DISABLED'].includes(status)){createNotification_(String(u.userId),'Pesan baru dari Wali',candidateName+': '+preview,'INFO');count++;}});return count;}
 function getCommunicationCenterData(sessionToken) {
   const actor = requireRole_(sessionToken, PSB_COMMUNICATION_ROLES);
   const ss = SpreadsheetApp.getActiveSpreadsheet();
@@ -2866,7 +2709,7 @@ function getDashboardPageData(sessionToken) {
     payments:paymentByStatus, selection:{participants:periodParticipants.length,results:periodResults.length,...resultCounts}, reregistration:reregCounts,
     finance:{paidAmount:revenue}, distributions:{jenjang:sortCountMap_(jenjangCounts),gelombang:sortCountMap_(gelombangCounts)},
     operational,
-    permissions:{canReport:role.some(r=>PSB_REPORT_ROLES.indexOf(r)>=0),canVerification:role.some(r=>PSB_VERIFICATION_ROLES.indexOf(r)>=0),canPayments:role.some(r=>PSB_PAYMENT_MANAGE_ROLES.indexOf(r)>=0),canSelection:role.some(r=>PSB_SELECTION_ADMIN_ROLES.indexOf(r)>=0),canAnnouncement:role.some(r=>PSB_ANNOUNCEMENT_ADMIN_ROLES.indexOf(r)>=0),canReregistration:role.some(r=>PSB_REREGISTRATION_ADMIN_ROLES.indexOf(r)>=0),canMonitoring:role.some(r=>PSB_MONITORING_ROLES.indexOf(r)>=0),canIncident:role.some(r=>PSB_INCIDENT_ROLES.indexOf(r)>=0),canChat:role.some(r=>PSB_CHAT_ACCESS_ROLES.indexOf(r)>=0)},
+    permissions:{canReport:role.some(r=>PSB_REPORT_ROLES.indexOf(r)>=0),canVerification:role.some(r=>PSB_VERIFICATION_ROLES.indexOf(r)>=0),canPayments:role.some(r=>PSB_PAYMENT_MANAGE_ROLES.indexOf(r)>=0),canSelection:role.some(r=>PSB_SELECTION_ADMIN_ROLES.indexOf(r)>=0),canAnnouncement:role.some(r=>PSB_ANNOUNCEMENT_ADMIN_ROLES.indexOf(r)>=0),canReregistration:role.some(r=>PSB_REREGISTRATION_ADMIN_ROLES.indexOf(r)>=0),canMonitoring:role.some(r=>PSB_MONITORING_ROLES.indexOf(r)>=0),canIncident:role.some(r=>PSB_INCIDENT_ROLES.indexOf(r)>=0)},
     generatedAt:new Date().toISOString()
   };
   try { dashboardCache.put(dashboardKey, JSON.stringify(response), 30); } catch (e) {}
@@ -3499,16 +3342,6 @@ function getCurrentDocuments_(registrationId) {
   return rows.map((r,i)=>rowObject_(headers,r,i+2))
     .filter(x => String(x.registrationId) === String(registrationId) && String(x.status || '').toUpperCase() !== 'REPLACED')
     .sort((a,b)=>String(b.uploadedAt||'').localeCompare(String(a.uploadedAt||'')));
-}
-
-function getChatAttachmentFolder_(registration,thread){
-  const props=PropertiesService.getScriptProperties();let yearFolder=null;const yearId=props.getProperty('PSB_DRIVE_YEAR_ID');
-  if(yearId){try{yearFolder=DriveApp.getFolderById(yearId);}catch(e){}}
-  if(!yearFolder){const rootId=props.getProperty('PSB_DRIVE_ROOT_ID');if(rootId){try{yearFolder=getOrCreateFolderInParent_(DriveApp.getFolderById(rootId),PSB_SETUP.YEAR_FOLDER_NAME);}catch(e){}}}
-  if(!yearFolder){const folders=DriveApp.getFoldersByName(PSB_SETUP.YEAR_FOLDER_NAME);yearFolder=folders.hasNext()?folders.next():DriveApp.createFolder(PSB_SETUP.YEAR_FOLDER_NAME);}
-  const chatRoot=getOrCreateFolderInParent_(yearFolder,'Chat PSB');
-  const regFolder=getOrCreateFolderInParent_(chatRoot,sanitizeFolderName_(registration.registrationNumber||registration.registrationId));
-  return getOrCreateFolderInParent_(regFolder,sanitizeFolderName_(thread.threadId||'THREAD'));
 }
 
 function getRegistrationDocumentFolder_(registration) {
