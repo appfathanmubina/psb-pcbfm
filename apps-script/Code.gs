@@ -633,18 +633,23 @@ function getSessionUser_(token, touch) {
   // aktivitas tetap dibaca langsung dari Spreadsheet agar logout/revoke berlaku segera.
   let found = null;
   const cachedRowNumber = Number(cache.get(sessionCacheKey) || 0);
-  const lastRow = sheet.getLastRow();
-  if (cachedRowNumber >= 2 && cachedRowNumber <= lastRow) {
-    const cachedRow = sheet.getRange(cachedRowNumber, 1, 1, 7).getValues()[0];
-    if (constantTimeEqual_(String(cachedRow[2] || ''), tokenHash)) {
-      found = { rowNumber: cachedRowNumber, row: cachedRow };
-    } else {
+  if (cachedRowNumber >= 2) {
+    try {
+      const cachedRow = sheet.getRange(cachedRowNumber, 1, 1, 7).getValues()[0];
+      if (constantTimeEqual_(String(cachedRow[2] || ''), tokenHash)) {
+        found = { rowNumber: cachedRowNumber, row: cachedRow };
+      } else {
+        cache.remove(sessionCacheKey);
+      }
+    } catch (e) {
       cache.remove(sessionCacheKey);
     }
   }
 
   // Cache miss/stale index: lakukan scan penuh satu kali, lalu simpan lokasi baris.
-  if (!found && lastRow >= 2) {
+  if (!found) {
+    const lastRow = sheet.getLastRow();
+    if (lastRow >= 2) {
     const rows = sheet.getRange(2, 1, lastRow - 1, 7).getValues();
     for (let i = rows.length - 1; i >= 0; i--) {
       if (constantTimeEqual_(String(rows[i][2] || ''), tokenHash)) {
@@ -652,6 +657,7 @@ function getSessionUser_(token, touch) {
         try { cache.put(sessionCacheKey, String(found.rowNumber), 21600); } catch (e) {}
         break;
       }
+    }
     }
   }
   if (!found) return fail_('Session tidak valid. Silakan login kembali.');
@@ -775,7 +781,6 @@ function findUser_(key) {
   const cacheKey = 'PSB_USER_ROW_LOGIN_V1_' + sha256Hex_(normalized).substring(0, 32);
   const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('USERS');
   if (!sheet) return null;
-  const lastRow = sheet.getLastRow();
 
   function matches(row) {
     return String(row[3] || '').trim().toLowerCase() === normalized ||
@@ -787,15 +792,18 @@ function findUser_(key) {
   // Cache hanya menyimpan lokasi baris. Data akun selalu dibaca fresh agar
   // perubahan status/password tidak tertahan oleh cache objek pengguna.
   const cachedRowNumber = Number(cache.get(cacheKey) || 0);
-  if (cachedRowNumber >= 2 && cachedRowNumber <= lastRow) {
-    const row = sheet.getRange(cachedRowNumber, 1, 1, 15).getValues()[0];
-    if (matches(row)) {
-      try { cache.put('PSB_USER_ROW_ID_V1_' + sha256Hex_(String(row[0] || '')).substring(0, 32), String(cachedRowNumber), 21600); } catch (e) {}
-      return userFromRow_(row, cachedRowNumber);
-    }
+  if (cachedRowNumber >= 2) {
+    try {
+      const row = sheet.getRange(cachedRowNumber, 1, 1, 15).getValues()[0];
+      if (matches(row)) {
+        try { cache.put('PSB_USER_ROW_ID_V1_' + sha256Hex_(String(row[0] || '')).substring(0, 32), String(cachedRowNumber), 21600); } catch (e) {}
+        return userFromRow_(row, cachedRowNumber);
+      }
+    } catch (e) {}
     cache.remove(cacheKey);
   }
 
+  const lastRow = sheet.getLastRow();
   if (lastRow < 2) return null;
   const rows = sheet.getRange(2, 1, lastRow - 1, 15).getValues();
   for (let i = 0; i < rows.length; i++) {
@@ -817,17 +825,19 @@ function findUserById_(id, bypassCache) {
   const cacheKey = 'PSB_USER_ROW_ID_V1_' + sha256Hex_(value).substring(0, 32);
   const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('USERS');
   if (!sheet) return null;
-  const lastRow = sheet.getLastRow();
 
   // bypassCache dipertahankan untuk kompatibilitas pemanggil lama. Indeks saja
   // yang di-cache; isi baris pengguna selalu dibaca terbaru dari Spreadsheet.
   const cachedRowNumber = Number(cache.get(cacheKey) || 0);
-  if (cachedRowNumber >= 2 && cachedRowNumber <= lastRow) {
-    const row = sheet.getRange(cachedRowNumber, 1, 1, 15).getValues()[0];
-    if (String(row[0] || '') === value) return userFromRow_(row, cachedRowNumber);
+  if (cachedRowNumber >= 2) {
+    try {
+      const row = sheet.getRange(cachedRowNumber, 1, 1, 15).getValues()[0];
+      if (String(row[0] || '') === value) return userFromRow_(row, cachedRowNumber);
+    } catch (e) {}
     cache.remove(cacheKey);
   }
 
+  const lastRow = sheet.getLastRow();
   if (lastRow < 2) return null;
   const rows = sheet.getRange(2, 1, lastRow - 1, 15).getValues();
   for (let i = 0; i < rows.length; i++) {
