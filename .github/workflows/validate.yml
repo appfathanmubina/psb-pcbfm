@@ -66,6 +66,8 @@ jobs:
         run: node tests/chat-feature-removal.test.js
       - name: Test PWA and Apps Script bridge contract
         run: node tests/bridge-contract.test.js
+      - name: Test safe retry for transient API Bridge lock contention
+        run: node tests/bridge-login-retry-safety.test.js
       - name: Test loading and login critical-path safeguards
         run: node tests/loading-login-performance.test.js
       - name: Test dashboard performance and final UI safeguards
