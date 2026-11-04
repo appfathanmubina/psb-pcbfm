@@ -6,19 +6,6 @@ const app = fs.readFileSync('frontend/app.js', 'utf8');
 const index = fs.readFileSync('apps-script/Index.html', 'utf8');
 const code = fs.readFileSync('apps-script/Code.gs', 'utf8');
 
-function functionSource(source, name) {
-  const start = source.indexOf('function ' + name + '(');
-  assert.notEqual(start, -1, 'Required function exists: ' + name);
-  const next = source.indexOf('\nfunction ', start + 10);
-  return source.slice(start, next < 0 ? source.length : next);
-}
-function asyncFunctionSource(source, name) {
-  const start = source.indexOf('async function ' + name + '(');
-  assert.notEqual(start, -1, 'Required async function exists: ' + name);
-  const next = source.indexOf('\n(?:async )?function ', start + 10);
-  return source.slice(start, next < 0 ? source.length : next);
-}
-
 const backendStart = code.indexOf('function getDashboardPageData(');
 const backendEnd = code.indexOf('\nfunction findParticipantRegistration_', backendStart);
 assert.notEqual(backendStart, -1, 'Dashboard backend exists');
@@ -36,7 +23,11 @@ assert.doesNotMatch(dashboard, /periodPayments\.filter\(/,
   'Dashboard must not rescan and sort payments for each bill');
 
 for (const [source, label] of [[app, 'PWA'], [index, 'Apps Script']]) {
-  const home = asyncFunctionSource(source, 'renderHome');
+  const start = source.indexOf('async function renderHome(');
+  const end = source.indexOf('\nfunction waliFlowAction', start);
+  assert.notEqual(start, -1, label + ' dashboard renderer exists');
+  assert.ok(end > start, label + ' dashboard renderer boundary exists');
+  const home = source.slice(start, end);
   assert.doesNotMatch(home, /RELEASE_STAGE|APP_VERSION|30\.14/,
     label + ' dashboard must not show internal production/version labels');
   assert.match(source, /function scheduleWarmNavigationData\(/,
