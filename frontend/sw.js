@@ -5,7 +5,7 @@ const ASSETS=[
   './index.html',
   './manifest.webmanifest?v=32.12.0',
   './styles.css?v=32.12.0',
-  './api-bridge.js?v=32.11.0',
+  './api-bridge.js?v=32.13.0',
   './app.js?v=32.12.0',
   './assets/logo-fathanmubina.svg?v=32.7.0',
   './assets/logo-fathan-mubina.png?v=32.7.0',
