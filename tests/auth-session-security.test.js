@@ -69,8 +69,8 @@ assert.match(userByLogin, /PSB_USER_ROW_LOGIN_V1_/,
   'Login identifier lookup must use a row-number index');
 assert.match(userByLogin, /getRange\(cachedRowNumber,\s*1,\s*1,\s*15\)/,
   'Login cache hits must read fresh user data from one row');
-const create = fn('createSession_');
-assert.match(create, /PSB_SESSION_ROW_V1_/,
+const createSeed = fn('createSession_');
+assert.match(createSeed, /PSB_SESSION_ROW_V1_/,
   'New sessions must seed their row index immediately');
 const cleanup = fn('cleanupPSBSessions_');
 assert.match(cleanup, /EXPIRED/);
