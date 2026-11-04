@@ -60,7 +60,10 @@ for (const [label, source] of [['Apps Script', appsSource], ['PWA', pwaSource]])
     label + ' login must use a neutral production placeholder');
   assert.ok(!/placeholder="[^"]*Superadmin/i.test(source),
     label + ' login must not suggest a built-in Superadmin username');
-  assert.doesNotMatch((source.match(/async function renderHome\\([\\s\\S]*?\\nfunction waliFlowAction/)||[''])[0], /RELEASE_STAGE|APP_VERSION|30\\.14/,
+  const homeStart = source.indexOf('async function renderHome(');
+  const homeEnd = source.indexOf('\\nfunction waliFlowAction', homeStart);
+  assert.ok(homeEnd > homeStart, label + ' dashboard renderer boundary exists');
+  assert.doesNotMatch(source.slice(homeStart, homeEnd), /RELEASE_STAGE|APP_VERSION|30\\.14/,
     label + ' dashboard must not show internal production/version labels');
   assert.ok(!/Stage\s*\d+/.test(source.slice(source.indexOf('function renderMore'), source.indexOf('function hasAnyRole'))),
     label + ' user-facing More menu must not expose internal stage numbers');
