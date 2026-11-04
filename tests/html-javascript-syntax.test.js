@@ -12,7 +12,8 @@ const htmlFiles = [
   'frontend/index.html'
 ];
 const standaloneJsFiles = [
-  'frontend/api-bridge.js'
+  'frontend/api-bridge.js',
+  'frontend/psb-fm-apps-script.js'
 ];
 
 function fail(file, block, error) {
