@@ -86,17 +86,18 @@ mustMatch(documentVerify, /requireRole_\(sessionToken,\s*PSB_VERIFICATION_ROLES\
 mustMatch(documentVerify, /LockService\.getScriptLock\(\)/,
   'Document verification must serialize status changes');
 
-// OTP verification must be time-limited, attempt-limited, single-use and constant-time.
-const otpVerify = functionSource('verifyWaliRegistration');
-mustMatch(otpVerify, /PSB_WALI_OTP_MAX_ATTEMPTS_/,
-  'Email OTP verification must enforce an attempt limit');
-mustMatch(otpVerify, /expiresAt\.getTime\(\)/,
-  'Email OTP verification must enforce expiry');
-mustMatch(otpVerify, /constantTimeEqual_\(expected,String\(row\[8\]\|\|''\)\)/,
-  'Email OTP hash comparison must be constant-time');
-mustMatch(otpVerify, /String\(row\[15\]\) !== 'PENDING'/,
-  'Email OTP verification must reject already-used or inactive codes');
-mustMatch(otpVerify, /'VERIFIED'/,
-  'Successful OTP verification must mark the challenge as verified');
+// Public WALI registration must serialize account creation, reject duplicate identifiers,
+// store only a password hash, and issue a WALI session after successful creation.
+const waliRegistration = functionSource('registerWali');
+mustMatch(waliRegistration, /LockService\.getScriptLock\(\)/,
+  'WALI registration must serialize duplicate checks and account creation');
+mustMatch(waliRegistration, /const duplicate = users\.some/,
+  'WALI registration must reject duplicate phone/email identifiers');
+mustMatch(waliRegistration, /hashPassword_\(input\.password,passwordSalt\)/,
+  'WALI registration must hash passwords before storage');
+mustMatch(waliRegistration, /'WALI','ACTIVE'/,
+  'WALI registration must create an active WALI account only');
+mustMatch(waliRegistration, /createSession_\(userId\)/,
+  'WALI registration must create a session after account creation');
 
 console.log('Authorization and ownership regression safeguards passed.');
