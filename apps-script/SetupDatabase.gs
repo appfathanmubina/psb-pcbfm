@@ -14,6 +14,8 @@
  * - Kredensial bootstrap disimpan di Script Properties melalui
  *   configureInitialSuperadmin_() yang dijalankan manual oleh editor tepercaya.
  * - Tidak menyediakan fungsi seed/clear data dummy di source produksi.
+ * - Tidak lagi menyiapkan sheet WALI_OTP karena pendaftaran Wali tidak memakai OTP.
+ * - Pembersihan trigger chat lama tersedia sebagai fungsi mandiri dan tidak menjadi efek samping setup database.
  */
 
 const PSB_SETUP = {
@@ -51,7 +53,6 @@ const PSB_SHEETS = {
   SELECTION_RESULTS: 'SELECTION_RESULTS',
   REREGISTRATIONS: 'REREGISTRATIONS',
   INCIDENTS: 'INCIDENTS',
-  WALI_OTP: 'WALI_OTP'
 };
 
 const PSB_HEADERS = {
@@ -99,7 +100,6 @@ function setupPSBDatabase_() {
   ensureInitialMasterData_();
   setupDriveFolders_();
   const superadminBootstrap = createInitialSuperadmin_();
-  removeLegacyChatAutomationTriggers_();
 
   return {
     success: true,
