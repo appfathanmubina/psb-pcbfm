@@ -4,7 +4,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 
 const pwa = fs.readFileSync('frontend/app.js', 'utf8');
-const apps = fs.readFileSync('apps-script/Index.html', 'utf8');
+const apps = fs.readFileSync('frontend/psb-fm-apps-script.js', 'utf8');
 const backend = fs.readFileSync('apps-script/Code.gs', 'utf8');
 const bridge = fs.readFileSync('apps-script/BridgeServer.gs', 'utf8');
 const galleryDir = 'frontend/gallery';
