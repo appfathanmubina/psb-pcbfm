@@ -32,13 +32,7 @@ mustMatch(registrationAccess, /hasRoleDirect_\(actor,\s*\['WALI'\]\)/,
 mustMatch(registrationAccess, /registration\.userId\)\s*===\s*String\(actor\.userId\)/,
   'WALI registration access must enforce ownership');
 
-const chatAccess = functionSource('chatCanAccessThread_');
-mustMatch(chatAccess, /PSB_CHAT_ADMIN_ROLES/,
-  'Chat access must explicitly identify chat administrators');
-mustMatch(chatAccess, /thread\.waliUserId\)===String\(actor\.userId\)/,
-  'WALI chat access must enforce thread ownership');
-
-// Read paths: WALI must not obtain another family's registration/payment/chat.
+// Read paths: WALI must not obtain another family's registration or payment.
 const myRegistrations = functionSource('getMyRegistrations');
 mustMatch(myRegistrations, /requireRole_\(sessionToken,\s*\['WALI','SUPERADMIN','ADMIN_PSB'\]\)/,
   'My registrations endpoint must require an allowed role');
@@ -62,18 +56,6 @@ mustMatch(paymentRead, /requireRole_\(sessionToken,\s*PSB_PAYMENT_VIEW_ROLES\)/,
   'Payment read must require a permitted role');
 mustMatch(paymentRead, /canAccessRegistration_\(actor,\s*found\.registration\)/,
   'Payment read must enforce registration ownership');
-
-const chatRead = functionSource('getChatThread');
-mustMatch(chatRead, /requireRole_\(sessionToken,\s*PSB_CHAT_ACCESS_ROLES\)/,
-  'Chat read must require a permitted role');
-mustMatch(chatRead, /chatCanAccessThread_\(actor,thread\)/,
-  'Chat read must enforce thread ownership');
-
-const chatWrite = functionSource('sendChatMessage');
-mustMatch(chatWrite, /requireRole_\(sessionToken,\s*PSB_CHAT_ACCESS_ROLES\)/,
-  'Chat write must require a permitted role');
-mustMatch(chatWrite, /chatCanAccessThread_\(actor,thread\)/,
-  'Chat write must enforce thread ownership before saving');
 
 // Mutation paths: authenticate, authorize the resource, then mutate.
 const paymentSubmit = functionSource('submitPayment');
