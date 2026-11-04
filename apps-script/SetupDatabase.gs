@@ -51,8 +51,6 @@ const PSB_SHEETS = {
   SELECTION_RESULTS: 'SELECTION_RESULTS',
   REREGISTRATIONS: 'REREGISTRATIONS',
   INCIDENTS: 'INCIDENTS',
-  CHAT_THREADS: 'CHAT_THREADS',
-  CHAT_MESSAGES: 'CHAT_MESSAGES',
   WALI_OTP: 'WALI_OTP'
 };
 
@@ -83,8 +81,6 @@ const PSB_HEADERS = {
   SELECTION_RESULTS: ['resultId','registrationId','status','announcementDate','note','createdAt','updatedAt'],
   REREGISTRATIONS: ['reregistrationId','registrationId','status','completedAt','note','createdAt','updatedAt'],
   INCIDENTS: ['incidentId','category','priority','status','title','description','relatedModule','relatedRecordId','reportedBy','assignedTo','resolutionNote','createdAt','updatedAt','resolvedAt','closedAt'],
-  CHAT_THREADS: ['threadId','registrationId','waliUserId','adminUserId','subject','status','lastMessageAt','lastMessageBy','createdAt','updatedAt','closedAt'],
-  CHAT_MESSAGES: ['messageId','threadId','senderUserId','senderRole','message','attachmentFileId','attachmentName','attachmentMimeType','isRead','createdAt','readAt'],
   WALI_OTP: ['verificationId','name','phone','phoneNormalized','email','emailNormalized','passwordHash','passwordSalt','otpHash','otpSalt','expiresAt','attempts','maxAttempts','sendCount','lastSentAt','status','createdAt','verifiedAt','waMessageId']
 };
 
@@ -103,7 +99,7 @@ function setupPSBDatabase_() {
   ensureInitialMasterData_();
   setupDriveFolders_();
   const superadminBootstrap = createInitialSuperadmin_();
-  ensureChatAutomationTrigger_();
+  removeLegacyChatAutomationTriggers_();
 
   return {
     success: true,
@@ -179,14 +175,6 @@ function ensureDefaultConfig_() {
     ['AUDIT_PAGE_SIZE', '50', 'Jumlah maksimum baris audit per halaman', now],
     ['SESSION_CLEANUP_BATCH', '500', 'Batas session yang diproses setiap maintenance', now],
     ['TIMEZONE', PSB_SETUP.TIMEZONE, 'Zona waktu aplikasi', now],
-    ['CHAT_RETENTION_DAYS', '180', 'Jumlah hari penyimpanan chat yang sudah ditutup sebelum dapat dibersihkan', now],
-    ['CHAT_MESSAGE_MAX_LENGTH', '1000', 'Batas karakter satu pesan chat', now],
-    ['CHAT_POLL_SECONDS', '10', 'Interval polling chat near real-time dalam detik', now],
-    ['CHAT_ATTACHMENT_MAX_SIZE_MB', '5', 'Batas ukuran satu lampiran chat dalam MB', now],
-    ['CHAT_ATTACHMENT_ALLOWED_MIME_TYPES', 'image/jpeg,image/png,image/webp,application/pdf', 'Tipe file yang diizinkan untuk lampiran chat', now],
-    ['CHAT_AUTOMATION_ENABLED', 'TRUE', 'Aktifkan otomasi chat terjadwal', now],
-    ['CHAT_AUTO_CLOSE_DAYS', '7', 'Jumlah hari tanpa aktivitas sebelum chat terbuka otomatis ditutup', now],
-    ['CHAT_ADMIN_REMINDER_MINUTES', '30', 'Menit sejak pesan Wali terakhir sebelum pengingat balasan Admin PSB dibuat', now]
   ];
 
   const rows = defaults.filter(r => !keys.has(r[0]));
@@ -245,23 +233,24 @@ function getOrCreateFolderInParent_(parent, name) {
   return folders.hasNext() ? folders.next() : parent.createFolder(name);
 }
 
-function ensureChatAutomationTrigger_() {
+function removeLegacyChatAutomationTriggers_() {
+  // Chat PSB sudah dihentikan. Hapus pemicu lama agar Apps Script tidak lagi
+  // mencoba menjalankan runChatAutomation/runChatAutomation_ yang sudah tidak ada.
+  const legacyHandlers = ['runChatAutomation', 'runChatAutomation_'];
+  let removed = 0;
   try {
-    const triggers = ScriptApp.getProjectTriggers();
-    triggers.forEach(trigger => {
-      if (['runChatAutomation', 'runChatAutomation_'].indexOf(trigger.getHandlerFunction()) >= 0) ScriptApp.deleteTrigger(trigger);
+    ScriptApp.getProjectTriggers().forEach(trigger => {
+      if (legacyHandlers.indexOf(trigger.getHandlerFunction()) >= 0) {
+        ScriptApp.deleteTrigger(trigger);
+        removed++;
+      }
     });
-    ScriptApp.newTrigger('runChatAutomation_').timeBased().everyMinutes(15).create();
-    PropertiesService.getScriptProperties().setProperty('PSB_CHAT_AUTOMATION_TRIGGER', 'INSTALLED');
-    return true;
+    PropertiesService.getScriptProperties().deleteProperty('PSB_CHAT_AUTOMATION_TRIGGER');
+    return { success: true, removed: removed };
   } catch (e) {
-    PropertiesService.getScriptProperties().setProperty('PSB_CHAT_AUTOMATION_TRIGGER', 'FAILED');
-    return false;
+    console.error('Legacy chat trigger cleanup failed: ' + String(e && e.message || e));
+    return { success: false, removed: removed };
   }
-}
-
-function installChatAutomationTrigger_() {
-  return ensureChatAutomationTrigger_();
 }
 
 function configureInitialSuperadmin_() {
