@@ -35,7 +35,7 @@ const requestCall = retry.indexOf('submitBridgeRequest(token, fn, args)');
 const retryCondition = retry.indexOf('if (retry && safeToRetry)');
 assert.ok(requestCall >= 0 && retryCondition > requestCall,
   'Retry classification must only run after a failed transport request');
-assert.match(retry, /Backend is never invoked when token consumption fails/,
+assert.match(retry, /backend is never invoked when token consumption fails/i,
   'Only failures known to occur before backend dispatch may be retried');
 
 console.log('Bridge lock contention retry safety: OK');
