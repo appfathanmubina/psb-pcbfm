@@ -6,13 +6,11 @@ function fn(name){const start=source.indexOf('function '+name+'(');assert.notEqu
 assert.match(fn('login'),/password\.length > 1024/);
 assert.match(fn('validateWaliRegistrationPayload_'),/password\.trim\(\)\.length === 0/);
 assert.match(fn('validateWaliRegistrationPayload_'),/password\.length > 128/);
-assert.match(fn('verifyWaliRegistration'),/id\.length > 128/);
-assert.match(fn('verifyWaliRegistration'),/constantTimeEqual_\(/);
-assert.match(fn('verifyWaliRegistration'),/PSB_WALI_OTP_MAX_ATTEMPTS_/);
-assert.match(fn('verifyWaliRegistration'),/LockService\.getScriptLock\(\)/);
-assert.match(fn('resendWaliRegistrationEmailOtp'),/id\.length > 128/);
-assert.match(fn('resendWaliRegistrationEmailOtp'),/\['PENDING','EXPIRED'\]\.includes/);
-assert.match(fn('resendWaliRegistrationEmailOtp'),/PSB_WALI_OTP_DAILY_LIMIT_/);
+assert.match(fn('registerWali'),/LockService\.getScriptLock\(\)/);
+assert.match(fn('registerWali'),/const duplicate = users\.some/);
+assert.match(fn('registerWali'),/hashPassword_\(input\.password,passwordSalt\)/);
+assert.match(fn('validateWaliRegistrationPayload_'),/!phoneNormalized && !emailNormalized/);
+assert.doesNotMatch(source,/verifyWaliRegistration|resendWaliRegistrationEmailOtp|PSB_WALI_OTP/);
 assert.match(fn('changePassword'),/currentPasswordValue\.length > 1024/);
 assert.match(fn('changePassword'),/newPasswordValue\.length > 128/);
 assert.match(fn('changePassword'),/verifyPasswordForUser_\(currentPasswordValue, current\)/);
@@ -21,4 +19,4 @@ assert.match(fn('adminResetUserPassword'),/requireRole_\(sessionToken, \['SUPERA
 assert.match(fn('adminResetUserPassword'),/newPassword\.length > 128/);
 assert.match(fn('adminResetUserPassword'),/revokeOtherSessionsForUser_\(target\.userId, 0\)/);
 assert.match(fn('adminResetUserPassword'),/mustChangePassword/);
-console.log('OTP, account recovery, and password input safeguards passed.');
+console.log('Direct registration, account recovery, and password input safeguards passed.');
