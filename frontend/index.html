@@ -8,8 +8,8 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="description" content="Sistem Penerimaan Santri Baru Pesantren Ciawi Bogor Fathan Mubina">
-<link rel="manifest" href="./manifest.webmanifest?v=32.7.0">
-<link rel="stylesheet" href="./styles.css?v=32.9.0">
+<link rel="manifest" href="./manifest.webmanifest?v=32.12.0">
+<link rel="stylesheet" href="./styles.css?v=32.12.0">
 <link rel="apple-touch-icon" sizes="256x256" href="./assets/logo-fathan-mubina.png?v=32.7.0">
 <link rel="icon" type="image/svg+xml" sizes="32x32" href="./icons/favicon-32.svg?v=32.7.0">
 <link rel="icon" type="image/svg+xml" sizes="48x48" href="./icons/favicon-48.svg?v=32.7.0">
@@ -30,11 +30,23 @@
   </div>
 </section>
 <script src="./api-bridge.js?v=32.11.0"></script>
-<script src="./app.js?v=32.10.0"></script>
+<script src="./app.js?v=32.12.0"></script>
 <script>
 (function(){
   'use strict';
-  if('serviceWorker' in navigator)window.addEventListener('load',function(){navigator.serviceWorker.register('./sw.js?v=32.11.0',{updateViaCache:'none'}).then(function(reg){return reg.update().catch(function(e){console.warn('Service worker update:',e);});}).catch(function(e){console.warn('Service worker:',e);});});
+  if('serviceWorker' in navigator){
+    let refreshing=false;
+    navigator.serviceWorker.addEventListener('controllerchange',function(){
+      if(refreshing)return;
+      refreshing=true;
+      window.location.reload();
+    });
+    window.addEventListener('load',function(){
+      navigator.serviceWorker.register('./sw.js?v=32.12.0',{updateViaCache:'none'})
+        .then(function(reg){return reg.update().catch(function(e){console.warn('Service worker update:',e);});})
+        .catch(function(e){console.warn('Service worker:',e);});
+    });
+  }
   let deferredInstallPrompt=null;
   const overlay=document.getElementById('installOverlay'),btn=document.getElementById('installBtn'),later=document.getElementById('installLater'),info=document.getElementById('installText'),steps=document.getElementById('installSteps');
   const installMode=new URLSearchParams(location.search).has('install');
