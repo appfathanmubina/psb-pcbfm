@@ -2,7 +2,7 @@
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const code = fs.readFileSync('apps-script/Code.gs','utf8');
-const html = fs.readFileSync('apps-script/Index.html','utf8');
+const html = fs.readFileSync('apps-script/Index.html','utf8') + '\n' + fs.readFileSync('frontend/psb-fm-apps-script.js','utf8');
 const pwa = fs.readFileSync('frontend/app.js','utf8');
 const bridge = code.slice(code.indexOf('const PSB_PWA_BRIDGE_ALLOWED_FUNCTIONS'),code.indexOf(']);',code.indexOf('const PSB_PWA_BRIDGE_ALLOWED_FUNCTIONS')));
 assert.ok(code.includes('function registerWali(payload)'), 'direct Wali registration endpoint must exist');
