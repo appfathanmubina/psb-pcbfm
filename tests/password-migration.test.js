@@ -5,6 +5,7 @@ const fs = require('node:fs');
 
 const source = fs.readFileSync('apps-script/Code.gs', 'utf8');
 const setup = fs.readFileSync('apps-script/SetupDatabase.gs', 'utf8');
+const bridge = fs.readFileSync('frontend/api-bridge.js', 'utf8');
 
 function legacySha256(password, salt) {
   return crypto.createHash('sha256').update(String(password) + String(salt), 'utf8').digest('hex');
@@ -29,6 +30,8 @@ assert.match(source, /function migratePbkdf2PasswordToLegacySha256AfterLogin_\(/
 assert.match(source, /migratePbkdf2PasswordToLegacySha256AfterLogin_\(user, password\)/);
 assert.match(source, /pbkdf2Sha256Hex_\(String\(password\), salt, iterations\)/);
 assert.match(setup, /hashPassword_\(secret, salt\)/);
+assert.match(bridge, /const LOGIN_TIMEOUT_MS = 60000/);
+assert.match(bridge, /item\.functionName === 'login' \? LOGIN_TIMEOUT_MS : TIMEOUT_MS/);
 
 // New account, change-password, and admin-reset paths must use the shared
 // hashPassword_ helper, which now writes the original SHA-256 format.
