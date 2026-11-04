@@ -13,7 +13,7 @@ assert.match(fn('validateWaliRegistrationPayload_'),/!phoneNormalized && !emailN
 assert.doesNotMatch(source,/verifyWaliRegistration|resendWaliRegistrationEmailOtp|PSB_WALI_OTP/);
 assert.match(fn('changePassword'),/currentPasswordValue\.length > 1024/);
 assert.match(fn('changePassword'),/newPasswordValue\.length > 128/);
-assert.match(fn('changePassword'),/verifyPasswordForUser_\(currentPasswordValue, current\)/);
+assert.match(fn('changePassword'),/verifyPasswordForUser_\(currentPasswordValue, result\.user\)/);
 assert.match(fn('changePassword'),/revokeOtherSessionsForUser_\(/);
 assert.match(fn('adminResetUserPassword'),/requireRole_\(sessionToken, \['SUPERADMIN'\]\)/);
 assert.match(fn('adminResetUserPassword'),/newPassword\.length > 128/);
