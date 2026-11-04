@@ -163,7 +163,7 @@ async function warmNavigationData(){
   tasks.push(['announcement',()=>server('getAnnouncementPageData',state.token)]);
   tasks.push(['notifications',()=>server('getNotifications',state.token)]);
   if(hasAnyRole(['WALI','SUPERADMIN','ADMIN_PSB','VERIFIKATOR','KEUANGAN']))tasks.push(['reregistration',()=>server('getReregistrationPageData',state.token)]);
-  if(hasAnyRole(['SUPERADMIN','ADMIN_PSB','VERIFIKATOR','SELEKSI','KEUANGAN']))tasks.push(['reports',()=>server('getLaporanPageData',state.token,{})]);
+  if(hasAnyRole(['SUPERADMIN','ADMIN_PSB','VERIFIKATOR','SELEKSI','KEUANGAN']))tasks.push(['reports',()=>server('getReportingPageData',state.token,{})]);
   if(hasAnyRole(['SUPERADMIN','ADMIN_PSB']))tasks.push(['audit',()=>server('getAuditLogPageData',state.token,{page:1,search:'',action:'',module:'',from:'',to:'',pageSize:50})]);
   if(hasAnyRole(['SUPERADMIN','ADMIN_PSB']))tasks.push(['master',async()=>{const [defs,items,lifecycle]=await Promise.all([server('getMasterDefinitions',state.token),server('getMasterData',state.token,state.masterKey,true),server('getAcademicYearLifecycleData',state.token)]);return {success:!!(defs?.success&&items?.success),definitions:defs?.definitions||{},items:items?.items||[],lifecycle:lifecycle?.success?lifecycle:null};}]);
   // Sequential background warm-up avoids flooding Apps Script with simultaneous Spreadsheet reads.
@@ -822,7 +822,7 @@ async function loadReports(){
   const panel=$('reportPanel');if(panel)panel.innerHTML='<div class="empty-state">Memuat data reporting...</div>';
   try{
     const filters={tahunAjaranId:$('reportYear')?.value||'',gelombangId:$('reportGelombang')?.value||'',jenjangId:$('reportJenjang')?.value||'',gender:$('reportGender')?.value||'',status:$('reportStatus')?.value||'',fromDate:$('reportFromDate')?.value||'',toDate:$('reportToDate')?.value||''};
-    const isDefault=!filters.tahunAjaranId&&!filters.gelombangId&&!filters.jenjangId&&!filters.gender&&!filters.status&&!filters.fromDate&&!filters.toDate;const r=(isDefault&&pageDataCached('reports'))||await warmPageData(isDefault?'reports':'reports-filter',()=>server('getLaporanPageData',state.token,filters));if(!r?.success){if(panel)panel.innerHTML=showMessage(r.message);return;}state.reportData=r;populateReportFilters(r);renderReportPanel(r);
+    const isDefault=!filters.tahunAjaranId&&!filters.gelombangId&&!filters.jenjangId&&!filters.gender&&!filters.status&&!filters.fromDate&&!filters.toDate;const r=(isDefault&&pageDataCached('reports'))||await warmPageData(isDefault?'reports':'reports-filter',()=>server('getReportingPageData',state.token,filters));if(!r?.success){if(panel)panel.innerHTML=showMessage(r.message);return;}state.reportData=r;populateReportFilters(r);renderReportPanel(r);
   }catch(e){if(panel)panel.innerHTML=showMessage('Gagal memuat reporting.');}
 }
 function populateReportFilters(data){
