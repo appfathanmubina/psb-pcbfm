@@ -54,5 +54,21 @@ assert.deepEqual(sort(common.filter(n => apps.get(n) !== pwa.get(n))), sort(inte
 for (const name of intentionallyDifferentBodies) {
   assert.ok(apps.has(name) && pwa.has(name), 'Allowlisted function must exist in both: ' + name);
 }
+
+for (const [label, source] of [['Apps Script', appsSource], ['PWA', pwaSource]]) {
+  assert.ok(source.includes('placeholder="Masukkan username, nomor HP, atau email"'),
+    label + ' login must use a neutral production placeholder');
+  assert.ok(!/placeholder="[^"]*Superadmin/i.test(source),
+    label + ' login must not suggest a built-in Superadmin username');
+  assert.ok(source.includes("state.config.APP_VERSION||'30.14'"),
+    label + ' dashboard fallback version must match backend production version');
+  assert.ok(source.includes("state.config.RELEASE_STAGE||'PRODUCTION'"),
+    label + ' dashboard must show the configured release stage');
+  assert.ok(!/Stage\s*\d+/.test(source.slice(source.indexOf('function renderMore'), source.indexOf('function hasAnyRole'))),
+    label + ' user-facing More menu must not expose internal stage numbers');
+  assert.ok(!source.includes('<span class="pill"></span>'),
+    label + ' must not render empty metadata badges');
+}
+
 console.log('UI function parity safeguards: OK (' + apps.size + ' Apps Script, ' + pwa.size +
   ' PWA functions; ' + intentionallyDifferentBodies.length + ' reviewed intentional differences)');
