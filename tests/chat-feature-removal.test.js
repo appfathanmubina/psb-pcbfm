@@ -24,6 +24,11 @@ assert.doesNotMatch(appsUi + pwaUi + styles, /chat-fab|chat-layout|chatPollTimer
 assert.doesNotMatch(appsUi + pwaUi, /\['chat','Chat','chat'\]|\['chat','Chat'/i, 'removed Chat navigation entry');
 assert.doesNotMatch(setup, /CHAT_THREADS|CHAT_MESSAGES|CHAT_RETENTION_DAYS|CHAT_AUTOMATION_ENABLED|ensureChatAutomationTrigger_|installChatAutomationTrigger_/);
 assert.match(setup, /function removeLegacyChatAutomationTriggers_\(\)/);
+assert.match(setup, /function cleanupLegacyChatAutomationTriggers\(\)/);
+assert.match(setup, /function cleanupLegacyChatAutomationTriggers\(\)\s*\{[\s\S]*?SpreadsheetApp\.getUi\(\)/,
+  'Manual trigger cleanup must require the bound spreadsheet editor UI');
+assert.match(setup, /ui\.alert\([\s\S]*?ui\.ButtonSet\.YES_NO/,
+  'Manual trigger cleanup must require explicit editor confirmation');
 assert.match(setup, /legacyHandlers = \['runChatAutomation', 'runChatAutomation_'\]/);
 assert.match(setup, /ScriptApp\.deleteTrigger\(trigger\)/);
 assert.doesNotMatch(setup, /ScriptApp\.newTrigger\(/);
