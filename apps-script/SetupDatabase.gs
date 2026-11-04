@@ -82,7 +82,6 @@ const PSB_HEADERS = {
   SELECTION_RESULTS: ['resultId','registrationId','status','announcementDate','note','createdAt','updatedAt'],
   REREGISTRATIONS: ['reregistrationId','registrationId','status','completedAt','note','createdAt','updatedAt'],
   INCIDENTS: ['incidentId','category','priority','status','title','description','relatedModule','relatedRecordId','reportedBy','assignedTo','resolutionNote','createdAt','updatedAt','resolvedAt','closedAt'],
-  WALI_OTP: ['verificationId','name','phone','phoneNormalized','email','emailNormalized','passwordHash','passwordSalt','otpHash','otpSalt','expiresAt','attempts','maxAttempts','sendCount','lastSentAt','status','createdAt','verifiedAt','waMessageId']
 };
 
 function setupPSBDatabase_() {
