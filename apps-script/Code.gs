@@ -217,48 +217,85 @@ function getPublicConfig(forceRefresh) {
 // =====================================================
 
 function login(identifier, password) {
+  // Catat durasi per tahap untuk diagnosis performa tanpa merekam
+  // identifier, password, hash, salt, token, atau data pribadi pengguna.
+  const timingStartedAt = Date.now();
+  const timingStages = {};
+  let timingStage = 'input';
+  let timingStageStartedAt = timingStartedAt;
+
+  function enterTimingStage_(name) {
+    timingStages[timingStage] = Date.now() - timingStageStartedAt;
+    timingStage = name;
+    timingStageStartedAt = Date.now();
+  }
+
+  function finishLoginTiming_(result, outcome) {
+    try {
+      timingStages[timingStage] = Date.now() - timingStageStartedAt;
+      console.info('AUTH_TIMING ' + JSON.stringify({
+        outcome: outcome,
+        totalMs: Date.now() - timingStartedAt,
+        stages: timingStages
+      }));
+    } catch (timingError) {}
+    return result;
+  }
+
   try {
     identifier = String(identifier || '').trim();
     password = String(password || '');
-    if (!identifier || !password || password.length > 1024) return fail_('No. HP/email dan password wajib diisi dengan benar.');
+    if (!identifier || !password || password.length > 1024) {
+      return finishLoginTiming_(fail_('No. HP/email dan password wajib diisi dengan benar.'), 'invalid_input');
+    }
 
     const key = normalizeIdentifier_(identifier);
+    enterTimingStage_('loginLockCheck');
     const lock = getLoginLock_(key);
-    if (lock.locked) return fail_('Terlalu banyak percobaan. Silakan coba lagi dalam ' + lock.remainingMinutes + ' menit.');
+    if (lock.locked) {
+      return finishLoginTiming_(fail_('Terlalu banyak percobaan. Silakan coba lagi dalam ' + lock.remainingMinutes + ' menit.'), 'locked');
+    }
 
+    enterTimingStage_('userLookup');
     const user = findUser_(key);
     if (!user || String(user.status).toUpperCase() !== 'ACTIVE') {
       registerLoginFailure_(key);
-      return fail_('Login gagal. Periksa No. HP/email dan password.');
+      return finishLoginTiming_(fail_('Login gagal. Periksa No. HP/email dan password.'), 'user_unavailable');
     }
 
+    enterTimingStage_('passwordVerification');
     const passwordCheck = verifyPasswordForUser_(password, user);
     if (!passwordCheck.valid) {
       registerLoginFailure_(key);
-      return fail_('Login gagal. Periksa No. HP/email dan password.');
+      return finishLoginTiming_(fail_('Login gagal. Periksa No. HP/email dan password.'), 'password_rejected');
     }
 
     // Migrasi akun lama secara otomatis setelah password lama berhasil diverifikasi.
     // Tidak mengubah identitas, role, atau data pendaftaran pengguna.
-    if (passwordCheck.needsUpgrade && !migrateLegacyPasswordAfterLogin_(user, password)) {
-      registerLoginFailure_(key);
-      return fail_('Login belum dapat diselesaikan. Silakan coba kembali.');
+    if (passwordCheck.needsUpgrade) {
+      enterTimingStage_('legacyPasswordMigration');
+      if (!migrateLegacyPasswordAfterLogin_(user, password)) {
+        registerLoginFailure_(key);
+        return finishLoginTiming_(fail_('Login belum dapat diselesaikan. Silakan coba kembali.'), 'migration_failed');
+      }
     }
 
+    enterTimingStage_('clearLoginFailure');
     clearLoginFailure_(key);
     // Hanya operasi yang wajib untuk menyelesaikan login dilakukan sebelum response.
     // LastLogin dan audit dipindahkan ke best-effort call setelah UI sudah tampil.
+    enterTimingStage_('sessionCreation');
     const session = createSession_(user.userId);
 
-    return {
+    return finishLoginTiming_({
       success: true,
       sessionToken: session.token,
       user: publicUser_(user),
       mustChangePassword: user.mustChangePassword === true || String(user.mustChangePassword).toUpperCase() === 'TRUE'
-    };
+    }, 'success');
   } catch (e) {
     console.error('AUTH_LOGIN_FAILED');
-    return fail_('Terjadi kesalahan saat login. Silakan coba lagi.');
+    return finishLoginTiming_(fail_('Terjadi kesalahan saat login. Silakan coba lagi.'), 'error');
   }
 }
 
