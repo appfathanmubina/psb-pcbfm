@@ -27,6 +27,7 @@ jobs:
           test -f frontend/index.html
           test -f frontend/styles.css
           test -f frontend/app.js
+          test -f frontend/psb-fm-apps-script.js
           test -f frontend/manifest.webmanifest
           test -f frontend/sw.js
           test -f apps-script/Code.gs
@@ -35,6 +36,7 @@ jobs:
           test -f apps-script/Index.html
           test -f apps-script/appsscript.json
           node --check frontend/app.js
+          node --check frontend/psb-fm-apps-script.js
           node -e "JSON.parse(require('fs').readFileSync('frontend/manifest.webmanifest', 'utf8'))"
           node -e "JSON.parse(require('fs').readFileSync('apps-script/appsscript.json', 'utf8'))"
           node -e "JSON.parse(require('fs').readFileSync('appsscript.json', 'utf8'))"
