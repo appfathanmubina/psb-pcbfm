@@ -66,7 +66,8 @@ Untuk memastikan source di kedua tempat sama, gunakan prosedur manual berikut:
 - Jika akun Superadmin sudah ada, fungsi bootstrap tidak menimpa password atau akun yang ada.
 - Hash password baru menggunakan PBKDF2-HMAC-SHA256 dengan salt acak dan 60.000 iterasi. Akun lama tetap dapat login dengan password yang sama; setelah login lama berhasil, hash akun tersebut otomatis dimigrasikan. Password tidak direset dan data/role pengguna tidak diubah.
 - Pendaftaran akun, perubahan password, reset administrator, dan bootstrap Superadmin menggunakan format hash baru. Format hash menyimpan nama skema dan jumlah iterasi agar dapat ditingkatkan pada migrasi berikutnya.
-- Fungsi pemeliharaan internal (`cleanupPSBSessions_`, `runChatAutomation_`) dan fungsi setup/bootstrap (`setupPSBDatabase_`, `configureInitialSuperadmin_`, `createInitialSuperadmin_`, `installChatAutomationTrigger_`) memakai akhiran garis bawah agar tidak menjadi endpoint `google.script.run` yang dapat dipanggil browser.
+- Fungsi pemeliharaan internal (`cleanupPSBSessions_`, `removeLegacyChatAutomationTriggers_`) dan fungsi setup/bootstrap (`setupPSBDatabase_`, `configureInitialSuperadmin_`, `createInitialSuperadmin_`) memakai akhiran garis bawah agar tidak menjadi endpoint `google.script.run` yang dapat dipanggil browser.
+- Fitur Chat Wali ↔ Admin PSB telah dihentikan dan dihapus dari UI, API, serta otomasi. Data historis pada sheet chat lama tidak dihapus otomatis.
 - `ensureSheet_()` tidak lagi menimpa header sheet yang berbeda. Proses setup berhenti dengan pesan kesalahan agar struktur dan data dapat diperiksa manual.
 - Error internal dari handler Bridge dicatat di execution log dan pesan yang dikirim ke pemanggil publik dibuat umum.
 - Pendaftaran Wali mewajibkan OTP email. Email wajib, nomor HP opsional, dan akun baru hanya dibuat setelah OTP berhasil diverifikasi. Pengiriman menggunakan MailApp bawaan Google Apps Script; tidak memerlukan token layanan eksternal.
@@ -102,7 +103,7 @@ Workflow `Validate PSB PWA` memeriksa struktur source frontend, syntax JavaScrip
 
 `frontend/` saat ini merupakan hasil ekstraksi kode UI, bukan endpoint API mandiri. Jangan mengaktifkan API publik sebelum desain autentikasi/CORS selesai.
 
-Setelah push dan regresi aman, tahap berikutnya adalah pengujian login/session, upload dokumen, pembayaran, seleksi, chat, notifikasi, dan seluruh role sebelum mempertimbangkan static hosting penuh.
+Setelah push dan regresi aman, tahap berikutnya adalah pengujian login/session, upload dokumen, pembayaran, seleksi, notifikasi, dan seluruh role sebelum mempertimbangkan static hosting penuh.
 
 ## Security Audit
 

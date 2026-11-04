@@ -21,11 +21,9 @@
    - `setupPSBDatabase_`
    - `configureInitialSuperadmin_`
    - `createInitialSuperadmin_`
-   - `installChatAutomationTrigger_`
 4. Renamed internal maintenance functions to private names:
-   - `runChatAutomation_`
    - The session cleanup helper remains private as `cleanupPSBSessions_`; the redundant public wrapper was removed.
-5. The chat automation trigger setup removes both the legacy public handler and the new private handler before installing the current trigger.
+5. The PSB Chat module and scheduled automation have been retired. `removeLegacyChatAutomationTriggers_()` removes legacy `runChatAutomation` and `runChatAutomation_` triggers without creating replacements.
 6. Bridge backend exceptions return a generic public error while details are written to the execution log.
 7. Existing spreadsheet headers are checked and mismatches cause a safe stop rather than overwriting headers.
 8. Added CI checks to prevent the protected setup/maintenance functions from being reintroduced as browser-callable public functions, and to parse-check Apps Script JavaScript files.
@@ -36,7 +34,7 @@
 
 - The PWA bridge has an explicit function allowlist.
 - Authenticated data and mutation endpoints reviewed use session validation and role checks.
-- Wali registration, payment, document, and chat paths reviewed include ownership checks against the authenticated user's registration or thread.
+- Wali registration, payment, and document paths reviewed include ownership checks against the authenticated user's registration.
 - Public configuration returns a narrow allowlist of browser-needed settings.
 - Public gallery is intentionally unauthenticated and reads images from a configured Drive folder.
 - Session tokens are generated with UUID entropy and only token hashes are stored in the session sheet.
@@ -60,9 +58,16 @@
 ### Medium priority
 
 - **Public gallery Drive folder:** `getPublicGallery` now fails closed unless trusted administrators explicitly configure `PSB_PUBLIC_GALLERY_FILE_IDS`. Only up to 15 allowlisted JPEG/PNG/WEBP/GIF files that remain direct children of `PSB_PUBLIC_GALLERY_FOLDER_ID` (or the legacy folder fallback) are returned. Original Drive filenames are not exposed. Keep student documents and private family photos outside the gallery, and manually verify each approved image's sharing/access settings. The allowlist is a publication control, not a substitute for checking image consent.
-- **Upload resource limits:** the current repository source now checks encoded Base64 length before decoding, enforces server-side byte limits, and verifies PDF/JPEG/PNG/WEBP signatures for document, payment, and chat uploads. Chat attachments are capped at 10 MB even if configuration is higher; document uploads default to 10 MB and are capped at 20 MB. These controls still require Apps Script runtime testing with valid and deliberately mismatched files.
+- **Upload resource limits:** the current repository source checks encoded Base64 length before decoding, enforces server-side byte limits, and verifies PDF/JPEG/PNG/WEBP signatures for document and payment uploads. Document uploads default to 10 MB and are capped at 20 MB. These controls still require Apps Script runtime testing with valid and deliberately mismatched files.
 - **Abuse throttling:** login lockout uses CacheService, which is best-effort and can be affected by concurrent requests or cache eviction. Add stronger server-side throttling for login and public registration if the service receives abusive traffic.
 - **Bootstrap password entry:** the trusted-editor bootstrap uses a standard Apps Script prompt; the password is not masked. Run it only in a private environment with the screen not visible to others.
+
+## Retirement of PSB Chat
+
+- The Wali ↔ Admin PSB chat feature, chat APIs, chat UI, polling, retention cleanup, and scheduled automation have been removed from the current source.
+- Existing `CHAT_THREADS` and `CHAT_MESSAGES` spreadsheet tabs and their historical contents are intentionally left untouched. The revised setup no longer creates or modifies those tabs.
+- `removeLegacyChatAutomationTriggers_()` removes old triggers whose handler is `runChatAutomation` or `runChatAutomation_`; it never creates a new trigger. The same cleanup runs during `setupPSBDatabase_()`.
+- A repository-wide source scan of the current application files found no OneSignal SDK, endpoint, or configuration reference. The chat implementation present in this branch used the PSB spreadsheet and Apps Script notifications, not an active OneSignal integration.
 
 ## Email OTP registration
 
@@ -79,7 +84,7 @@
 
 - `decodeAndValidateUpload_()` rejects empty/malformed Base64 and checks the encoded length against the maximum byte size before calling `Utilities.base64Decode()`.
 - The decoded byte count is checked again, and the file signature must match the declared MIME type for PDF, JPEG, PNG, or WEBP.
-- Payment proof uploads are limited to 5 MB; chat attachments use the configured limit with a hard ceiling of 10 MB; document uploads use the document-type limit (or 10 MB when unset) with a hard ceiling of 20 MB.
+- Payment proof uploads are limited to 5 MB; document uploads use the document-type limit (or 10 MB when unset) with a hard ceiling of 20 MB.
 - The existing per-document MIME allowlist and ownership/role checks remain in place. This is defense-in-depth, not antivirus scanning; uploaded files should still be treated as untrusted content.
 - Verify actual browser payloads and Apps Script behavior in a test deployment before production sync.
 
@@ -95,8 +100,8 @@
 ## Operational requirements before production sync
 
 1. Do not assume GitHub changes automatically update the deployed Apps Script project. Copy the reviewed Apps Script source manually and deploy it only after a controlled backup and test.
-2. When applying the new source to Apps Script, run `installChatAutomationTrigger_` from the trusted Apps Script editor once. This replaces any legacy `runChatAutomation` trigger with the private `runChatAutomation_` handler. Alternatively, run `setupPSBDatabase_` if a full setup pass is intentionally required.
-3. Verify login, Wali registration, password change/reset, session expiry/logout, Wali ownership boundaries, payments, documents, chat, and scheduled chat automation in a test deployment.
+2. After copying the updated `SetupDatabase.gs` to Apps Script, run `removeLegacyChatAutomationTriggers_()` once from the trusted Apps Script editor. It deletes legacy chat automation triggers and does not install a replacement. The normal setup function also invokes this cleanup.
+3. Verify login, Wali registration, password change/reset, session expiry/logout, Wali ownership boundaries, payments, documents, notifications, and all active roles in a test deployment.
 4. Do not copy any source into the production Apps Script project until the source comparison and backup are complete.
 
 ## Audit conclusion
