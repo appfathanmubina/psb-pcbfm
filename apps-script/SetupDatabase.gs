@@ -99,7 +99,9 @@ function setupPSBDatabase_() {
     const root = getOrCreateFolder_(PSB_SETUP.ROOT_FOLDER_NAME);
     PropertiesService.getScriptProperties().setProperties({
       PSB_SPREADSHEET_ID: ss.getId(),
-      PSB_DRIVE_ROOT_ID: root.getId()
+      PSB_DRIVE_ROOT_ID: root.getId(),
+      // Alias kompatibilitas untuk instalasi/validasi lama; keduanya menunjuk folder yang sama.
+      PSB_ROOT_FOLDER_ID: root.getId()
     }, false);
 
     Object.keys(PSB_SHEETS).forEach(key => ensureSheet_(ss, PSB_SHEETS[key], PSB_HEADERS[key]));
