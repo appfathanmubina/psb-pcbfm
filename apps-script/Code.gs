@@ -2520,8 +2520,6 @@ function getDashboardPageData(sessionToken) {
   const gelombangMasters = sheetRows_(ss.getSheetByName(PSB_SHEETS.MASTER_GELOMBANG));
   const candidateMap = {};
   candidates.forEach(x => candidateMap[String(x.candidateId)] = x);
-  const userMap = {};
-  users.forEach(x => userMap[String(x.userId)] = x);
   const yearMap = {};
   yearMasters.forEach(x => yearMap[String(x.tahunAjaranId)] = x);
   const jenjangMap = {};
@@ -2533,9 +2531,24 @@ function getDashboardPageData(sessionToken) {
   const activeYearId = yearMasters.find(x => String(x.name || '') === activeYear)?.tahunAjaranId || '';
   const periodRegs = activeYearId ? regs.filter(x => String(x.tahunAjaranId) === String(activeYearId)) : regs;
   const periodRegIds = {};
-  periodRegs.forEach(x => periodRegIds[String(x.registrationId)] = true);
+  const periodRegMap = {};
+  periodRegs.forEach(x => {
+    const id = String(x.registrationId);
+    periodRegIds[id] = true;
+    periodRegMap[id] = x;
+  });
   const periodBills = bills.filter(x => periodRegIds[String(x.registrationId)]);
   const periodPayments = payments.filter(x => periodRegIds[String(x.registrationId)]);
+  // Index pembayaran terbaru sekali; hindari filter + sort ulang untuk setiap tagihan.
+  const latestPaymentByBill = {};
+  periodPayments.forEach(payment => {
+    const billId = String(payment.billId || '');
+    if (!billId) return;
+    const current = latestPaymentByBill[billId];
+    const timestamp = new Date(payment.createdAt || 0).getTime() || 0;
+    const currentTimestamp = current ? (new Date(current.createdAt || 0).getTime() || 0) : -1;
+    if (!current || timestamp > currentTimestamp) latestPaymentByBill[billId] = payment;
+  });
   const periodParticipants = participants.filter(x => periodRegIds[String(findParticipantRegistration_(x, participants))]);
   const periodResults = results.filter(x => periodRegIds[String(x.registrationId)]);
   const periodRereg = reregistrations.filter(x => periodRegIds[String(x.registrationId)]);
@@ -2548,7 +2561,7 @@ function getDashboardPageData(sessionToken) {
     if(st==='PAID') paymentByStatus.paid++;
     else if(st==='PAYMENT_REVIEW') paymentByStatus.review++;
     else paymentByStatus.unpaid++;
-    const p=periodPayments.filter(x=>String(x.billId)===String(b.billId)).sort((a,z)=>new Date(z.createdAt||0)-new Date(a.createdAt||0))[0];
+    const p=latestPaymentByBill[String(b.billId || '')];
     if(String(p?.status||'').toUpperCase()==='REJECTED') paymentByStatus.rejected++;
   });
   const resultCounts={passed:0,notPassed:0,waitlist:0,pending:0};
@@ -2570,12 +2583,11 @@ function getDashboardPageData(sessionToken) {
   periodRegs.forEach(r => { candidateNameByReg[String(r.registrationId)] = String(candidateMap[String(r.candidateId)]?.fullName || '-'); });
   const makeTask = (r, type, label, action, extra) => ({registrationId:r.registrationId,registrationNumber:r.registrationNumber||'',candidateName:candidateNameByReg[String(r.registrationId)]||'-',status:String(r.status||''),statusLabel:statusLabel_(String(r.status||'')),type,label,action,updatedAt:r.updatedAt||r.createdAt||'',...extra});
   const verificationItems = periodRegs.filter(r=>['SUBMITTED','UNDER_REVIEW','REVISION'].indexOf(String(r.status||'').toUpperCase())>=0).sort((a,b)=>new Date(a.updatedAt||a.createdAt||0)-new Date(b.updatedAt||b.createdAt||0));
-  const paymentItems = periodBills.filter(b=>String(b.status||'').toUpperCase()==='PAYMENT_REVIEW').map(b=>{const r=periodRegs.find(x=>String(x.registrationId)===String(b.registrationId));return r?makeTask(r,'PAYMENT','Bukti pembayaran menunggu verifikasi','payments',{billId:b.billId,amount:Number(b.amount)||0}):null;}).filter(Boolean).sort((a,b)=>new Date(a.updatedAt||0)-new Date(b.updatedAt||0));
-  const participantMap = {}; periodParticipants.forEach(x=>participantMap[String(x.registrationId)] = x);
-  const selectionItems = periodParticipants.filter(x=>['SCHEDULED','PRESENT','PENDING'].indexOf(String(x.status||'').toUpperCase())>=0).map(x=>{const r=periodRegs.find(reg=>String(reg.registrationId)===String(x.registrationId));return r?makeTask(r,'SELECTION','Peserta tes perlu ditindaklanjuti','selection',{participantId:x.participantId,scheduleId:x.scheduleId,participantStatus:String(x.status||'')}):null;}).filter(Boolean);
+  const paymentItems = periodBills.filter(b=>String(b.status||'').toUpperCase()==='PAYMENT_REVIEW').map(b=>{const r=periodRegMap[String(b.registrationId||'')];return r?makeTask(r,'PAYMENT','Bukti pembayaran menunggu verifikasi','payments',{billId:b.billId,amount:Number(b.amount)||0}):null;}).filter(Boolean).sort((a,b)=>new Date(a.updatedAt||0)-new Date(b.updatedAt||0));
+  const selectionItems = periodParticipants.filter(x=>['SCHEDULED','PRESENT','PENDING'].indexOf(String(x.status||'').toUpperCase())>=0).map(x=>{const r=periodRegMap[String(x.registrationId||'')];return r?makeTask(r,'SELECTION','Peserta tes perlu ditindaklanjuti','selection',{participantId:x.participantId,scheduleId:x.scheduleId,participantStatus:String(x.status||'')}):null;}).filter(Boolean);
   const scheduleItems = schedules.filter(x=>String(x.isActive).toUpperCase()==='TRUE' && [today,tomorrow].indexOf(String(x.selectionDate||'').slice(0,10))>=0).sort((a,b)=>String(a.selectionDate||'').localeCompare(String(b.selectionDate||'')));
-  const publishItems = periodResults.filter(x=>['PASSED','NOT_PASSED','WAITLIST'].indexOf(String(x.status||'').toUpperCase())>=0 && !String(x.announcementDate||'').trim()).map(x=>{const r=periodRegs.find(reg=>String(reg.registrationId)===String(x.registrationId));return r?makeTask(r,'ANNOUNCEMENT','Hasil seleksi siap dipublikasikan','announcement',{resultId:x.resultId,resultStatus:String(x.status||'')}):null;}).filter(Boolean);
-  const reregItems = periodRereg.filter(x=>['PENDING','PAYMENT_PENDING','PAYMENT_VERIFIED'].indexOf(String(x.status||'').toUpperCase())>=0).map(x=>{const r=periodRegs.find(reg=>String(reg.registrationId)===String(x.registrationId));return r?makeTask(r,'REREGISTRATION','Daftar ulang masih perlu diselesaikan','reregistration',{reregistrationId:x.reregistrationId,reregistrationStatus:String(x.status||'')}):null;}).filter(Boolean);
+  const publishItems = periodResults.filter(x=>['PASSED','NOT_PASSED','WAITLIST'].indexOf(String(x.status||'').toUpperCase())>=0 && !String(x.announcementDate||'').trim()).map(x=>{const r=periodRegMap[String(x.registrationId||'')];return r?makeTask(r,'ANNOUNCEMENT','Hasil seleksi siap dipublikasikan','announcement',{resultId:x.resultId,resultStatus:String(x.status||'')}):null;}).filter(Boolean);
+  const reregItems = periodRereg.filter(x=>['PENDING','PAYMENT_PENDING','PAYMENT_VERIFIED'].indexOf(String(x.status||'').toUpperCase())>=0).map(x=>{const r=periodRegMap[String(x.registrationId||'')];return r?makeTask(r,'REREGISTRATION','Daftar ulang masih perlu diselesaikan','reregistration',{reregistrationId:x.reregistrationId,reregistrationStatus:String(x.status||'')}):null;}).filter(Boolean);
   const operational = {
     activeSchedules:schedules.filter(x=>String(x.isActive).toUpperCase()==='TRUE').length,
     activeUsers:users.filter(x=>String(x.status).toUpperCase()==='ACTIVE').length,
