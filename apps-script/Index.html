@@ -570,8 +570,18 @@ async function warmNavigationData(){
   if(hasAnyRole(['SUPERADMIN','ADMIN_PSB','VERIFIKATOR','SELEKSI','KEUANGAN']))tasks.push(['reports',()=>server('getReportingPageData',state.token,{})]);
   if(hasAnyRole(['SUPERADMIN','ADMIN_PSB']))tasks.push(['audit',()=>server('getAuditLogPageData',state.token,{page:1,search:'',action:'',module:'',from:'',to:'',pageSize:50})]);
   if(hasAnyRole(['SUPERADMIN','ADMIN_PSB']))tasks.push(['master',async()=>{const [defs,items,lifecycle]=await Promise.all([server('getMasterDefinitions',state.token),server('getMasterData',state.token,state.masterKey,true),server('getAcademicYearLifecycleData',state.token)]);return {success:!!(defs?.success&&items?.success),definitions:defs?.definitions||{},items:items?.items||[],lifecycle:lifecycle?.success?lifecycle:null};}]);
-  // Sequential background warm-up avoids flooding Apps Script with simultaneous Spreadsheet reads.
-  for(const [page,loader] of tasks){if(pageDataCached(page))continue;await warmPageData(page,loader);}
+  // Prefetch dilakukan hanya saat browser senggang dan berhenti saat pengguna
+  // membuka menu lain agar tidak merebut slot eksekusi Apps Script.
+  for(const [page,loader] of tasks){
+    if(document.visibilityState==='hidden'||state.page!=='home'||!state.token)return;
+    if(pageDataCached(page))continue;
+    await warmPageData(page,loader);
+  }
+}
+function scheduleWarmNavigationData(){
+  const run=()=>{if(document.visibilityState!=='hidden'&&state.token&&state.page==='home')warmNavigationData();};
+  if(typeof window.requestIdleCallback==='function')window.requestIdleCallback(run,{timeout:4000});
+  else setTimeout(run,1200);
 }
 
 function showMessage(text,type='error'){return `<div class="message ${type}">${esc(text)}</div>`}
@@ -994,16 +1004,16 @@ async function renderHome(){
   const admin=hasAnyRole(['SUPERADMIN','ADMIN_PSB','VERIFIKATOR']);
   if(!wali){
     const local=readDashboardLocal();
-    $('content').innerHTML=`<section class="hero"><div style="display:flex;gap:10px;align-items:flex-start;justify-content:space-between;flex-wrap:wrap"><div><h2>Dashboard</h2><p>Ringkasan operasional PSB periode ${esc(state.config.ACTIVE_YEAR||'2027/2028')}.</p></div><span class="pill info">${esc(state.config.RELEASE_STAGE||'PRODUCTION')} · v${esc(state.config.APP_VERSION||'30.14')}</span></div></section><div id="dashboardPanel"><div class="empty-state">${local?'Memperbarui ringkasan...':'Memuat dashboard...'}</div></div>`;
+    $('content').innerHTML=`<section class="hero"><div style="display:flex;gap:10px;align-items:flex-start;justify-content:space-between;flex-wrap:wrap"><div><h2>Dashboard</h2><p>Ringkasan operasional PSB periode ${esc(state.config.ACTIVE_YEAR||'2027/2028')}.</p></div></div></section><div id="dashboardPanel"><div class="empty-state">${local?'Memperbarui ringkasan...':'Memuat dashboard...'}</div></div>`;
     if(local){state.cache.pages.dashboard={data:local,ts:Date.now()};renderAdminDashboard(local);}
-    try{const r=await server('getDashboardPageData',state.token);if(!r.success){if(!local)$('dashboardPanel').innerHTML=showMessage(r.message);return;}state.cache.pages.dashboard={data:r,ts:Date.now()};writeDashboardLocal(r);renderAdminDashboard(r);setTimeout(()=>warmNavigationData(),0);}catch(e){if(!local)$('dashboardPanel').innerHTML=showMessage('Gagal memuat dashboard.');}
+    try{const r=await server('getDashboardPageData',state.token);if(!r.success){if(!local)$('dashboardPanel').innerHTML=showMessage(r.message);return;}state.cache.pages.dashboard={data:r,ts:Date.now()};writeDashboardLocal(r);renderAdminDashboard(r);scheduleWarmNavigationData();}catch(e){if(!local)$('dashboardPanel').innerHTML=showMessage('Gagal memuat dashboard.');}
     return;
   }
   const maintenanceBanner=String(state.config.MAINTENANCE_MODE||'').toUpperCase()==='TRUE'?`<div class="status-card" style="margin-bottom:12px"><div class="status-row"><div><b>Sistem dalam pemeliharaan</b><div class="muted" style="font-size:10px;margin-top:3px">Akses informasi tetap tersedia, tetapi tindakan perubahan data sementara dinonaktifkan.</div></div><span class="pill warning">Maintenance</span></div></div>`:''; $('content').innerHTML=`<section class="hero"><h2>Selamat datang, ${esc(state.user.name)}</h2><p>Pantau tahapan setiap pendaftaran anak dan lanjutkan langkah yang masih harus dilakukan.</p></section>${maintenanceBanner}<div id="waliHomeFlow"><div class="empty-state">Memuat alur pendaftaran...</div></div>`;
   try{
     const r=await server('getWaliHomeData',state.token);
     if(!r.success){$('waliHomeFlow').innerHTML=showMessage(r.message||'Alur pendaftaran belum dapat dimuat.');return}
-    renderWaliHomeFlow(r);setTimeout(()=>warmNavigationData(),0);
+    renderWaliHomeFlow(r);scheduleWarmNavigationData();
   }catch(e){$('waliHomeFlow').innerHTML=showMessage('Gagal memuat alur pendaftaran. Silakan coba lagi.');}
 }
 function waliFlowAction(key,id){
