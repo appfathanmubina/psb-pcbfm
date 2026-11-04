@@ -44,6 +44,34 @@ assert.match(create, /SESSION_TTL_MINUTES/);
 assert.match(create, /appendRow\(\[sessionId, userId, tokenHash, now, expires, now, 'ACTIVE'\]\)/);
 const logout = fn('logout');
 assert.match(logout, /invalidateSession_\(result\.sessionRow, 'LOGOUT'\)/);
+const sessionIndex = fn('getSessionUser_');
+assert.match(sessionIndex, /PSB_SESSION_ROW_V1_/,
+  'Session lookup must use a cached row-number index');
+assert.match(sessionIndex, /getRange\(cachedRowNumber,\s*1,\s*1,\s*7\)/,
+  'Session cache hits must read only the indexed session row');
+assert.match(sessionIndex, /constantTimeEqual_\(String\(cachedRow\[2\]/,
+  'A cached session row must be checked against the requested token hash');
+assert.match(sessionIndex, /getRange\(2,\s*1,\s*lastRow\s*-\s*1,\s*7\)/,
+  'A full session scan is permitted only as an index-miss fallback');
+assert.match(sessionIndex, />=\s*2\s*\*\s*60000/,
+  'Session activity writes must be throttled to at most once per two minutes');
+assert.match(sessionIndex, /findUserById_\(String\(row\[1\]\),\s*true\)/,
+  'Session validation must continue checking the latest user row');
+const userById = fn('findUserById_');
+assert.match(userById, /PSB_USER_ROW_ID_V1_/,
+  'User ID lookup must use a row-number index');
+assert.match(userById, /getRange\(cachedRowNumber,\s*1,\s*1,\s*15\)/,
+  'User ID cache hits must read fresh user data from one row');
+assert.match(userById, /String\(row\[0\]\s*\|\|\s*''\)\s*===\s*value/,
+  'Cached user row must be checked against the requested user ID');
+const userByLogin = fn('findUser_');
+assert.match(userByLogin, /PSB_USER_ROW_LOGIN_V1_/,
+  'Login identifier lookup must use a row-number index');
+assert.match(userByLogin, /getRange\(cachedRowNumber,\s*1,\s*1,\s*15\)/,
+  'Login cache hits must read fresh user data from one row');
+const createSeed = fn('createSession_');
+assert.match(createSeed, /PSB_SESSION_ROW_V1_/,
+  'New sessions must seed their row index immediately');
 const cleanup = fn('cleanupPSBSessions_');
 assert.match(cleanup, /EXPIRED/);
 assert.match(cleanup, /IDLE_TIMEOUT/);

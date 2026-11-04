@@ -613,35 +613,58 @@ function createSession_(userId) {
   const sessionId = generateId_('SES');
   const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('SESSIONS');
   sheet.appendRow([sessionId, userId, tokenHash, now, expires, now, 'ACTIVE']);
+  // Seed the row index immediately so finalizeLogin and the first API call do not scan SESSIONS.
+  try { CacheService.getScriptCache().put('PSB_SESSION_ROW_V1_' + tokenHash.substring(0, 40), String(sheet.getLastRow()), 21600); } catch (e) {}
   return { token: token, expiresAt: expires.toISOString(), sessionId: sessionId };
 }
 
 function getSessionUser_(token, touch) {
   token = String(token || '');
   // Token sesi yang diterbitkan createSession_ adalah dua UUID (72 karakter).
-  // Batas panjang mencegah input arbitrer diproses tanpa mengubah token lama.
   if (!token || token.length < 32 || token.length > 256) return fail_('Session tidak ditemukan. Silakan login kembali.');
 
-  // Baca sumber sesi secara langsung agar pencabutan sesi berlaku segera.
-  const cache = CacheService.getScriptCache();
-  const sessionCacheKey = 'PSB_SESSION_' + sha256Hex_(token).substring(0, 40);
-  cache.remove(sessionCacheKey);
-
-  const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('SESSIONS');
-  if (!sheet || sheet.getLastRow() < 2) return fail_('Session tidak ditemukan. Silakan login kembali.');
-  const rows = sheet.getRange(2, 1, sheet.getLastRow() - 1, 7).getValues();
   const tokenHash = sha256Hex_(token);
-  const now = new Date();
+  const cache = CacheService.getScriptCache();
+  const sessionCacheKey = 'PSB_SESSION_ROW_V1_' + tokenHash.substring(0, 40);
+  const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('SESSIONS');
+  if (!sheet) return fail_('Session tidak ditemukan. Silakan login kembali.');
+
+  // Cache hanya menyimpan nomor baris, bukan status sesi. Status, expiry, dan
+  // aktivitas tetap dibaca langsung dari Spreadsheet agar logout/revoke berlaku segera.
   let found = null;
-  for (let i = rows.length - 1; i >= 0; i--) {
-    if (constantTimeEqual_(String(rows[i][2] || ''), tokenHash)) {
-      found = { rowNumber: i + 2, row: rows[i] };
-      break;
+  const cachedRowNumber = Number(cache.get(sessionCacheKey) || 0);
+  if (cachedRowNumber >= 2) {
+    try {
+      const cachedRow = sheet.getRange(cachedRowNumber, 1, 1, 7).getValues()[0];
+      if (constantTimeEqual_(String(cachedRow[2] || ''), tokenHash)) {
+        found = { rowNumber: cachedRowNumber, row: cachedRow };
+      } else {
+        cache.remove(sessionCacheKey);
+      }
+    } catch (e) {
+      cache.remove(sessionCacheKey);
+    }
+  }
+
+  // Cache miss/stale index: lakukan scan penuh satu kali, lalu simpan lokasi baris.
+  if (!found) {
+    const lastRow = sheet.getLastRow();
+    if (lastRow >= 2) {
+    const rows = sheet.getRange(2, 1, lastRow - 1, 7).getValues();
+    for (let i = rows.length - 1; i >= 0; i--) {
+      if (constantTimeEqual_(String(rows[i][2] || ''), tokenHash)) {
+        found = { rowNumber: i + 2, row: rows[i] };
+        try { cache.put(sessionCacheKey, String(found.rowNumber), 21600); } catch (e) {}
+        break;
+      }
+    }
     }
   }
   if (!found) return fail_('Session tidak valid. Silakan login kembali.');
+
   const row = found.row;
   if (String(row[6] || '').toUpperCase() !== 'ACTIVE') return fail_('Session sudah berakhir. Silakan login kembali.');
+  const now = new Date();
   const expiresAt = row[4] ? new Date(row[4]) : null;
   if (!expiresAt || !Number.isFinite(expiresAt.getTime())) {
     invalidateSession_(found, 'INVALID_EXPIRY');
@@ -661,14 +684,19 @@ function getSessionUser_(token, touch) {
     invalidateSession_(found, 'IDLE_TIMEOUT');
     return fail_('Session berakhir karena tidak aktif. Silakan login kembali.');
   }
-  // Bypass cache akun supaya perubahan status ACTIVE/non-ACTIVE langsung berlaku.
+
+  // Baca data akun terbaru, tetapi gunakan indeks row-number agar tidak memindai
+  // seluruh USERS pada setiap pemanggilan API.
   const user = findUserById_(String(row[1]), true);
   if (!user || String(user.status).toUpperCase() !== 'ACTIVE') {
     invalidateSession_(found, 'ACCOUNT_INACTIVE');
     return fail_('Akun tidak aktif.');
   }
-  if (touch) {
-    const touchedAt = new Date();
+
+  // Batasi penulisan lastActivity maksimal sekali per 2 menit per sesi.
+  // Idle timeout tetap 30 menit; validasi status sesi tetap dilakukan setiap request.
+  if (touch && (now.getTime() - lastActivity.getTime()) >= 2 * 60000) {
+    const touchedAt = now;
     sheet.getRange(found.rowNumber, 6).setValue(touchedAt);
     row[5] = touchedAt;
   }
@@ -750,27 +778,41 @@ function findUser_(key) {
   const normalized = String(key || '').toLowerCase();
   if (!normalized) return null;
   const cache = CacheService.getScriptCache();
-  const cacheKey = 'PSB_USER_V3_' + sha256Hex_(normalized).substring(0, 32);
-  const cached = cache.get(cacheKey);
-  if (cached) {
-    try { return JSON.parse(cached); } catch (e) {}
+  const cacheKey = 'PSB_USER_ROW_LOGIN_V1_' + sha256Hex_(normalized).substring(0, 32);
+  const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('USERS');
+  if (!sheet) return null;
+
+  function matches(row) {
+    return String(row[3] || '').trim().toLowerCase() === normalized ||
+      String(row[5] || '').trim().toLowerCase() === normalized ||
+      String(row[2] || '').trim().toLowerCase() === normalized ||
+      String(row[4] || '').trim().toLowerCase() === normalized;
   }
 
-  const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('USERS');
-  if (!sheet || sheet.getLastRow() < 2) return null;
-  const rows = sheet.getRange(2, 1, sheet.getLastRow() - 1, 15).getValues();
+  // Cache hanya menyimpan lokasi baris. Data akun selalu dibaca fresh agar
+  // perubahan status/password tidak tertahan oleh cache objek pengguna.
+  const cachedRowNumber = Number(cache.get(cacheKey) || 0);
+  if (cachedRowNumber >= 2) {
+    try {
+      const row = sheet.getRange(cachedRowNumber, 1, 1, 15).getValues()[0];
+      if (matches(row)) {
+        try { cache.put('PSB_USER_ROW_ID_V1_' + sha256Hex_(String(row[0] || '')).substring(0, 32), String(cachedRowNumber), 21600); } catch (e) {}
+        return userFromRow_(row, cachedRowNumber);
+      }
+    } catch (e) {}
+    cache.remove(cacheKey);
+  }
+
+  const lastRow = sheet.getLastRow();
+  if (lastRow < 2) return null;
+  const rows = sheet.getRange(2, 1, lastRow - 1, 15).getValues();
   for (let i = 0; i < rows.length; i++) {
-    const r = rows[i];
-    const phoneNormalized = String(r[3] || '').trim().toLowerCase();
-    const emailNormalized = String(r[5] || '').trim().toLowerCase();
-    const phoneRaw = String(r[2] || '').trim().toLowerCase();
-    const emailRaw = String(r[4] || '').trim().toLowerCase();
-    // Username legacy/bootstrap (termasuk akun Superadmin) disimpan pada kolom phone.
-    // Akun WALI tetap menggunakan phoneNormalized/emailNormalized seperti biasa.
-    if (phoneNormalized === normalized || emailNormalized === normalized || phoneRaw === normalized || emailRaw === normalized) {
-      const user = userFromRow_(r, i + 2);
-      try { cache.put(cacheKey, JSON.stringify(user), 300); } catch (e) {}
-      return user;
+    if (matches(rows[i])) {
+      try {
+        cache.put(cacheKey, String(i + 2), 21600);
+        cache.put('PSB_USER_ROW_ID_V1_' + sha256Hex_(String(rows[i][0] || '')).substring(0, 32), String(i + 2), 21600);
+      } catch (e) {}
+      return userFromRow_(rows[i], i + 2);
     }
   }
   return null;
@@ -780,19 +822,28 @@ function findUserById_(id, bypassCache) {
   const value = String(id || '');
   if (!value) return null;
   const cache = CacheService.getScriptCache();
-  const cacheKey = 'PSB_USER_ID_' + sha256Hex_(value).substring(0, 32);
-  if (!bypassCache) {
-    const cached = cache.get(cacheKey);
-    if (cached) { try { return JSON.parse(cached); } catch (e) {} }
-  }
+  const cacheKey = 'PSB_USER_ROW_ID_V1_' + sha256Hex_(value).substring(0, 32);
   const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('USERS');
-  if (!sheet || sheet.getLastRow() < 2) return null;
-  const rows = sheet.getRange(2, 1, sheet.getLastRow() - 1, 15).getValues();
+  if (!sheet) return null;
+
+  // bypassCache dipertahankan untuk kompatibilitas pemanggil lama. Indeks saja
+  // yang di-cache; isi baris pengguna selalu dibaca terbaru dari Spreadsheet.
+  const cachedRowNumber = Number(cache.get(cacheKey) || 0);
+  if (cachedRowNumber >= 2) {
+    try {
+      const row = sheet.getRange(cachedRowNumber, 1, 1, 15).getValues()[0];
+      if (String(row[0] || '') === value) return userFromRow_(row, cachedRowNumber);
+    } catch (e) {}
+    cache.remove(cacheKey);
+  }
+
+  const lastRow = sheet.getLastRow();
+  if (lastRow < 2) return null;
+  const rows = sheet.getRange(2, 1, lastRow - 1, 15).getValues();
   for (let i = 0; i < rows.length; i++) {
-    if (String(rows[i][0]) === value) {
-      const user = userFromRow_(rows[i], i + 2);
-      if (!bypassCache) { try { cache.put(cacheKey, JSON.stringify(user), 300); } catch (e) {} }
-      return user;
+    if (String(rows[i][0] || '') === value) {
+      try { cache.put(cacheKey, String(i + 2), 21600); } catch (e) {}
+      return userFromRow_(rows[i], i + 2);
     }
   }
   return null;
