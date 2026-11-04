@@ -373,5 +373,16 @@ function createInitialSuperadmin_() {
  * Aman dijalankan tanpa menjalankan setup database.
  */
 function cleanupLegacyChatAutomationTriggers() {
+  // Spreadsheet UI is available from the bound editor, not from the deployed
+  // web-app/browser context. This keeps maintenance cleanup off google.script.run.
+  const ui = SpreadsheetApp.getUi();
+  const choice = ui.alert(
+    'Bersihkan trigger chat lama',
+    'Hapus hanya trigger runChatAutomation dan runChatAutomation_ yang tersisa?',
+    ui.ButtonSet.YES_NO
+  );
+  if (choice !== ui.Button.YES) {
+    return { success: false, cancelled: true, removed: 0 };
+  }
   return removeLegacyChatAutomationTriggers_();
 }
