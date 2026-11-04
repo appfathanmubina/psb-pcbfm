@@ -1,7 +1,7 @@
 'use strict';
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
-const appsSource = fs.readFileSync('apps-script/Index.html', 'utf8');
+const appsSource = fs.readFileSync('apps-script/Index.html', 'utf8') + '\n' + fs.readFileSync('frontend/psb-fm-apps-script.js', 'utf8');
 const pwaSource = fs.readFileSync('frontend/app.js', 'utf8');
 
 const onlyInAppsScript = ['installStaticBrandIcons', 'renderPublicVideo'];
