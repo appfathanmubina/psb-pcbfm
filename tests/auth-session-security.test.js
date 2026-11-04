@@ -76,7 +76,7 @@ const migration = fn('migrateLegacyPasswordAfterLogin_');
 assert.ok(migration.indexOf('hashPassword_(') < migration.indexOf('lock.waitLock(20000)'),
   'Legacy PBKDF2 migration must derive the hash before taking the global lock');
 assert.match(migration.slice(migration.indexOf('lock.waitLock(20000)')),
-  /findUserById_\\(verifiedUser\\.userId, true\\)[\\s\\S]*?passwordHash !== verifiedUser\\.passwordHash[\\s\\S]*?return false/,
+  /findUserById_\(verifiedUser\.userId, true\)[\s\S]*?passwordHash !== verifiedUser\.passwordHash[\s\S]*?return false/,
   'Legacy password migration must recheck current credentials under lock');
 const passwordChange = fn('changePassword');
 const passwordLockAt = passwordChange.indexOf('lock.waitLock(20000)');
@@ -87,7 +87,7 @@ assert.ok(passwordChange.indexOf('hashPassword_(') < passwordLockAt,
 assert.doesNotMatch(passwordChange.slice(passwordLockAt), /verifyPasswordForUser_|hashPassword_/,
   'Password change critical section must not run expensive PBKDF2 work');
 assert.match(passwordChange.slice(passwordLockAt),
-  /String\\(current\\.status\\)\\.toUpperCase\\(\\) !== 'ACTIVE'/,
+  /String\(current\.status\)\.toUpperCase\(\) !== 'ACTIVE'/,
   'Password change must recheck active account status under lock');
 
 const cleanup = fn('cleanupPSBSessions_');
