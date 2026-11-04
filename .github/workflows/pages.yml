@@ -37,6 +37,7 @@ jobs:
           test -f apps-script/appsscript.json
           node --check frontend/app.js
           node --check frontend/psb-fm-apps-script.js
+          node -e "const fs=require('fs'); const shell=fs.readFileSync('apps-script/Index.html','utf8'); const expected='https://appfathanmubina.github.io/psb-pcbfm/psb-fm-apps-script.js'; if(!shell.includes(expected)){console.error('Apps Script shell bundle URL mismatch.');process.exit(1);} if(!fs.existsSync('frontend/psb-fm-apps-script.js')){console.error('Apps Script bundle missing from Pages artifact source.');process.exit(1);} const wf=fs.readFileSync('.github/workflows/pages.yml','utf8'); if(!/path:\\s*[\"']\\.\\/frontend[\"']/.test(wf)){console.error('Pages artifact must publish the frontend directory.');process.exit(1);}"
           node -e "JSON.parse(require('fs').readFileSync('frontend/manifest.webmanifest', 'utf8'))"
           node -e "JSON.parse(require('fs').readFileSync('apps-script/appsscript.json', 'utf8'))"
           node -e "JSON.parse(require('fs').readFileSync('appsscript.json', 'utf8'))"
