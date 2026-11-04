@@ -1951,5 +1951,38 @@ window.visualViewport?.addEventListener('resize',syncViewport,{passive:true});
 syncViewport();
 window.addEventListener('load',boot);
 </script>
+
+<div id="bootFailure" hidden role="alert" aria-live="assertive" style="position:fixed;inset:0;z-index:2000;display:none;align-items:center;justify-content:center;padding:24px;background:#f7f4fb;color:#241a31;font:16px/1.5 system-ui,sans-serif;text-align:center">
+  <div style="max-width:440px;padding:28px;border-radius:20px;background:#fff;box-shadow:0 12px 40px rgba(35,20,55,.14)">
+    <h1 style="margin:0 0 10px;font-size:22px">Aplikasi belum berhasil dimuat</h1>
+    <p style="margin:0 0 20px">Muat ulang halaman. Jika masalah berulang, catat waktu kejadian dan hubungi pengelola aplikasi.</p>
+    <button type="button" id="bootFailureReload" style="padding:11px 20px;border:0;border-radius:10px;background:#6d28d9;color:#fff;font:inherit;font-weight:700;cursor:pointer">Muat ulang</button>
+  </div>
+</div>
+<style>#bootFailure[hidden]{display:none!important}#bootFailure:not([hidden]){display:flex!important}</style>
+<script>
+(function(){
+  'use strict';
+  var shown=false;
+  function stillBooting(){
+    var loading=document.getElementById('loading');
+    var app=document.getElementById('app');
+    return !!(loading&&!loading.classList.contains('hidden')) || !!(app&&!app.childElementCount);
+  }
+  function showStartupFailure(reason){
+    if(shown||!stillBooting())return;
+    shown=true;
+    console.error('[PSB] Startup failed:',reason);
+    var panel=document.getElementById('bootFailure');
+    if(panel)panel.hidden=false;
+    var loading=document.getElementById('loading');
+    if(loading)loading.classList.add('hidden');
+  }
+  window.addEventListener('error',function(event){showStartupFailure(event.message||'script error');});
+  window.addEventListener('unhandledrejection',function(event){showStartupFailure(event.reason||'unhandled rejection');});
+  document.getElementById('bootFailureReload').addEventListener('click',function(){window.location.reload();});
+  window.setTimeout(function(){showStartupFailure('startup timeout');},25000);
+})();
+</script>
 </body>
 </html>
