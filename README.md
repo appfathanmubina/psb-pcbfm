@@ -66,11 +66,11 @@ Untuk memastikan source di kedua tempat sama, gunakan prosedur manual berikut:
 - Jika akun Superadmin sudah ada, fungsi bootstrap tidak menimpa password atau akun yang ada.
 - Hash password baru menggunakan PBKDF2-HMAC-SHA256 dengan salt acak dan 60.000 iterasi. Akun lama tetap dapat login dengan password yang sama; setelah login lama berhasil, hash akun tersebut otomatis dimigrasikan. Password tidak direset dan data/role pengguna tidak diubah.
 - Pendaftaran akun, perubahan password, reset administrator, dan bootstrap Superadmin menggunakan format hash baru. Format hash menyimpan nama skema dan jumlah iterasi agar dapat ditingkatkan pada migrasi berikutnya.
-- Fungsi pemeliharaan internal (`cleanupPSBSessions_`, `removeLegacyChatAutomationTriggers_`) dan fungsi setup/bootstrap (`setupPSBDatabase_`, `configureInitialSuperadmin_`, `createInitialSuperadmin_`) memakai akhiran garis bawah agar tidak menjadi endpoint `google.script.run` yang dapat dipanggil browser.
+- Fungsi pemeliharaan internal (`cleanupPSBSessions_`, `removeLegacyChatAutomationTriggers_`) dan fungsi setup/bootstrap (`setupPSBDatabase_`, `configureInitialSuperadmin_`, `createInitialSuperadmin_`) memakai akhiran garis bawah. Fungsi publik `cleanupLegacyChatAutomationTriggers()` adalah wrapper terbatas untuk menjalankan pembersihan trigger chat lama secara manual; fungsi ini tidak termasuk allowlist bridge.
 - Fitur Chat Wali ↔ Admin PSB telah dihentikan dan dihapus dari UI, API, serta otomasi. Data historis pada sheet chat lama tidak dihapus otomatis.
 - `ensureSheet_()` tidak lagi menimpa header sheet yang berbeda. Proses setup berhenti dengan pesan kesalahan agar struktur dan data dapat diperiksa manual.
 - Error internal dari handler Bridge dicatat di execution log dan pesan yang dikirim ke pemanggil publik dibuat umum.
-- Pendaftaran Wali mewajibkan OTP email. Email wajib, nomor HP opsional, dan akun baru hanya dibuat setelah OTP berhasil diverifikasi. Pengiriman menggunakan MailApp bawaan Google Apps Script; tidak memerlukan token layanan eksternal.
+- Pendaftaran Wali dilakukan langsung tanpa OTP atau verifikasi email. Email dan nomor HP bersifat opsional, tetapi minimal salah satunya wajib diisi sebagai identitas login. Akun dibuat aktif dan pengguna langsung memperoleh sesi setelah validasi berhasil.
 - Tidak ada workflow rekonsiliasi otomatis, OIDC, clasp, atau kredensial Google yang diperlukan untuk prosedur sinkronisasi manual ini.
 - GitHub Pages hanya menerbitkan frontend PWA; ia tidak menjalankan backend Apps Script.
 - GitHub menjadi tempat pengelolaan source dan salinan backend; Google Apps Script tetap menjadi backend produksi.
@@ -89,11 +89,9 @@ Aktifkan aturan perlindungan branch/ruleset pada GitHub untuk `main`:
 
 Pemeriksaan status saat audit terakhir menunjukkan branch `main` belum protected. Pengaturan ini harus diaktifkan pada **Settings → Rules → Rulesets** atau **Settings → Branches** oleh pemilik/admin repository; perubahan file dalam Pull Request tidak dapat mengaktifkannya sendiri.
 
-## Konfigurasi Email OTP
+## Pembersihan trigger chat lama
 
-Integrasi menggunakan MailApp bawaan Google Apps Script. Tidak diperlukan akun Meta, WhatsApp Cloud API, token API, atau template eksternal. Email verifikasi dikirim dari akun Google yang menjalankan Apps Script. Kuota penerima harian bergantung pada jenis akun Google dan batas Apps Script. Kode berlaku 5 menit, maksimal 5 percobaan, jeda kirim ulang 60 detik, dan maksimal 5 pengiriman per alamat email dalam 24 jam.
-
-Opsional, administrator dapat mengatur Script Properties `PSB_OTP_SENDER_NAME` dan `PSB_OTP_REPLY_TO`. Jangan menyimpan kredensial di repository. Uji terlebih dahulu pada project Apps Script dan spreadsheet duplikat.
+Setelah source `SetupDatabase.gs` terbaru disalin ke Apps Script, jalankan `cleanupLegacyChatAutomationTriggers()` satu kali dari editor Apps Script bila ingin menghapus trigger lama `runChatAutomation` atau `runChatAutomation_`. Fungsi ini hanya menghapus trigger dengan dua nama handler tersebut dan properti `PSB_CHAT_AUTOMATION_TRIGGER`. Fungsi `setupPSBDatabase_()` tidak lagi menjalankan pembersihan ini sebagai efek samping. Jangan jalankan setup database hanya untuk membersihkan trigger; sheet dan data lama tidak perlu dihapus.
 
 ## Validation
 
