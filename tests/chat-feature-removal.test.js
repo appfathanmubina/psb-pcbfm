@@ -4,7 +4,7 @@ const fs = require('node:fs');
 
 const code = fs.readFileSync('apps-script/Code.gs', 'utf8');
 const setup = fs.readFileSync('apps-script/SetupDatabase.gs', 'utf8');
-const appsUi = fs.readFileSync('apps-script/Index.html', 'utf8');
+const appsUi = fs.readFileSync('apps-script/Index.html', 'utf8') + '\n' + fs.readFileSync('frontend/psb-fm-apps-script.js', 'utf8');
 const pwaUi = fs.readFileSync('frontend/app.js', 'utf8');
 const styles = fs.readFileSync('frontend/styles.css', 'utf8');
 
