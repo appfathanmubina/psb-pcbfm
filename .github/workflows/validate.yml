@@ -16,6 +16,7 @@ jobs:
           test -f frontend/index.html
           test -f frontend/styles.css
           test -f frontend/app.js
+          test -f frontend/psb-fm-apps-script.js
           test -f frontend/manifest.webmanifest
           test -f frontend/sw.js
           test -f apps-script/Code.gs
@@ -30,6 +31,7 @@ jobs:
       - name: Validate JavaScript and JSON
         run: |
           node --check frontend/app.js
+          node --check frontend/psb-fm-apps-script.js
           node --check < apps-script/Code.gs
           node --check < apps-script/SetupDatabase.gs
           node --check < apps-script/BridgeServer.gs
@@ -38,6 +40,8 @@ jobs:
           node -e "JSON.parse(require('fs').readFileSync('appsscript.json', 'utf8'))"
       - name: Validate inline HTML and PWA bridge JavaScript syntax
         run: node tests/html-javascript-syntax.test.js
+      - name: Guard Apps Script HTML Service payload size
+        run: node tests/apps-script-html-payload.test.js
       - name: Test password hash compatibility and migration safeguards
         run: node tests/password-migration.test.js
       - name: Test upload validation safeguards

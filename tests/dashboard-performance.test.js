@@ -3,7 +3,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 
 const app = fs.readFileSync('frontend/app.js', 'utf8');
-const index = fs.readFileSync('apps-script/Index.html', 'utf8');
+const index = fs.readFileSync('apps-script/Index.html', 'utf8') + '\n' + fs.readFileSync('frontend/psb-fm-apps-script.js', 'utf8');
 const code = fs.readFileSync('apps-script/Code.gs', 'utf8');
 
 const backendStart = code.indexOf('function getDashboardPageData(');
