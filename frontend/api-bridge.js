@@ -253,7 +253,7 @@
       if (retry && safeToRetry) {
         if (tokenSession && tokenSession.token === token) tokenSession = null;
         if (error.code === 'BRIDGE_TEMPORARILY_BUSY') {
-          await new Promise(resolve => setTimeout(resolve, 600));
+          await new Promise(resolve => setTimeout(resolve, 250));
         }
         // The backend is never invoked when token consumption fails, so this
         // bounded retry cannot duplicate login or another business operation.
