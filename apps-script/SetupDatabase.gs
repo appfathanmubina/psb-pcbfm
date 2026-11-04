@@ -460,6 +460,15 @@ function cleanupLegacyChatAutomationTriggers() {
 }
 
 /**
+ * Public entry point for configuring the initial Superadmin credentials.
+ * The existing internal implementation keeps the validation and secure
+ * Script Properties handling unchanged.
+ */
+function RUN_CONFIGURE_INITIAL_SUPERADMIN() {
+  return configureInitialSuperadmin_();
+}
+
+/**
  * Public entry point for initializing the PSB database from the Apps Script editor.
  * Internal setup implementation remains private (underscore suffix).
  */
