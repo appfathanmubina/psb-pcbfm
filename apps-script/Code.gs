@@ -129,8 +129,43 @@ function doGet(e) {
     .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
 }
 
+/**
+ * DATABASE ACCESS — satu pintu akses Spreadsheet PSB.
+ *
+ * Web App tidak boleh bergantung pada konteks active spreadsheet.
+ * Gunakan ID yang disimpan saat setup; fallback ke active spreadsheet
+ * hanya untuk kompatibilitas proyek yang masih bound dan belum memiliki ID.
+ */
+var PSB_DATABASE_SPREADSHEET_CACHE_ = null;
+
+function getDatabaseSpreadsheet_() {
+  if (PSB_DATABASE_SPREADSHEET_CACHE_) return PSB_DATABASE_SPREADSHEET_CACHE_;
+
+  const props = PropertiesService.getScriptProperties();
+  const spreadsheetId = String(props.getProperty('PSB_SPREADSHEET_ID') || '').trim();
+
+  if (spreadsheetId) {
+    try {
+      PSB_DATABASE_SPREADSHEET_CACHE_ = SpreadsheetApp.openById(spreadsheetId);
+      return PSB_DATABASE_SPREADSHEET_CACHE_;
+    } catch (e) {
+      console.error('PSB_DATABASE_OPEN_FAILED: ' + String(e && e.stack || e));
+      throw new Error('Database PSB tidak dapat diakses. Periksa PSB_SPREADSHEET_ID dan izin akses akun deployment Apps Script.');
+    }
+  }
+
+  // Kompatibilitas untuk instalasi lama yang belum menyimpan ID database.
+  const activeSpreadsheet = SpreadsheetApp.getActiveSpreadsheet();
+  if (activeSpreadsheet) {
+    PSB_DATABASE_SPREADSHEET_CACHE_ = activeSpreadsheet;
+    return activeSpreadsheet;
+  }
+
+  throw new Error('ID database PSB belum dikonfigurasi. Jalankan setup database satu kali dari proyek Apps Script yang terhubung ke Spreadsheet.');
+}
+
 function getAppInfo() {
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const ss = getDatabaseSpreadsheet_();
   const props = PropertiesService.getScriptProperties();
   return {
     success: true,
@@ -153,7 +188,7 @@ function getPublicConfig(forceRefresh) {
     if (cached) { try { return JSON.parse(cached); } catch (e) {} }
   }
 
-  const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('CONFIG');
+  const sheet = getDatabaseSpreadsheet_().getSheetByName('CONFIG');
   if (!sheet || sheet.getLastRow() < 2) return { success: true, config: {} };
   const values = sheet.getRange(2, 1, sheet.getLastRow() - 1, 2).getValues();
   const config = {};
@@ -304,7 +339,7 @@ function registerWali(payload) {
   const lock = LockService.getScriptLock();
   lock.waitLock(15000);
   try {
-    const usersSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('USERS');
+    const usersSheet = getDatabaseSpreadsheet_().getSheetByName('USERS');
     if (!usersSheet) return fail_('Database pengguna belum tersedia.');
 
     const users = usersSheet.getLastRow() >= 2
@@ -364,7 +399,7 @@ function getInitialAppData(sessionToken) {
   };
   // Lightweight preload only: do not fetch documents/files/payments here.
   if (roles.indexOf('WALI') >= 0) {
-    const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(PSB_SHEETS.REGISTRATIONS);
+    const sheet = getDatabaseSpreadsheet_().getSheetByName(PSB_SHEETS.REGISTRATIONS);
     if (sheet && sheet.getLastRow() >= 2) {
       const headers = sheet.getRange(1,1,1,sheet.getLastColumn()).getValues()[0].map(String);
       const rows = sheet.getRange(2,1,sheet.getLastRow()-1,sheet.getLastColumn()).getValues();
@@ -413,7 +448,7 @@ function changePassword(sessionToken, currentPassword, newPassword) {
         current.passwordSalt !== result.user.passwordSalt) {
       return fail_('Data password telah berubah. Silakan masuk kembali sebelum mengganti password.');
     }
-    const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('USERS');
+    const sheet = getDatabaseSpreadsheet_().getSheetByName('USERS');
     sheet.getRange(current.rowNumber, 7, 1, 3).setValues([[hash, salt, current.role]]);
     sheet.getRange(current.rowNumber, 14, 1, 2).setValues([[new Date(), false]]);
     revokeOtherSessionsForUser_(current.userId, String(result.sessionRow.rowNumber));
@@ -484,7 +519,7 @@ function productionConfigObject_() {
 
 function getProductionControlData(sessionToken) {
   const actor = requireRole_(sessionToken, PSB_PRODUCTION_ADMIN_ROLES);
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const ss = getDatabaseSpreadsheet_();
   const users = sheetRows_(ss.getSheetByName(PSB_SHEETS.USERS));
   const activeSuperadmins = users.filter(u => String(u.status||'').toUpperCase()==='ACTIVE' && String(u.role||'').toUpperCase().split(',').map(x=>x.trim()).indexOf('SUPERADMIN')>=0);
   const mustChange = activeSuperadmins.filter(u => String(u.mustChangePassword||'').toUpperCase()==='TRUE' || u.mustChangePassword===true).length;
@@ -501,7 +536,7 @@ function setProductionControl(sessionToken, payload) {
   if (changes.APP_VERSION) changes.APP_VERSION = String(changes.APP_VERSION).trim();
   if (changes.APP_VERSION && !/^\d+\.\d+(?:\.\d+)?(?:[-._A-Za-z0-9]+)?$/.test(changes.APP_VERSION)) return fail_('Format APP_VERSION tidak valid.');
   ['REGISTRATION_OPEN','MAINTENANCE_MODE'].forEach(k => { if (Object.prototype.hasOwnProperty.call(changes,k)) changes[k] = (changes[k]===true || String(changes[k]).toUpperCase()==='TRUE') ? 'TRUE' : 'FALSE'; });
-  const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(PSB_SHEETS.CONFIG);
+  const sheet = getDatabaseSpreadsheet_().getSheetByName(PSB_SHEETS.CONFIG);
   if (!sheet) return fail_('Sheet CONFIG belum tersedia.');
   const old = productionConfigObject_();
   const headers = sheet.getRange(1,1,1,sheet.getLastColumn()).getValues()[0].map(String);
@@ -522,7 +557,7 @@ function setProductionControl(sessionToken, payload) {
 
 function getDataIntegrityReport(sessionToken) {
   const actor = requireRole_(sessionToken, PSB_PRODUCTION_ADMIN_ROLES);
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const ss = getDatabaseSpreadsheet_();
   const checks=[];
   const add=(key,label,status,detail,category)=>checks.push({key,label,status,detail,category});
   const rowsBy=name=>sheetRows_(ss.getSheetByName(name));
@@ -556,7 +591,7 @@ function getDataIntegrityReport(sessionToken) {
 
 function createProductionBackup(sessionToken) {
   const actor=requireRole_(sessionToken,['SUPERADMIN']);
-  const ss=SpreadsheetApp.getActiveSpreadsheet();
+  const ss=getDatabaseSpreadsheet_();
   const props=PropertiesService.getScriptProperties();
   let folder=null; const yearId=String(props.getProperty('PSB_DRIVE_YEAR_ID')||'').trim();
   if(yearId){try{folder=DriveApp.getFolderById(yearId);}catch(e){folder=null;}}
@@ -574,7 +609,7 @@ function getGoLiveChecklist(sessionToken) {
   const control=getProductionControlData(sessionToken);
   const readiness=getProductionReadiness(sessionToken);
   const integrity=getDataIntegrityReport(sessionToken);
-  const ss=SpreadsheetApp.getActiveSpreadsheet();
+  const ss=getDatabaseSpreadsheet_();
   const users=sheetRows_(ss.getSheetByName(PSB_SHEETS.USERS));
   const passwordReady=users.some(u=>String(u.role||'').toUpperCase().split(',').map(x=>x.trim()).indexOf('SUPERADMIN')>=0 && String(u.status||'').toUpperCase()==='ACTIVE' && !(u.mustChangePassword===true || String(u.mustChangePassword||'').toUpperCase()==='TRUE'));
   const items=[
@@ -615,7 +650,7 @@ function createSession_(userId) {
   const ttl = Number(getConfig_('SESSION_TTL_MINUTES')) || PSB_AUTH.SESSION_TTL_MINUTES;
   const expires = new Date(now.getTime() + ttl * 60000);
   const sessionId = generateId_('SES');
-  const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('SESSIONS');
+  const sheet = getDatabaseSpreadsheet_().getSheetByName('SESSIONS');
   sheet.appendRow([sessionId, userId, tokenHash, now, expires, now, 'ACTIVE']);
   // Seed the row index immediately so finalizeLogin and the first API call do not scan SESSIONS.
   try { CacheService.getScriptCache().put('PSB_SESSION_ROW_V1_' + tokenHash.substring(0, 40), String(sheet.getLastRow()), 21600); } catch (e) {}
@@ -630,7 +665,7 @@ function getSessionUser_(token, touch) {
   const tokenHash = sha256Hex_(token);
   const cache = CacheService.getScriptCache();
   const sessionCacheKey = 'PSB_SESSION_ROW_V1_' + tokenHash.substring(0, 40);
-  const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('SESSIONS');
+  const sheet = getDatabaseSpreadsheet_().getSheetByName('SESSIONS');
   if (!sheet) return fail_('Session tidak ditemukan. Silakan login kembali.');
 
   // Cache hanya menyimpan nomor baris, bukan status sesi. Status, expiry, dan
@@ -708,7 +743,7 @@ function getSessionUser_(token, touch) {
 }
 
 function revokeOtherSessionsForUser_(userId, keepRowNumber) {
-  const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('SESSIONS');
+  const sheet = getDatabaseSpreadsheet_().getSheetByName('SESSIONS');
   if (!sheet || sheet.getLastRow() < 2) return 0;
   const lastRow = sheet.getLastRow();
   const rows = sheet.getRange(2,1,lastRow-1,7).getValues();
@@ -728,7 +763,7 @@ function revokeOtherSessionsForUser_(userId, keepRowNumber) {
 }
 
 function cleanupPSBSessions_(limit) {
-  const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('SESSIONS');
+  const sheet = getDatabaseSpreadsheet_().getSheetByName('SESSIONS');
   if (!sheet || sheet.getLastRow() < 2) return {processed:0,expired:0,idle:0};
   const max = Math.max(1, Number(limit || getConfig_('SESSION_CLEANUP_BATCH') || 500));
   const lastRow = sheet.getLastRow();
@@ -767,7 +802,7 @@ function runSecurityMaintenance(sessionToken) {
 
 function invalidateSession_(found, status) {
   if (!found || !found.rowNumber) return;
-  SpreadsheetApp.getActiveSpreadsheet().getSheetByName('SESSIONS').getRange(found.rowNumber, 7).setValue(status || 'REVOKED');
+  getDatabaseSpreadsheet_().getSheetByName('SESSIONS').getRange(found.rowNumber, 7).setValue(status || 'REVOKED');
   try {
     const tokenHash = String((found.row || [])[2] || '');
     if (tokenHash) CacheService.getScriptCache().remove('PSB_SESSION_' + tokenHash.substring(0, 40));
@@ -783,7 +818,7 @@ function findUser_(key) {
   if (!normalized) return null;
   const cache = CacheService.getScriptCache();
   const cacheKey = 'PSB_USER_ROW_LOGIN_V1_' + sha256Hex_(normalized).substring(0, 32);
-  const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('USERS');
+  const sheet = getDatabaseSpreadsheet_().getSheetByName('USERS');
   if (!sheet) return null;
 
   function matches(row) {
@@ -827,7 +862,7 @@ function findUserById_(id, bypassCache) {
   if (!value) return null;
   const cache = CacheService.getScriptCache();
   const cacheKey = 'PSB_USER_ROW_ID_V1_' + sha256Hex_(value).substring(0, 32);
-  const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('USERS');
+  const sheet = getDatabaseSpreadsheet_().getSheetByName('USERS');
   if (!sheet) return null;
 
   // bypassCache dipertahankan untuk kompatibilitas pemanggil lama. Indeks saja
@@ -867,12 +902,12 @@ function publicUser_(u) {
 }
 
 function updateLastLogin_(rowNumber) {
-  SpreadsheetApp.getActiveSpreadsheet().getSheetByName('USERS').getRange(rowNumber, 12).setValue(new Date());
+  getDatabaseSpreadsheet_().getSheetByName('USERS').getRange(rowNumber, 12).setValue(new Date());
 }
 
 function getUserManagementData(sessionToken) {
   requireRole_(sessionToken, ['SUPERADMIN']);
-  const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('USERS');
+  const sheet = getDatabaseSpreadsheet_().getSheetByName('USERS');
   if (!sheet || sheet.getLastRow() < 2) return { success: true, users: [], roles: PSB_ROLES.slice() };
   const rows = sheet.getRange(2, 1, sheet.getLastRow() - 1, Math.min(15, sheet.getLastColumn())).getValues();
   const users = rows.map((r, i) => ({
@@ -909,7 +944,7 @@ function adminResetUserPassword(sessionToken, payload) {
 
     const salt = Utilities.getUuid().replace(/-/g, '').substring(0, 32);
     const hash = hashPassword_(newPassword, salt);
-    const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('USERS');
+    const sheet = getDatabaseSpreadsheet_().getSheetByName('USERS');
     if (!sheet) return fail_('Sheet USERS tidak ditemukan.');
 
     // USERS: passwordHash=7, passwordSalt=8, role=9, updatedAt=14, mustChangePassword=15.
@@ -958,7 +993,7 @@ function createManualUser(sessionToken, payload) {
   const lock = LockService.getScriptLock();
   lock.waitLock(10000);
   try {
-    const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('USERS');
+    const sheet = getDatabaseSpreadsheet_().getSheetByName('USERS');
     if (!sheet) return fail_('Database USERS belum tersedia. Jalankan setupPSBDatabase() terlebih dahulu.');
     const lastRow = sheet.getLastRow();
     const width = Math.max(15, sheet.getLastColumn());
@@ -1084,7 +1119,7 @@ function migrateLegacyPasswordAfterLogin_(verifiedUser, password) {
         current.passwordHash !== verifiedUser.passwordHash ||
         current.passwordSalt !== verifiedUser.passwordSalt) return false;
 
-    const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('USERS');
+    const sheet = getDatabaseSpreadsheet_().getSheetByName('USERS');
     if (!sheet) return false;
     sheet.getRange(current.rowNumber, 7, 1, 2).setValues([[hash, salt]]);
     try {
@@ -1220,7 +1255,7 @@ function redactAuditText_(value) {
 
 function writeAudit_(userId, action, module, recordId, oldValue, newValue, description) {
   try {
-    const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('AUDIT_LOG');
+    const sheet = getDatabaseSpreadsheet_().getSheetByName('AUDIT_LOG');
     if (!sheet) return;
     // Jangan mengambil ScriptLock di sini karena writeAudit_ dipanggil dari
     // beberapa transaksi yang memang sudah memegang ScriptLock. appendRow
@@ -1235,7 +1270,7 @@ function writeAudit_(userId, action, module, recordId, oldValue, newValue, descr
 function getAuditLogPageData(sessionToken, filters) {
   requireRole_(sessionToken, PSB_AUDIT_ACCESS_ROLES);
   filters=filters||{};
-  const sheet=SpreadsheetApp.getActiveSpreadsheet().getSheetByName('AUDIT_LOG');
+  const sheet=getDatabaseSpreadsheet_().getSheetByName('AUDIT_LOG');
   if(!sheet || sheet.getLastRow()<2) return {success:true,rows:[],total:0,page:1,pageSize:50,hasMore:false,options:{actions:[],modules:[]}};
   const headers=sheet.getRange(1,1,1,sheet.getLastColumn()).getValues()[0].map(String);
   const values=sheet.getRange(2,1,sheet.getLastRow()-1,sheet.getLastColumn()).getValues();
@@ -1276,7 +1311,7 @@ function getConfig_(key) {
   const cacheKey = 'PSB_CFG_' + sha256Hex_(k).substring(0, 24);
   const cached = cache.get(cacheKey);
   if (cached !== null && cached !== '') return cached;
-  const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('CONFIG');
+  const sheet = getDatabaseSpreadsheet_().getSheetByName('CONFIG');
   if (!sheet || sheet.getLastRow() < 2) return '';
   const values = sheet.getRange(2, 1, sheet.getLastRow() - 1, 2).getValues();
   let value = '';
@@ -1290,7 +1325,7 @@ function getConfig_(key) {
 function setConfigValue_(key, value) {
   const k = String(key || '').trim();
   if (!k) return false;
-  const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(PSB_SHEETS.CONFIG);
+  const sheet = getDatabaseSpreadsheet_().getSheetByName(PSB_SHEETS.CONFIG);
   if (!sheet) throw new Error('Sheet CONFIG belum tersedia.');
   const headers = sheet.getRange(1,1,1,sheet.getLastColumn()).getValues()[0].map(String);
   const keyIdx = headers.indexOf('key'), valueIdx = headers.indexOf('value'), updatedIdx = headers.indexOf('updatedAt');
@@ -1323,7 +1358,7 @@ function getActiveAcademicYear_() {
 
 function getAcademicYearLifecycleData(sessionToken) {
   const actor = requireRole_(sessionToken, PSB_MASTER_ACCESS_ROLES);
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const ss = getDatabaseSpreadsheet_();
   const years = sheetRows_(ss.getSheetByName(PSB_SHEETS.MASTER_TAHUN_AJARAN));
   const waves = sheetRows_(ss.getSheetByName(PSB_SHEETS.MASTER_GELOMBANG));
   const regs = sheetRows_(ss.getSheetByName(PSB_SHEETS.REGISTRATIONS));
@@ -1363,7 +1398,7 @@ function setActiveAcademicYear(sessionToken, tahunAjaranId) {
   const lock = LockService.getScriptLock();
   lock.waitLock(10000);
   try {
-    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const ss = getDatabaseSpreadsheet_();
     const sheet = ss.getSheetByName(PSB_SHEETS.MASTER_TAHUN_AJARAN);
     if (!sheet) return fail_('Master tahun ajaran belum tersedia.');
     const headers = sheet.getRange(1,1,1,sheet.getLastColumn()).getValues()[0].map(String);
@@ -1463,7 +1498,7 @@ function getMasterData(sessionToken, masterKey, includeInactive) {
   requireRole_(sessionToken, PSB_MASTER_ACCESS_ROLES);
   const def = PSB_MASTER_DEFINITIONS[String(masterKey || '')];
   if (!def) return fail_('Master data tidak dikenali.');
-  const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(def.sheet);
+  const sheet = getDatabaseSpreadsheet_().getSheetByName(def.sheet);
   if (!sheet) return fail_('Sheet master data belum tersedia: ' + def.sheet);
   if (sheet.getLastRow() < 2) return {success:true, masterKey:masterKey, title:def.title, items:[]};
 
@@ -1492,7 +1527,7 @@ function saveMasterItem(sessionToken, masterKey, payload) {
   const lock = LockService.getScriptLock();
   lock.waitLock(10000);
   try {
-    const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(def.sheet);
+    const sheet = getDatabaseSpreadsheet_().getSheetByName(def.sheet);
     if (!sheet) return fail_('Sheet master data belum tersedia.');
     const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0].map(String);
     const idField = def.idField;
@@ -1551,7 +1586,7 @@ function deactivateMasterItem(sessionToken, masterKey, id) {
   assertOperationalMutation_(actor);
   const def = PSB_MASTER_DEFINITIONS[String(masterKey || '')];
   if (!def) return fail_('Master data tidak dikenali.');
-  const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(def.sheet);
+  const sheet = getDatabaseSpreadsheet_().getSheetByName(def.sheet);
   const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0].map(String);
   const existing = findMasterRow_(sheet, headers, def.idField, String(id || ''));
   if (!existing) return fail_('Data master tidak ditemukan.');
@@ -1653,7 +1688,7 @@ function getRegistrationFormOptions(sessionToken) {
 
 function getWaliHomeData(sessionToken) {
   const actor = requireRole_(sessionToken, ['WALI']);
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const ss = getDatabaseSpreadsheet_();
   const regSheet = ss.getSheetByName(PSB_SHEETS.REGISTRATIONS);
   if (!regSheet || regSheet.getLastRow() < 2) return {success:true, registrations:[], activeYear:String(getConfig_('ACTIVE_YEAR')||'2027/2028')};
 
@@ -1722,7 +1757,7 @@ function statusLabel_(s) {
 
 function getMyRegistrations(sessionToken) {
   const user = requireRole_(sessionToken, ['WALI','SUPERADMIN','ADMIN_PSB']);
-  const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(PSB_SHEETS.REGISTRATIONS);
+  const sheet = getDatabaseSpreadsheet_().getSheetByName(PSB_SHEETS.REGISTRATIONS);
   if (!sheet || sheet.getLastRow() < 2) return { success:true, registrations:[] };
   const headers = sheet.getRange(1,1,1,sheet.getLastColumn()).getValues()[0].map(String);
   const rows = sheet.getRange(2,1,sheet.getLastRow()-1,sheet.getLastColumn()).getValues();
@@ -1732,7 +1767,7 @@ function getMyRegistrations(sessionToken) {
 
 function getRegistrationList(sessionToken, filters) {
   const user = requireRole_(sessionToken, PSB_REGISTRATION_ADMIN_ROLES);
-  const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(PSB_SHEETS.REGISTRATIONS);
+  const sheet = getDatabaseSpreadsheet_().getSheetByName(PSB_SHEETS.REGISTRATIONS);
   if (!sheet || sheet.getLastRow() < 2) return { success:true, registrations:[] };
   const headers = sheet.getRange(1,1,1,sheet.getLastColumn()).getValues()[0].map(String);
   const rows = sheet.getRange(2,1,sheet.getLastRow()-1,sheet.getLastColumn()).getValues();
@@ -1767,7 +1802,7 @@ const PSB_PAYMENT_EDITABLE_STATUSES = ['SUBMITTED','UNDER_REVIEW','REVISION','VE
 function getPaymentPageData(sessionToken, registrationId) {
   const actor = requireRole_(sessionToken, PSB_PAYMENT_VIEW_ROLES);
   const isWali = hasRoleDirect_(actor, ['WALI']);
-  const regSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(PSB_SHEETS.REGISTRATIONS);
+  const regSheet = getDatabaseSpreadsheet_().getSheetByName(PSB_SHEETS.REGISTRATIONS);
   let registrations = [];
   if (regSheet && regSheet.getLastRow() >= 2) {
     const headers = regSheet.getRange(1,1,1,regSheet.getLastColumn()).getValues()[0].map(String);
@@ -1793,7 +1828,7 @@ function getPaymentsForRegistration(sessionToken, registrationId) {
 }
 
 function buildPaymentData_(registrationId) {
-  const ss=SpreadsheetApp.getActiveSpreadsheet();
+  const ss=getDatabaseSpreadsheet_();
   const billsSheet=ss.getSheetByName(PSB_SHEETS.BILLS), paymentsSheet=ss.getSheetByName(PSB_SHEETS.PAYMENTS);
   const bills=billsSheet&&billsSheet.getLastRow()>=2 ? sheetRows_(billsSheet).filter(x=>String(x.registrationId)===String(registrationId)) : [];
   const payments=paymentsSheet&&paymentsSheet.getLastRow()>=2 ? sheetRows_(paymentsSheet).filter(x=>String(x.registrationId)===String(registrationId)) : [];
@@ -1813,7 +1848,7 @@ function createBill(sessionToken,payload){
   const found=findRegistration_(registrationId); if(!found) return fail_('Pendaftaran tidak ditemukan.');
   const type=findMasterItemById_('MASTER_JENIS_PEMBAYARAN','paymentTypeId',paymentTypeId); if(!type||!type.isActive) return fail_('Jenis pembayaran tidak aktif.');
   return withScriptLock_(10000, function(){
-  const sheet=SpreadsheetApp.getActiveSpreadsheet().getSheetByName(PSB_SHEETS.BILLS); if(!sheet) return fail_('Sheet BILLS belum tersedia.');
+  const sheet=getDatabaseSpreadsheet_().getSheetByName(PSB_SHEETS.BILLS); if(!sheet) return fail_('Sheet BILLS belum tersedia.');
   const headers=sheet.getRange(1,1,1,sheet.getLastColumn()).getValues()[0].map(String);
   const rows=sheet.getLastRow()<2?[]:sheet.getRange(2,1,sheet.getLastRow()-1,sheet.getLastColumn()).getValues();
   const dup=rows.some(r=>String(r[headers.indexOf('registrationId')])===registrationId&&String(r[headers.indexOf('paymentTypeId')])===paymentTypeId&&String(r[headers.indexOf('status')])!=='CANCELLED');
@@ -1831,7 +1866,7 @@ function submitPayment(sessionToken,payload){
   assertOperationalMutation_(actor); payload=payload||{};
   const billId=String(payload.billId||'').trim(), base64=String(payload.base64||'').trim(), fileName=sanitizeFileName_(payload.fileName||'bukti-pembayaran'), mimeType=String(payload.mimeType||'').toLowerCase();
   if(!billId||!base64) return fail_('Tagihan dan bukti pembayaran wajib diisi.');
-  const bills=SpreadsheetApp.getActiveSpreadsheet().getSheetByName(PSB_SHEETS.BILLS), br=findRowById_(bills,'billId',billId); if(!br) return fail_('Tagihan tidak ditemukan.');
+  const bills=getDatabaseSpreadsheet_().getSheetByName(PSB_SHEETS.BILLS), br=findRowById_(bills,'billId',billId); if(!br) return fail_('Tagihan tidak ditemukan.');
   const found=findRegistration_(String(br.object.registrationId)); if(!found) return fail_('Pendaftaran tidak ditemukan.');
   if(!canAccessRegistration_(actor,found.registration) && !hasRoleDirect_(actor,PSB_PAYMENT_MANAGE_ROLES)) return fail_('Anda tidak memiliki akses ke tagihan ini.');
   if(String(br.object.status).toUpperCase()==='PAID') return fail_('Tagihan ini sudah lunas.');
@@ -1839,7 +1874,7 @@ function submitPayment(sessionToken,payload){
   const upload=decodeAndValidateUpload_(base64,mimeType,5*1024*1024); if(!upload.success) return fail_(upload.message==='Ukuran file melebihi batas yang diizinkan.'?'Ukuran bukti pembayaran maksimal 5 MB.':upload.message); const bytes=upload.bytes;
   const lock=LockService.getScriptLock(); lock.waitLock(10000);
   try{
-    const paymentSheet=SpreadsheetApp.getActiveSpreadsheet().getSheetByName(PSB_SHEETS.PAYMENTS);
+    const paymentSheet=getDatabaseSpreadsheet_().getSheetByName(PSB_SHEETS.PAYMENTS);
     if (!paymentSheet) return fail_('Sheet PAYMENTS belum tersedia.');
     const ph=paymentSheet.getRange(1,1,1,paymentSheet.getLastColumn()).getValues()[0].map(String);
     const prows=paymentSheet.getLastRow()<2?[]:paymentSheet.getRange(2,1,paymentSheet.getLastRow()-1,paymentSheet.getLastColumn()).getValues();
@@ -1875,12 +1910,12 @@ function verifyPayment(sessionToken,payload){
   if(!paymentId||['VERIFIED','REJECTED'].indexOf(status)<0) return fail_('Data verifikasi pembayaran tidak valid.');
   const lock=LockService.getScriptLock(); lock.waitLock(10000);
   try {
-  const sheet=SpreadsheetApp.getActiveSpreadsheet().getSheetByName(PSB_SHEETS.PAYMENTS), found=findRowById_(sheet,'paymentId',paymentId); if(!found) return fail_('Pembayaran tidak ditemukan.');
+  const sheet=getDatabaseSpreadsheet_().getSheetByName(PSB_SHEETS.PAYMENTS), found=findRowById_(sheet,'paymentId',paymentId); if(!found) return fail_('Pembayaran tidak ditemukan.');
   if (['VERIFIED','REJECTED'].indexOf(String(found.object.status||'').toUpperCase())>=0) return fail_('Pembayaran ini sudah diverifikasi sebelumnya.');
   const regFound=findRegistration_(String(found.object.registrationId||'')); if(!regFound) return fail_('Pendaftaran pembayaran tidak ditemukan.');
   const now=new Date(), headers=sheet.getRange(1,1,1,sheet.getLastColumn()).getValues()[0].map(String); ['status','updatedAt'].forEach(k=>{const i=headers.indexOf(k);if(i>=0)sheet.getRange(found.rowNumber,i+1).setValue(k==='status'?status:now);});
-  const verSheet=SpreadsheetApp.getActiveSpreadsheet().getSheetByName(PSB_SHEETS.PAYMENT_VERIFICATIONS); if(verSheet){const vh=verSheet.getRange(1,1,1,verSheet.getLastColumn()).getValues()[0].map(String);const rec={};vh.forEach(h=>rec[h]='');Object.assign(rec,{verificationId:generateId_('PVF'),paymentId,status,verifiedBy:actor.userId,verifiedAt:now,note});verSheet.appendRow(vh.map(h=>rec[h]));}
-  const bills=SpreadsheetApp.getActiveSpreadsheet().getSheetByName(PSB_SHEETS.BILLS), br=findRowById_(bills,'billId',found.object.billId); if(br){const bh=bills.getRange(1,1,1,bills.getLastColumn()).getValues()[0].map(String);const i=bh.indexOf('status');if(i>=0)bills.getRange(br.rowNumber,i+1).setValue(status==='VERIFIED'?'PAID':'UNPAID'); if(status==='VERIFIED'){const type=findMasterItemById_('MASTER_JENIS_PEMBAYARAN','paymentTypeId',br.object.paymentTypeId); if(/formulir/i.test(String(type?.name||''))){const reg=findRegistration_(String(br.object.registrationId)); if(reg && String(reg.registration.status)==='VERIFIED'){setRegistrationStatus_(reg.registration,'PAYMENT_VERIFIED',actor.userId,'Pembayaran Formulir terverifikasi; pendaftar dapat mengikuti proses tes.');}} if(/daftar\s*ulang/i.test(String(type?.name||''))){syncReregistrationAfterPayment_(String(br.object.registrationId),actor.userId);}}}
+  const verSheet=getDatabaseSpreadsheet_().getSheetByName(PSB_SHEETS.PAYMENT_VERIFICATIONS); if(verSheet){const vh=verSheet.getRange(1,1,1,verSheet.getLastColumn()).getValues()[0].map(String);const rec={};vh.forEach(h=>rec[h]='');Object.assign(rec,{verificationId:generateId_('PVF'),paymentId,status,verifiedBy:actor.userId,verifiedAt:now,note});verSheet.appendRow(vh.map(h=>rec[h]));}
+  const bills=getDatabaseSpreadsheet_().getSheetByName(PSB_SHEETS.BILLS), br=findRowById_(bills,'billId',found.object.billId); if(br){const bh=bills.getRange(1,1,1,bills.getLastColumn()).getValues()[0].map(String);const i=bh.indexOf('status');if(i>=0)bills.getRange(br.rowNumber,i+1).setValue(status==='VERIFIED'?'PAID':'UNPAID'); if(status==='VERIFIED'){const type=findMasterItemById_('MASTER_JENIS_PEMBAYARAN','paymentTypeId',br.object.paymentTypeId); if(/formulir/i.test(String(type?.name||''))){const reg=findRegistration_(String(br.object.registrationId)); if(reg && String(reg.registration.status)==='VERIFIED'){setRegistrationStatus_(reg.registration,'PAYMENT_VERIFIED',actor.userId,'Pembayaran Formulir terverifikasi; pendaftar dapat mengikuti proses tes.');}} if(/daftar\s*ulang/i.test(String(type?.name||''))){syncReregistrationAfterPayment_(String(br.object.registrationId),actor.userId);}}}
   writeAudit_(actor.userId,'PAYMENT_VERIFY','PAYMENT',paymentId,'',JSON.stringify({status,note}),'Pembayaran diverifikasi');
   const paymentType=findMasterItemById_('MASTER_JENIS_PEMBAYARAN','paymentTypeId',String(br?.object?.paymentTypeId||''));
   const paymentLabel=String(paymentType?.name||'pembayaran');
@@ -1900,7 +1935,7 @@ const PSB_SELECTION_VIEW_ROLES = ['WALI','SUPERADMIN','ADMIN_PSB','SELEKSI','VER
 function getSelectionPageData(sessionToken, registrationId) {
   const actor = requireRole_(sessionToken, PSB_SELECTION_VIEW_ROLES);
   const isWali = hasRoleDirect_(actor, ['WALI']);
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const ss = getDatabaseSpreadsheet_();
   const regSheet = ss.getSheetByName(PSB_SHEETS.REGISTRATIONS);
   let registrations = [];
   if (regSheet && regSheet.getLastRow() >= 2) {
@@ -1953,7 +1988,7 @@ function createSelectionSchedule(sessionToken,payload){
   const name=clean_(payload.name), selectionDate=clean_(payload.selectionDate), location=clean_(payload.location);
   if(!tahunAjaranId||!name||!selectionDate) return fail_('Tahun ajaran, nama tes, dan tanggal tes wajib diisi.');
   const year=findMasterItemById_('MASTER_TAHUN_AJARAN','tahunAjaranId',tahunAjaranId); if(!year||!year.isActive)return fail_('Tahun ajaran tidak aktif atau tidak ditemukan.');
-  const sheet=SpreadsheetApp.getActiveSpreadsheet().getSheetByName(PSB_SHEETS.SELECTION_SCHEDULE); if(!sheet)return fail_('Sheet jadwal seleksi belum tersedia.');
+  const sheet=getDatabaseSpreadsheet_().getSheetByName(PSB_SHEETS.SELECTION_SCHEDULE); if(!sheet)return fail_('Sheet jadwal seleksi belum tersedia.');
   const headers=sheet.getRange(1,1,1,sheet.getLastColumn()).getValues()[0].map(String), now=new Date(), record={}; headers.forEach(h=>record[h]='');
   Object.assign(record,{scheduleId:generateId_('SCH'),tahunAjaranId,name,selectionDate,location,isActive:true,createdAt:now,updatedAt:now});
   sheet.appendRow(headers.map(h=>record[h]));
@@ -1965,7 +2000,7 @@ function updateSelectionScheduleStatus(sessionToken,payload){
   const actor=requireRole_(sessionToken,PSB_SELECTION_ADMIN_ROLES);
   assertOperationalMutation_(actor); payload=payload||{};
   const scheduleId=String(payload.scheduleId||'').trim(), isActive=!!payload.isActive;
-  const sheet=SpreadsheetApp.getActiveSpreadsheet().getSheetByName(PSB_SHEETS.SELECTION_SCHEDULE), found=findRowById_(sheet,'scheduleId',scheduleId);
+  const sheet=getDatabaseSpreadsheet_().getSheetByName(PSB_SHEETS.SELECTION_SCHEDULE), found=findRowById_(sheet,'scheduleId',scheduleId);
   if(!found)return fail_('Jadwal tes tidak ditemukan.');
   const headers=sheet.getRange(1,1,1,sheet.getLastColumn()).getValues()[0].map(String), idx=headers.indexOf('isActive'), up=headers.indexOf('updatedAt');
   if(idx>=0)sheet.getRange(found.rowNumber,idx+1).setValue(isActive); if(up>=0)sheet.getRange(found.rowNumber,up+1).setValue(new Date());
@@ -1980,10 +2015,10 @@ function addSelectionParticipant(sessionToken,payload){
   if(!registrationId||!scheduleId)return fail_('Pendaftaran dan jadwal tes wajib dipilih.');
   const found=findRegistration_(registrationId); if(!found)return fail_('Pendaftaran tidak ditemukan.');
   if(!isRegistrationSelectionEligible_(registrationId))return fail_('Pendaftar belum memenuhi syarat mengikuti tes. Pastikan verifikasi pendaftaran dan Pembayaran Formulir sudah selesai.');
-  const schedule=findRowById_(SpreadsheetApp.getActiveSpreadsheet().getSheetByName(PSB_SHEETS.SELECTION_SCHEDULE),'scheduleId',scheduleId);
+  const schedule=findRowById_(getDatabaseSpreadsheet_().getSheetByName(PSB_SHEETS.SELECTION_SCHEDULE),'scheduleId',scheduleId);
   if(!schedule)return fail_('Jadwal tes tidak ditemukan.');
   if(!schedule.object.isActive && String(schedule.object.isActive).toUpperCase()!=='TRUE')return fail_('Jadwal tes tidak aktif.');
-  const sheet=SpreadsheetApp.getActiveSpreadsheet().getSheetByName(PSB_SHEETS.SELECTION_PARTICIPANTS);
+  const sheet=getDatabaseSpreadsheet_().getSheetByName(PSB_SHEETS.SELECTION_PARTICIPANTS);
   if(!sheet)return fail_('Sheet peserta seleksi belum tersedia.');
   const lock=LockService.getScriptLock(); lock.waitLock(15000);
   let record;
@@ -2010,7 +2045,7 @@ function addSelectionParticipantsBulk(sessionToken,payload){
   const scheduleId=String(payload.scheduleId||'').trim();
   if(!registrationIds.length)return fail_('Pilih minimal satu pendaftar.');
   if(!scheduleId)return fail_('Jadwal tes wajib dipilih.');
-  const ss=SpreadsheetApp.getActiveSpreadsheet();
+  const ss=getDatabaseSpreadsheet_();
   const scheduleSheet=ss.getSheetByName(PSB_SHEETS.SELECTION_SCHEDULE), schedule=findRowById_(scheduleSheet,'scheduleId',scheduleId);
   if(!schedule)return fail_('Jadwal tes tidak ditemukan.');
   if(!schedule.object.isActive && String(schedule.object.isActive).toUpperCase()!=='TRUE')return fail_('Jadwal tes tidak aktif.');
@@ -2046,7 +2081,7 @@ function updateSelectionParticipantStatus(sessionToken,payload){
   if(!participantId || !['SCHEDULED','PRESENT','ABSENT','COMPLETED'].includes(status))return fail_('Peserta dan status peserta wajib dipilih.');
   const lock=LockService.getScriptLock(); lock.waitLock(10000);
   try {
-    const sheet=SpreadsheetApp.getActiveSpreadsheet().getSheetByName(PSB_SHEETS.SELECTION_PARTICIPANTS);
+    const sheet=getDatabaseSpreadsheet_().getSheetByName(PSB_SHEETS.SELECTION_PARTICIPANTS);
     const found=findRowById_(sheet,'participantId',participantId); if(!found)return fail_('Peserta tes tidak ditemukan.');
     const headers=sheet.getRange(1,1,1,sheet.getLastColumn()).getValues()[0].map(String), idx=headers.indexOf('status'), up=headers.indexOf('updatedAt');
     if(idx>=0)sheet.getRange(found.rowNumber,idx+1).setValue(status);
@@ -2063,7 +2098,7 @@ function saveSelectionScore(sessionToken,payload){
   if(!participantId||!component||component.length>100||!Number.isFinite(score)||score<0||score>100)return fail_('Peserta, komponen nilai, dan nilai 0–100 wajib diisi.');
   const lock=LockService.getScriptLock(); lock.waitLock(10000);
   try {
-    const ss=SpreadsheetApp.getActiveSpreadsheet();
+    const ss=getDatabaseSpreadsheet_();
     const participant=findRowById_(ss.getSheetByName(PSB_SHEETS.SELECTION_PARTICIPANTS),'participantId',participantId);
     if(!participant)return fail_('Peserta tes tidak ditemukan.');
     const publishedResult=findRowById_(ss.getSheetByName(PSB_SHEETS.SELECTION_RESULTS),'registrationId',String(participant.object.registrationId||''));
@@ -2085,12 +2120,12 @@ function saveSelectionResult(sessionToken,payload){
   const registrationId=String(payload.registrationId||'').trim(), status=String(payload.status||'').toUpperCase(), note=clean_(payload.note);
   if(!registrationId||!['PENDING','PASSED','NOT_PASSED','WAITLIST'].includes(status))return fail_('Pendaftaran dan hasil seleksi wajib diisi.');
   const found=findRegistration_(registrationId); if(!found)return fail_('Pendaftaran tidak ditemukan.');
-  const participant=findRowById_(SpreadsheetApp.getActiveSpreadsheet().getSheetByName(PSB_SHEETS.SELECTION_PARTICIPANTS),'registrationId',registrationId); if(!participant)return fail_('Pendaftar belum terdaftar sebagai peserta tes.');
+  const participant=findRowById_(getDatabaseSpreadsheet_().getSheetByName(PSB_SHEETS.SELECTION_PARTICIPANTS),'registrationId',registrationId); if(!participant)return fail_('Pendaftar belum terdaftar sebagai peserta tes.');
 
   const lock=LockService.getScriptLock();
   lock.waitLock(10000);
   try{
-    const sheet=SpreadsheetApp.getActiveSpreadsheet().getSheetByName(PSB_SHEETS.SELECTION_RESULTS);
+    const sheet=getDatabaseSpreadsheet_().getSheetByName(PSB_SHEETS.SELECTION_RESULTS);
     if(!sheet)return fail_('Sheet hasil seleksi belum tersedia.');
     const rows=sheetRows_(sheet), existing=rows.find(x=>String(x.registrationId)===registrationId), now=new Date();
     if(existing && String(existing.announcementDate||'').trim()!=='')return fail_('Hasil seleksi tidak dapat diubah setelah dipublikasikan.');
@@ -2127,7 +2162,7 @@ function isRegistrationSelectionEligible_(registrationId){
   if(status==='PAYMENT_VERIFIED')return true;
   // Compatibility for existing records that were verified before Stage 8.
   if(status!=='VERIFIED')return false;
-  const ss=SpreadsheetApp.getActiveSpreadsheet(), bills=sheetRows_(ss.getSheetByName(PSB_SHEETS.BILLS)), types={};
+  const ss=getDatabaseSpreadsheet_(), bills=sheetRows_(ss.getSheetByName(PSB_SHEETS.BILLS)), types={};
   getActiveMasterItems_('MASTER_JENIS_PEMBAYARAN').forEach(x=>types[String(x.paymentTypeId)]=x);
   return bills.some(b=>String(b.registrationId)===String(registrationId)&&String(b.status).toUpperCase()==='PAID'&&/formulir/i.test(String(types[String(b.paymentTypeId)]?.name||'')));
 }
@@ -2147,7 +2182,7 @@ const PSB_ANNOUNCEMENT_VIEW_ROLES = ['WALI','SUPERADMIN','ADMIN_PSB','SELEKSI','
 
 function getAnnouncementPageData(sessionToken) {
   const actor = requireRole_(sessionToken, PSB_ANNOUNCEMENT_VIEW_ROLES);
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const ss = getDatabaseSpreadsheet_();
   const resultSheet = ss.getSheetByName(PSB_SHEETS.SELECTION_RESULTS);
   const rows = resultSheet && resultSheet.getLastRow() >= 2 ? sheetRows_(resultSheet) : [];
   const registrations = ss.getSheetByName(PSB_SHEETS.REGISTRATIONS);
@@ -2174,7 +2209,7 @@ function publishAnnouncement(sessionToken,payload) {
   assertOperationalMutation_(actor); payload=payload||{};
   const registrationId=String(payload.registrationId||'').trim();
   if(!registrationId) return fail_('Pendaftaran wajib dipilih.');
-  const ss=SpreadsheetApp.getActiveSpreadsheet();
+  const ss=getDatabaseSpreadsheet_();
   const resultSheet=ss.getSheetByName(PSB_SHEETS.SELECTION_RESULTS);
   const found=findRowById_(resultSheet,'registrationId',registrationId);
   if(!found) return fail_('Hasil seleksi belum tersedia.');
@@ -2229,7 +2264,7 @@ function publishAnnouncement(sessionToken,payload) {
 
 function getNotifications(sessionToken) {
   const actor=requireRole_(sessionToken,PSB_ANNOUNCEMENT_VIEW_ROLES);
-  const sheet=SpreadsheetApp.getActiveSpreadsheet().getSheetByName(PSB_SHEETS.NOTIFICATIONS);
+  const sheet=getDatabaseSpreadsheet_().getSheetByName(PSB_SHEETS.NOTIFICATIONS);
   const rows=sheet&&sheet.getLastRow()>=2?sheetRows_(sheet):[];
   const items=rows.filter(x=>String(x.userId)===String(actor.userId)).sort((a,b)=>String(b.createdAt||'').localeCompare(String(a.createdAt||''))).slice(0,100);
   return {success:true,items,unreadCount:items.filter(x=>String(x.isRead).toUpperCase()!=='TRUE').length};
@@ -2237,7 +2272,7 @@ function getNotifications(sessionToken) {
 
 function markNotificationRead(sessionToken,notificationId) {
   const actor=requireRole_(sessionToken,PSB_ANNOUNCEMENT_VIEW_ROLES);
-  assertOperationalMutation_(actor);  const sheet=SpreadsheetApp.getActiveSpreadsheet().getSheetByName(PSB_SHEETS.NOTIFICATIONS);
+  assertOperationalMutation_(actor);  const sheet=getDatabaseSpreadsheet_().getSheetByName(PSB_SHEETS.NOTIFICATIONS);
   const found=findRowById_(sheet,'notificationId',String(notificationId||''));
   if(!found || String(found.object.userId)!==String(actor.userId)) return fail_('Notifikasi tidak ditemukan.');
   const headers=sheet.getRange(1,1,1,sheet.getLastColumn()).getValues()[0].map(String), readIdx=headers.indexOf('isRead'), dateIdx=headers.indexOf('readAt');
@@ -2249,7 +2284,7 @@ function markNotificationRead(sessionToken,notificationId) {
 function markAllNotificationsRead(sessionToken) {
   const actor=requireRole_(sessionToken,PSB_ANNOUNCEMENT_VIEW_ROLES);
   assertOperationalMutation_(actor);
-  const sheet=SpreadsheetApp.getActiveSpreadsheet().getSheetByName(PSB_SHEETS.NOTIFICATIONS);
+  const sheet=getDatabaseSpreadsheet_().getSheetByName(PSB_SHEETS.NOTIFICATIONS);
   if(!sheet||sheet.getLastRow()<2)return {success:true};
   const headers=sheet.getRange(1,1,1,sheet.getLastColumn()).getValues()[0].map(String), userIdx=headers.indexOf('userId'), readIdx=headers.indexOf('isRead'), dateIdx=headers.indexOf('readAt');
   if(userIdx<0||readIdx<0)return {success:true};
@@ -2262,7 +2297,7 @@ function markAllNotificationsRead(sessionToken) {
 
 function getCommunicationCenterData(sessionToken) {
   const actor = requireRole_(sessionToken, PSB_COMMUNICATION_ROLES);
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const ss = getDatabaseSpreadsheet_();
   const users = sheetRows_(ss.getSheetByName(PSB_SHEETS.USERS));
   const notifications = sheetRows_(ss.getSheetByName(PSB_SHEETS.NOTIFICATIONS));
   const activeUsers = users.filter(u => !['INACTIVE','DISABLED'].includes(String(u.status || 'ACTIVE').toUpperCase()));
@@ -2298,7 +2333,7 @@ function sendCommunication(sessionToken, payload) {
   const targetRoles = Array.isArray(payload.roles) ? payload.roles.map(x => String(x || '').toUpperCase().trim()).filter(Boolean) : [];
   const uniqueRoles = [...new Set(targetRoles)];
   if (!uniqueRoles.length || uniqueRoles.some(r => !PSB_COMMUNICATION_RECIPIENT_ROLES.includes(r))) return fail_('Penerima role tidak valid.');
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const ss = getDatabaseSpreadsheet_();
   const users = sheetRows_(ss.getSheetByName(PSB_SHEETS.USERS));
   const recipients = users.filter(u => !['INACTIVE','DISABLED'].includes(String(u.status || 'ACTIVE').toUpperCase()) && uniqueRoles.some(role => String(u.role || '').toUpperCase().split(',').map(x => x.trim()).includes(role)));
   if (!recipients.length) return fail_('Tidak ada penerima aktif untuk role yang dipilih.');
@@ -2310,7 +2345,7 @@ function sendCommunication(sessionToken, payload) {
 }
 
 function createNotification_(userId,title,message,type){
-  const sheet=SpreadsheetApp.getActiveSpreadsheet().getSheetByName(PSB_SHEETS.NOTIFICATIONS); if(!sheet||!userId)return null;
+  const sheet=getDatabaseSpreadsheet_().getSheetByName(PSB_SHEETS.NOTIFICATIONS); if(!sheet||!userId)return null;
   const headers=sheet.getRange(1,1,1,sheet.getLastColumn()).getValues()[0].map(String), record={}; headers.forEach(h=>record[h]='');
   Object.assign(record,{notificationId:generateId_('NTF'),userId:String(userId),title:clean_(title),message:clean_(message),type:String(type||'INFO'),isRead:false,createdAt:new Date(),readAt:''});
   sheet.appendRow(headers.map(h=>record[h])); return record;
@@ -2319,7 +2354,7 @@ function createNotification_(userId,title,message,type){
 function notifyUsersByRoles_(roles,title,message,type){
   const wanted=Array.isArray(roles)?roles.map(x=>String(x||'').trim().toUpperCase()).filter(Boolean):[];
   if(!wanted.length)return 0;
-  const sheet=SpreadsheetApp.getActiveSpreadsheet().getSheetByName(PSB_SHEETS.USERS);
+  const sheet=getDatabaseSpreadsheet_().getSheetByName(PSB_SHEETS.USERS);
   if(!sheet||sheet.getLastRow()<2)return 0;
   const rows=sheetRows_(sheet); let count=0;
   rows.forEach(u=>{
@@ -2346,7 +2381,7 @@ const PSB_REREGISTRATION_STATUSES = ['PENDING','PAYMENT_PENDING','PAYMENT_VERIFI
 
 function getReregistrationPageData(sessionToken) {
   const actor = requireRole_(sessionToken, PSB_REREGISTRATION_VIEW_ROLES);
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const ss = getDatabaseSpreadsheet_();
   const regSheet = ss.getSheetByName(PSB_SHEETS.REGISTRATIONS);
   const rrSheet = ss.getSheetByName(PSB_SHEETS.REREGISTRATIONS);
   if (!regSheet || !rrSheet) return {success:true,items:[],summary:{eligible:0,completed:0,pending:0}};
@@ -2401,11 +2436,11 @@ function openReregistration(sessionToken, registrationId) {
   if (!id) return fail_('Pendaftaran wajib dipilih.');
   const found = findRegistration_(id); if (!found) return fail_('Pendaftaran tidak ditemukan.');
   if (hasRoleDirect_(actor,['WALI']) && String(found.registration.userId)!==String(actor.userId)) return fail_('Anda tidak memiliki akses ke pendaftaran ini.');
-  const result=findRowById_(SpreadsheetApp.getActiveSpreadsheet().getSheetByName(PSB_SHEETS.SELECTION_RESULTS),'registrationId',id);
+  const result=findRowById_(getDatabaseSpreadsheet_().getSheetByName(PSB_SHEETS.SELECTION_RESULTS),'registrationId',id);
   if(!result || String(result.object.status||'').toUpperCase()!=='PASSED' || !String(result.object.announcementDate||'').trim()) return fail_('Daftar ulang hanya dapat dibuka setelah hasil LULUS dipublikasikan.');
   const lock=LockService.getScriptLock(); lock.waitLock(10000);
   try {
-    const rrSheet=SpreadsheetApp.getActiveSpreadsheet().getSheetByName(PSB_SHEETS.REREGISTRATIONS);
+    const rrSheet=getDatabaseSpreadsheet_().getSheetByName(PSB_SHEETS.REREGISTRATIONS);
     const current=findRowById_(rrSheet,'registrationId',id);
     if(current) return {success:true,message:'Daftar ulang sudah terbuka.',reregistration:current.object,alreadyOpen:true};
     const rr=ensureReregistration_(id,actor.userId,true); if(!rr) return fail_('Daftar ulang belum dapat dibuka.');
@@ -2417,7 +2452,7 @@ function openReregistration(sessionToken, registrationId) {
 }
 
 function ensureReregistration_(registrationId, actorUserId, createBill) {
-  const rrSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(PSB_SHEETS.REREGISTRATIONS);
+  const rrSheet = getDatabaseSpreadsheet_().getSheetByName(PSB_SHEETS.REREGISTRATIONS);
   if (!rrSheet) return null;
   const existing = findRowById_(rrSheet, 'registrationId', registrationId);
   if (existing) return existing.object;
@@ -2439,7 +2474,7 @@ function ensureReregistrationBill_(found, actorUserId) {
   const typeItems = getActiveMasterItems_('MASTER_JENIS_PEMBAYARAN');
   const type = typeItems.find(x => /daftar\s*ulang/i.test(String(x.name || '')));
   if (!type) return null;
-  const billSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(PSB_SHEETS.BILLS);
+  const billSheet = getDatabaseSpreadsheet_().getSheetByName(PSB_SHEETS.BILLS);
   if (!billSheet) return null;
   const rows = sheetRows_(billSheet);
   const existing = rows.find(x => String(x.registrationId) === String(found.registration.registrationId) && String(x.paymentTypeId) === String(type.paymentTypeId) && String(x.status || '').toUpperCase() !== 'CANCELLED');
@@ -2460,7 +2495,7 @@ function finalizeReregistration(sessionToken, registrationId) {
   if (!id) return fail_('Pendaftaran wajib dipilih.');
   const lock=LockService.getScriptLock(); lock.waitLock(10000);
   try {
-    const rrSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(PSB_SHEETS.REREGISTRATIONS);
+    const rrSheet = getDatabaseSpreadsheet_().getSheetByName(PSB_SHEETS.REREGISTRATIONS);
     const rrFound = findRowById_(rrSheet, 'registrationId', id);
     const regFound = findRegistration_(id);
     if (!rrFound || !regFound) return fail_('Data daftar ulang tidak ditemukan.');
@@ -2488,7 +2523,7 @@ function finalizeReregistration(sessionToken, registrationId) {
 }
 
 function syncReregistrationAfterPayment_(registrationId, actorUserId) {
-  const rrSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(PSB_SHEETS.REREGISTRATIONS);
+  const rrSheet = getDatabaseSpreadsheet_().getSheetByName(PSB_SHEETS.REREGISTRATIONS);
   const rrFound = findRowById_(rrSheet, 'registrationId', String(registrationId));
   if (!rrFound) return;
   const docs = getCurrentDocuments_(String(registrationId));
@@ -2531,7 +2566,7 @@ function getDashboardPageData(sessionToken) {
   if (dashboardCached) {
     try { return JSON.parse(dashboardCached); } catch (e) {}
   }
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const ss = getDatabaseSpreadsheet_();
   const activeYear = String(getConfig_('ACTIVE_YEAR') || '2027/2028');
   const regs = sheetRows_(ss.getSheetByName(PSB_SHEETS.REGISTRATIONS));
   const candidates = sheetRows_(ss.getSheetByName(PSB_SHEETS.CANDIDATES));
@@ -2652,7 +2687,7 @@ function sortCountMap_(obj) {
 // =====================================================
 function getProductionReadiness(sessionToken) {
   const actor = requireRole_(sessionToken, ['SUPERADMIN','ADMIN_PSB']);
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const ss = getDatabaseSpreadsheet_();
   const props = PropertiesService.getScriptProperties();
   const activeYear = String(getConfig_('ACTIVE_YEAR') || '').trim();
   const checks = [];
@@ -2733,7 +2768,7 @@ function psbActiveYearRegistrationSet_(ss){
 
 function getMonitoringPageData(sessionToken){
   const actor=requireRole_(sessionToken,PSB_MONITORING_ROLES);
-  const ss=SpreadsheetApp.getActiveSpreadsheet();
+  const ss=getDatabaseSpreadsheet_();
   const period=psbActiveYearRegistrationSet_(ss);
   const regs=period.period, regIds=period.ids;
   const candidates=sheetRows_(ss.getSheetByName(PSB_SHEETS.CANDIDATES));
@@ -2791,7 +2826,7 @@ function getMonitoringPageData(sessionToken){
 }
 
 function getIncidentPageData(sessionToken){
-  const actor=requireRole_(sessionToken,PSB_INCIDENT_ROLES); const ss=SpreadsheetApp.getActiveSpreadsheet();
+  const actor=requireRole_(sessionToken,PSB_INCIDENT_ROLES); const ss=getDatabaseSpreadsheet_();
   const incidents=sheetRows_(ss.getSheetByName(PSB_SHEETS.INCIDENTS)).sort((a,b)=>new Date(b.updatedAt||b.createdAt||0)-new Date(a.updatedAt||a.createdAt||0));
   return {success:true,items:incidents.slice(0,200),statuses:PSB_INCIDENT_STATUSES,priorities:PSB_INCIDENT_PRIORITIES,actorRole:actor.role};
 }
@@ -2800,7 +2835,7 @@ function saveIncident(sessionToken,payload){
   const title=String(payload.title||'').trim(), description=String(payload.description||'').trim(); if(!title)return fail_('Judul insiden wajib diisi.'); if(!description)return fail_('Deskripsi insiden wajib diisi.');
   const priority=String(payload.priority||'MEDIUM').toUpperCase(); if(PSB_INCIDENT_PRIORITIES.indexOf(priority)<0)return fail_('Prioritas insiden tidak valid.');
   const status=String(payload.status||'OPEN').toUpperCase(); if(PSB_INCIDENT_STATUSES.indexOf(status)<0)return fail_('Status insiden tidak valid.');
-  const sheet=SpreadsheetApp.getActiveSpreadsheet().getSheetByName(PSB_SHEETS.INCIDENTS); if(!sheet)return fail_('Sheet INCIDENTS belum tersedia.');
+  const sheet=getDatabaseSpreadsheet_().getSheetByName(PSB_SHEETS.INCIDENTS); if(!sheet)return fail_('Sheet INCIDENTS belum tersedia.');
   const now=new Date(), existingId=String(payload.incidentId||'').trim(); let row=null, old=null;
   if(existingId){const found=findRowById_(sheet,'incidentId',existingId); if(!found)return fail_('Insiden tidak ditemukan.'); row=found.rowNumber; old=found.object;}
   const obj={incidentId:existingId||('INC-'+Utilities.formatDate(now,Session.getScriptTimeZone()||'Asia/Jakarta','yyyyMMdd-HHmmss')+'-'+Utilities.getUuid().slice(0,8)),category:String(payload.category||'GENERAL').trim().toUpperCase(),priority,status,title,description,relatedModule:String(payload.relatedModule||'').trim(),relatedRecordId:String(payload.relatedRecordId||'').trim(),reportedBy:old?.reportedBy||actor.userId,assignedTo:String(payload.assignedTo||old?.assignedTo||'').trim(),resolutionNote:String(payload.resolutionNote||'').trim(),createdAt:old?.createdAt||now,updatedAt:now,resolvedAt:status==='RESOLVED'||status==='CLOSED'?(old?.resolvedAt||now):'',closedAt:status==='CLOSED'?(old?.closedAt||now):''};
@@ -2809,7 +2844,7 @@ function saveIncident(sessionToken,payload){
   return {success:true,message:old?'Insiden diperbarui.':'Insiden dibuat.',item:rpcSafe_(obj)};
 }
 function closeIncident(sessionToken,incidentId,resolutionNote){
-  const actor=requireRole_(sessionToken,PSB_INCIDENT_ROLES); assertOperationalMutation_(actor); const sheet=SpreadsheetApp.getActiveSpreadsheet().getSheetByName(PSB_SHEETS.INCIDENTS); if(!sheet)return fail_('Sheet INCIDENTS belum tersedia.');
+  const actor=requireRole_(sessionToken,PSB_INCIDENT_ROLES); assertOperationalMutation_(actor); const sheet=getDatabaseSpreadsheet_().getSheetByName(PSB_SHEETS.INCIDENTS); if(!sheet)return fail_('Sheet INCIDENTS belum tersedia.');
   const found=findRowById_(sheet,'incidentId',String(incidentId||'')); if(!found)return fail_('Insiden tidak ditemukan.'); const old=found.object; const now=new Date();
   const headers=sheet.getRange(1,1,1,sheet.getLastColumn()).getValues()[0].map(String), set={status:'CLOSED',resolutionNote:String(resolutionNote||old.resolutionNote||'').trim(),updatedAt:now,closedAt:now,resolvedAt:old.resolvedAt||now};
   headers.forEach((h,i)=>{if(Object.prototype.hasOwnProperty.call(set,h))sheet.getRange(found.rowNumber,i+1).setValue(set[h]);});
@@ -2836,7 +2871,7 @@ function reportGroupName_(jenjangName, gender) {
 function getReportingPageData(sessionToken, filters) {
   const actor = requireRole_(sessionToken, PSB_REPORT_ROLES);
   filters = filters || {};
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const ss = getDatabaseSpreadsheet_();
   const activeYear = String(getConfig_('ACTIVE_YEAR') || '2027/2028');
   const year = String(filters.tahunAjaranId || '').trim();
   const status = String(filters.status || '').trim().toUpperCase();
@@ -2887,7 +2922,7 @@ function getReportingPageData(sessionToken, filters) {
 function getAdvancedReportingData(sessionToken, filters) {
   const actor = requireRole_(sessionToken, PSB_REPORT_ROLES);
   filters = filters || {};
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const ss = getDatabaseSpreadsheet_();
   const activeYear = String(getConfig_('ACTIVE_YEAR') || '2027/2028');
   const selectedYear = String(filters.tahunAjaranId || '').trim();
   const gelombangId = String(filters.gelombangId || '').trim();
@@ -2955,7 +2990,7 @@ const PSB_VERIFICATION_REGISTRATION_STATUSES = ['SUBMITTED','UNDER_REVIEW','REVI
 
 function getVerificationQueue(sessionToken, filters) {
   const actor = requireRole_(sessionToken, PSB_VERIFICATION_ROLES);
-  const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(PSB_SHEETS.REGISTRATIONS);
+  const sheet = getDatabaseSpreadsheet_().getSheetByName(PSB_SHEETS.REGISTRATIONS);
   if (!sheet || sheet.getLastRow() < 2) return {success:true, registrations:[]};
   const headers = sheet.getRange(1,1,1,sheet.getLastColumn()).getValues()[0].map(String);
   const rows = sheet.getRange(2,1,sheet.getLastRow()-1,sheet.getLastColumn()).getValues();
@@ -3005,7 +3040,7 @@ function verifyDocument(sessionToken, payload) {
   lock.waitLock(10000);
   let registrationId='', documentTypeId='';
   try {
-    const sheet=SpreadsheetApp.getActiveSpreadsheet().getSheetByName(PSB_SHEETS.DOCUMENTS);
+    const sheet=getDatabaseSpreadsheet_().getSheetByName(PSB_SHEETS.DOCUMENTS);
     if(!sheet || sheet.getLastRow()<2) return fail_('Dokumen tidak ditemukan.');
     const headers=sheet.getRange(1,1,1,sheet.getLastColumn()).getValues()[0].map(String);
     const found=findRowById_(sheet,'documentId',documentId);
@@ -3064,7 +3099,7 @@ function finalizeVerification(sessionToken, payload) {
 }
 
 function setRegistrationStatus_(registration, status, actorUserId, note) {
-  const sheet=SpreadsheetApp.getActiveSpreadsheet().getSheetByName(PSB_SHEETS.REGISTRATIONS);
+  const sheet=getDatabaseSpreadsheet_().getSheetByName(PSB_SHEETS.REGISTRATIONS);
   if(!sheet) return fail_('Sheet REGISTRATIONS belum tersedia.');
   const headers=sheet.getRange(1,1,1,sheet.getLastColumn()).getValues()[0].map(String);
   const row=registration.rowNumber, now=new Date();
@@ -3115,7 +3150,7 @@ function getRegistrationDocuments(sessionToken, registrationId) {  return getDoc
 function getDocumentPageData(sessionToken, registrationId) {
   const actor = requireRole_(sessionToken, PSB_DOCUMENT_ACCESS_ROLES);
   const isWali = hasRoleDirect_(actor, ['WALI']);
-  const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(PSB_SHEETS.REGISTRATIONS);
+  const sheet = getDatabaseSpreadsheet_().getSheetByName(PSB_SHEETS.REGISTRATIONS);
   let registrations = [];
   if (sheet && sheet.getLastRow() >= 2) {
     const headers = sheet.getRange(1,1,1,sheet.getLastColumn()).getValues()[0].map(String);
@@ -3193,7 +3228,7 @@ function uploadDocument(sessionToken, payload) {
   let uploadedFile = null;
   let documentRowWritten = false;
   try {
-    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const ss = getDatabaseSpreadsheet_();
     const sheet = ss.getSheetByName(PSB_SHEETS.DOCUMENTS);
     if (!sheet) return fail_('Sheet DOCUMENTS belum tersedia. Jalankan setup database terlebih dahulu.');
 
@@ -3266,7 +3301,7 @@ function canAccessRegistration_(actor, registration) {
 }
 
 function getCurrentDocuments_(registrationId) {
-  const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(PSB_SHEETS.DOCUMENTS);
+  const sheet = getDatabaseSpreadsheet_().getSheetByName(PSB_SHEETS.DOCUMENTS);
   if (!sheet || sheet.getLastRow() < 2) return [];
   const headers = sheet.getRange(1,1,1,sheet.getLastColumn()).getValues()[0].map(String);
   const rows = sheet.getRange(2,1,sheet.getLastRow()-1,sheet.getLastColumn()).getValues();
@@ -3323,7 +3358,7 @@ function saveRegistration(sessionToken, payload) {
   const lock = LockService.getScriptLock();
   lock.waitLock(10000);
   try {
-    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const ss = getDatabaseSpreadsheet_();
     const regSheet = ss.getSheetByName(PSB_SHEETS.REGISTRATIONS);
     const candidateSheet = ss.getSheetByName(PSB_SHEETS.CANDIDATES);
     const guardianSheet = ss.getSheetByName(PSB_SHEETS.GUARDIANS);
@@ -3442,7 +3477,7 @@ function submitRegistration(sessionToken, registrationId) {
   if(PSB_REGISTRATION_EDITABLE_STATUSES.indexOf(String(latest.registration.status))<0) return fail_('Pendaftaran tidak berada pada status yang dapat dikirim.');
   const latestValidation=validateCompleteRegistration_(latest); if(!latestValidation.success) return latestValidation;
   found=latest;
-  const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(PSB_SHEETS.REGISTRATIONS);
+  const sheet = getDatabaseSpreadsheet_().getSheetByName(PSB_SHEETS.REGISTRATIONS);
   const headers = sheet.getRange(1,1,1,sheet.getLastColumn()).getValues()[0].map(String);
   const row = found.registration.rowNumber;
   const statusIdx = headers.indexOf('status');
@@ -3489,7 +3524,7 @@ function validateCompleteRegistration_(found) {
 }
 
 function findRegistration_(registrationId) {
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const ss = getDatabaseSpreadsheet_();
   const reg = findRowById_(ss.getSheetByName(PSB_SHEETS.REGISTRATIONS), 'registrationId', registrationId);
   if (!reg) return null;
   const candidate = findRowById_(ss.getSheetByName(PSB_SHEETS.CANDIDATES), 'candidateId', reg.object.candidateId);
@@ -3500,7 +3535,7 @@ function findRegistration_(registrationId) {
 }
 
 function enrichRegistrationList_(items) {
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const ss = getDatabaseSpreadsheet_();
   const candidates = sheetMapById_(ss.getSheetByName(PSB_SHEETS.CANDIDATES), 'candidateId');
   const years = sheetMapById_(ss.getSheetByName(PSB_SHEETS.MASTER_TAHUN_AJARAN), 'tahunAjaranId');
   const waves = sheetMapById_(ss.getSheetByName(PSB_SHEETS.MASTER_GELOMBANG), 'gelombangId');
@@ -3515,7 +3550,7 @@ function enrichRegistrationList_(items) {
 
 function getActiveMasterItems_(masterKey) {
   const def = PSB_MASTER_DEFINITIONS[masterKey];
-  const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(def.sheet);
+  const sheet = getDatabaseSpreadsheet_().getSheetByName(def.sheet);
   if (!sheet || sheet.getLastRow() < 2) return [];
   const headers = sheet.getRange(1,1,1,sheet.getLastColumn()).getValues()[0].map(String);
   return sheet.getRange(2,1,sheet.getLastRow()-1,sheet.getLastColumn()).getValues().map((r,i)=>masterObjectFromRow_(headers,r,i+2)).filter(x=>x.isActive===true);
@@ -3523,7 +3558,7 @@ function getActiveMasterItems_(masterKey) {
 
 function findMasterItemById_(masterKey, idField, id) {
   const def = PSB_MASTER_DEFINITIONS[masterKey];
-  const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(def.sheet);
+  const sheet = getDatabaseSpreadsheet_().getSheetByName(def.sheet);
   if (!sheet) return null;
   return findRowById_(sheet,idField,String(id||''))?.object || null;
 }
