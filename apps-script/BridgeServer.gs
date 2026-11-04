@@ -46,7 +46,7 @@ function psbConsumePwaBridgeToken_(token, origin) {
   if (!/^[a-f0-9]{64}$/i.test(value)) return false;
   const lock = LockService.getScriptLock();
   try {
-    lock.waitLock(5000);
+    lock.waitLock(10000);
     const cache = CacheService.getScriptCache();
     const key = 'PSB_PWA_BRIDGE_TOKEN_' + value;
     const raw = cache.get(key);
@@ -71,8 +71,8 @@ function psbConsumePwaBridgeToken_(token, origin) {
     }
     return true;
   } catch (e) {
-    console.warn('PWA bridge token validation failed: ' + String(e && e.message || e));
-    return false;
+    console.warn('PWA bridge token validation deferred: ' + String(e && e.message || e));
+    return { success: false, code: 'BRIDGE_TEMPORARILY_BUSY', message: 'Server sedang sibuk. Permintaan aman untuk dicoba kembali.' };
   } finally {
     try { lock.releaseLock(); } catch (e) {}
   }
@@ -130,8 +130,10 @@ function doPost(e) {
     });
   };
 
-  if (!psbConsumePwaBridgeToken_(payload.token, origin)) {
-    return fail('BRIDGE_TOKEN_INVALID', 'Sesi transport kedaluwarsa. Silakan ulangi permintaan.');
+  const tokenResult = psbConsumePwaBridgeToken_(payload.token, origin);
+  if (tokenResult !== true) {
+    return fail(tokenResult && tokenResult.code || 'BRIDGE_TOKEN_INVALID',
+      tokenResult && tokenResult.message || 'Sesi transport kedaluwarsa. Silakan ulangi permintaan.');
   }
 
   const functionName = String(payload.fn || '').trim();
