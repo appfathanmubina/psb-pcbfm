@@ -68,7 +68,7 @@
 - `SetupDatabase.gs` tidak lagi mendeklarasikan sheet `WALI_OTP`.
 - Sheet `WALI_OTP` atau sheet chat yang mungkin sudah ada di Spreadsheet lama tidak dihapus oleh perubahan source ini.
 - `setupPSBDatabase_()` tidak lagi memanggil pembersihan trigger chat.
-- Fungsi publik `cleanupLegacyChatAutomationTriggers()` memanggil helper internal yang hanya menghapus trigger bernama `runChatAutomation` atau `runChatAutomation_` serta properti `PSB_CHAT_AUTOMATION_TRIGGER`.
+- Wrapper `cleanupLegacyChatAutomationTriggers()` meminta UI Spreadsheet dan konfirmasi YES/NO sebelum memanggil helper internal; pembatasan konteks editor mencegah fungsi maintenance ini dipanggil dari Web App/browser. Helper hanya menghapus trigger bernama `runChatAutomation` atau `runChatAutomation_` serta properti `PSB_CHAT_AUTOMATION_TRIGGER`.
 - Jalankan wrapper cleanup secara manual hanya jika diperlukan. Jangan menjalankan setup database untuk membersihkan trigger.
 
 ### 6. PWA, cache, dan publikasi galeri
