@@ -3190,6 +3190,8 @@ function uploadDocument(sessionToken, payload) {
 
   const lock = LockService.getScriptLock();
   lock.waitLock(10000);
+  let uploadedFile = null;
+  let documentRowWritten = false;
   try {
     const ss = SpreadsheetApp.getActiveSpreadsheet();
     const sheet = ss.getSheetByName(PSB_SHEETS.DOCUMENTS);
@@ -3198,6 +3200,7 @@ function uploadDocument(sessionToken, payload) {
     const folder = getRegistrationDocumentFolder_(found.registration);
     const blob = Utilities.newBlob(bytes, mimeType, fileName);
     const file = folder.createFile(blob);
+    uploadedFile = file;
     const detectedMime = String(file.getMimeType() || '').toLowerCase();
     if (detectedMime && detectedMime !== mimeType && !(mimeType === 'application/pdf' && detectedMime === 'application/pdf')) {
       try { file.setTrashed(true); } catch (trashError) {}
@@ -3218,10 +3221,6 @@ function uploadDocument(sessionToken, payload) {
         oldDocuments.push({rowNumber:i+2, object:rowObject_(headers, rows[i], i+2)});
       }
     }
-    oldDocuments.forEach(old => {
-      if (statusIdx >= 0) sheet.getRange(old.rowNumber, statusIdx + 1).setValue('REPLACED');
-    });
-
     const record = {};
     headers.forEach(h => record[h] = '');
     record.documentId = documentId;
@@ -3238,11 +3237,22 @@ function uploadDocument(sessionToken, payload) {
     record.verifiedBy = '';
     record.revisionNote = '';
 
-    sheet.appendRow(headers.map(h => record[h] !== undefined ? record[h] : ''));
+    // Simpan dokumen baru terlebih dahulu agar dokumen lama tetap aktif
+    // apabila penulisan dokumen pengganti gagal.
+    const recordRow = safeSheetRow_(headers.map(h => record[h] !== undefined ? record[h] : ''));
+    sheet.appendRow(recordRow);
+    documentRowWritten = true;
+    const savedRowNumber = sheet.getLastRow();
+    oldDocuments.forEach(old => {
+      if (statusIdx >= 0) sheet.getRange(old.rowNumber, statusIdx + 1).setValue('REPLACED');
+    });
     writeAudit_(actor.userId, 'UPLOAD', 'DOCUMENT', documentId, oldDocuments.length ? JSON.stringify(oldDocuments.map(x => x.object)) : '', JSON.stringify({documentId:documentId,registrationId:registrationId,documentTypeId:documentTypeId,fileId:file.getId(),fileName:file.getName(),mimeType:mimeType,fileSize:actualSize,status:'PENDING'}), 'Dokumen diunggah ke Google Drive');
 
-    return { success:true, message:'Dokumen berhasil diunggah.', document:rowObject_(headers, headers.map(h => record[h] !== undefined ? record[h] : ''), sheet.getLastRow()) };
+    return { success:true, message:'Dokumen berhasil diunggah.', document:rowObject_(headers, recordRow, savedRowNumber) };
   } catch (e) {
+    if (uploadedFile && !documentRowWritten) {
+      try { uploadedFile.setTrashed(true); } catch (cleanupError) {}
+    }
     console.error(e);
     return fail_('Gagal mengunggah dokumen ke Google Drive.');
   } finally {
