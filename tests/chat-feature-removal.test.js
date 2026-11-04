@@ -21,6 +21,7 @@ for (const endpoint of [
 }
 assert.doesNotMatch(code, /PSB_CHAT_ACCESS_ROLES|PSB_CHAT_ADMIN_ROLES|CHAT_THREADS|CHAT_MESSAGES|canChat/);
 assert.doesNotMatch(appsUi + pwaUi + styles, /chat-fab|chat-layout|chatPollTimer|chatThread|goPage\(['"]chat['"]\)/i);
+assert.doesNotMatch(appsUi + pwaUi, /\['chat','Chat','chat'\]|\['chat','Chat'/i, 'removed Chat navigation entry');
 assert.doesNotMatch(setup, /CHAT_THREADS|CHAT_MESSAGES|CHAT_RETENTION_DAYS|CHAT_AUTOMATION_ENABLED|ensureChatAutomationTrigger_|installChatAutomationTrigger_/);
 assert.match(setup, /function removeLegacyChatAutomationTriggers_\(\)/);
 assert.match(setup, /legacyHandlers = \['runChatAutomation', 'runChatAutomation_'\]/);
