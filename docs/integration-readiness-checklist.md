@@ -84,7 +84,7 @@
 - [ ] Folder `Dokumen Santri` dan `Bukti Pembayaran` beserta file di dalamnya tidak dapat diakses publik; uji dengan akun/peramban tanpa sesi PSB.
 - [ ] Pastikan setiap gambar galeri memiliki persetujuan publik yang sesuai; allowlist bukan pengganti persetujuan.
 - [ ] Waktu login PBKDF2, waktu validasi sesi, dan batas eksekusi Apps Script diukur pada proyek uji.
-- [ ] Jalankan `cleanupLegacyChatAutomationTriggers()` pada project uji dan pastikan hanya trigger lama `runChatAutomation`/`runChatAutomation_` yang dihapus; setup database tidak dijalankan untuk keperluan ini.
+- [ ] Jalankan `cleanupLegacyChatAutomationTriggers()` pada project uji dan pastikan dialog konfirmasi muncul, hanya trigger lama `runChatAutomation`/`runChatAutomation_` yang dihapus, dan setup database tidak dijalankan untuk keperluan ini.
 - [ ] Log audit merekam aksi penting tanpa password, OTP, token, atau rahasia.
 - [ ] Backup dan prosedur pemulihan telah diuji pada salinan.
 - [ ] Tidak ada kredensial atau ID sensitif yang tidak semestinya di-commit.
