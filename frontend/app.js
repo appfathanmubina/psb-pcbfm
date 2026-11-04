@@ -815,7 +815,7 @@ async function createProductionBackupUI(){
 
 async function renderReports(){
   if(!hasAnyRole(['SUPERADMIN','ADMIN_PSB','VERIFIKATOR','SELEKSI','KEUANGAN'])){renderMore();return;}
-  $('content').innerHTML=`<section class="hero"><h2>Laporan</h2><p>Ringkasan pendaftar, pembayaran, seleksi, dan Daftar Ulang. Data dapat difilter dan diunduh sebagai CSV.</p></section><section class="dashboard-section"><div class="report-filter-grid"><div class="field"><label>Tahun Ajaran</label><select id="reportYear" class="select-field professional-select"><option value="">Menyiapkan pilihan...</option></select></div><div class="field"><label>Gelombang</label><select id="reportGelombang" class="select-field professional-select"><option value="">Semua gelombang</option></select></div><div class="field"><label>Jenjang</label><select id="reportJenjang" class="select-field professional-select"><option value="">Semua jenjang</option></select></div><div class="field"><label>Jenis Kelamin</label><select id="reportGender" class="select-field professional-select"><option value="">Semua jenis kelamin</option></select></div><div class="field"><label>Status</label><select id="reportStatus" class="select-field professional-select"><option value="">Semua status</option></select></div><div class="field"><label>Dari tanggal</label><input id="reportFromDate" type="date" class="select-field"></div><div class="field"><label>Sampai tanggal</label><input id="reportToDate" type="date" class="select-field"></div></div><div class="report-actions"><button class="btn btn-primary" onclick="loadReports()">Terapkan Filter</button><button class="btn btn-secondary" onclick="exportReportCsv()">Export CSV</button><button class="btn btn-secondary" onclick="loadAdvancedReports()">Advanced Analytics</button></div></section><div id="reportPanel"><div class="empty-state">Memuat reporting...</div></div><div id="advancedReportPanel" style="margin-top:14px"><div class="empty-state">Advanced Analytics dimuat saat tombol dibuka.</div></div>`;
+  $('content').innerHTML=`<section class="hero"><h2>Laporan</h2><p>Ringkasan pendaftar, pembayaran, seleksi, dan Daftar Ulang. Data dapat difilter dan diunduh sebagai CSV.</p></section><section class="dashboard-section"><div class="report-filter-grid"><div class="field"><label>Tahun Ajaran</label><select id="reportYear" class="select-field professional-select"><option value="">Menyiapkan pilihan...</option></select></div><div class="field"><label>Gelombang</label><select id="reportGelombang" class="select-field professional-select"><option value="">Semua gelombang</option></select></div><div class="field"><label>Jenjang</label><select id="reportJenjang" class="select-field professional-select"><option value="">Semua jenjang</option></select></div><div class="field"><label>Jenis Kelamin</label><select id="reportGender" class="select-field professional-select"><option value="">Semua jenis kelamin</option></select></div><div class="field"><label>Status</label><select id="reportStatus" class="select-field professional-select"><option value="">Semua status</option></select></div><div class="field"><label>Dari tanggal</label><input id="reportFromDate" type="date" class="select-field"></div><div class="field"><label>Sampai tanggal</label><input id="reportToDate" type="date" class="select-field"></div></div><div class="report-actions"><button class="btn btn-primary" onclick="loadReports()">Terapkan Filter</button><button class="btn btn-secondary" onclick="exportReportCsv()">Export CSV</button><button class="btn btn-secondary" onclick="loadAdvancedReports()">Analisis Lanjutan</button></div></section><div id="reportPanel"><div class="empty-state">Memuat reporting...</div></div><div id="advancedReportPanel" style="margin-top:14px"><div class="empty-state">Analisis Lanjutan dimuat saat tombol dibuka.</div></div>`;
   await loadReports();
 }
 async function loadReports(){
@@ -844,14 +844,14 @@ function renderReportPanel(data){
 async function loadAdvancedReports(){
   const el=$('advancedReportPanel');
   if(!el)return;
-  el.innerHTML='<div class="empty-state">Memuat Advanced Analytics...</div>';
+  el.innerHTML='<div class="empty-state">Memuat Analisis Lanjutan...</div>';
   try{
     const filters={tahunAjaranId:$('reportYear')?.value||'',gelombangId:$('reportGelombang')?.value||'',jenjangId:$('reportJenjang')?.value||'',gender:$('reportGender')?.value||'',status:$('reportStatus')?.value||'',fromDate:$('reportFromDate')?.value||'',toDate:$('reportToDate')?.value||''};
-    const r=await server('getAdvancedLaporanData',state.token,filters);
+    const r=await server('getAdvancedReportingData',state.token,filters);
     if(!r?.success){el.innerHTML=showMessage(r?.message||'Gagal memuat analytics.');return;}
     state.advancedReportData=r;
     renderAdvancedReports(r);
-  }catch(e){el.innerHTML=showMessage('Gagal memuat Advanced Analytics.');}
+  }catch(e){el.innerHTML=showMessage('Gagal memuat Analisis Lanjutan.');}
 }
 function renderAdvancedReports(d){
   const el=$('advancedReportPanel');if(!el)return;
@@ -861,7 +861,7 @@ function renderAdvancedReports(d){
   const bar=(label,value,total)=>'<div class="analytics-list-row"><div><div>'+esc(label)+'</div><div class="analytics-bar"><i style="width:'+(total?Math.max(3,Math.round(Number(value||0)/total*100)):0)+'%"></i></div></div><div class="v">'+Number(value||0).toLocaleString('id-ID')+'</div></div>';
   const trend=(d.trends||[]).map(x=>'<tr><td>'+esc(x.month)+'</td><td>'+Number(x.registrations||0)+'</td><td>'+Number(x.submitted||0)+'</td><td>'+Number(x.verified||0)+'</td></tr>').join('')||'<tr><td colspan="4">Tidak ada data trend.</td></tr>';
   const breakdown=arr=>{if(!arr||!arr.length)return '<div class="empty-state">Tidak ada data.</div>';const max=Math.max(1,...arr.map(x=>Number(x.count||0)));return arr.slice(0,8).map(x=>bar(x.label,x.count,max)).join('');};
-  el.innerHTML='<section class="dashboard-section"><div class="status-row"><div><h3 style="margin:0">Advanced Laporan & Analytics</h3><p style="margin:4px 0 0">Funnel, conversion, tren, outcome seleksi, keuangan, dan waktu proses.</p></div><button class="btn btn-secondary btn-sm" onclick="exportAdvancedReports()">Export Analytics</button></div><div class="analytics-grid">'+
+  el.innerHTML='<section class="dashboard-section"><div class="status-row"><div><h3 style="margin:0">Analisis Lanjutan</h3><p style="margin:4px 0 0">Funnel, conversion, tren, outcome seleksi, keuangan, dan waktu proses.</p></div><button class="btn btn-secondary btn-sm" onclick="exportAdvancedReports()">Export Analytics</button></div><div class="analytics-grid">'+
     '<article class="analytics-card"><b>'+Number(f.registrations||0).toLocaleString('id-ID')+'</b><span>Pendaftar</span></article>'+
     '<article class="analytics-card"><b>'+rate(c.verificationRate)+'</b><span>Verification rate</span></article>'+
     '<article class="analytics-card"><b>'+rate(c.paymentRate)+'</b><span>Payment conversion</span></article>'+
@@ -889,7 +889,7 @@ function renderAdvancedReports(d){
 async function exportAdvancedReports(){
   try{
     const filters={tahunAjaranId:$('reportYear')?.value||'',gelombangId:$('reportGelombang')?.value||'',jenjangId:$('reportJenjang')?.value||'',status:$('reportStatus')?.value||'',fromDate:$('reportFromDate')?.value||'',toDate:$('reportToDate')?.value||''};
-    const r=await server('exportAdvancedLaporanCsv',state.token,filters);
+    const r=await server('exportAdvancedReportingCsv',state.token,filters);
     if(!r?.success){showAlert('Export gagal',r?.message||'Tidak dapat mengekspor analytics.','error');return;}
     const blob=new Blob([r.csv],{type:'text/csv;charset=utf-8;'});
     const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download=r.filename||'PSB_Fathan_Mubina_Advanced_Analytics.csv';document.body.appendChild(a);a.click();a.remove();setTimeout(function(){URL.revokeObjectURL(url);},500);
