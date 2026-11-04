@@ -634,7 +634,7 @@ async function renderHome(){
   const admin=hasAnyRole(['SUPERADMIN','ADMIN_PSB','VERIFIKATOR']);
   if(!wali){
     const local=readDashboardLocal();
-    $('content').innerHTML=`<section class="hero"><div style="display:flex;gap:10px;align-items:flex-start;justify-content:space-between;flex-wrap:wrap"><div><h2>Dashboard</h2><p>Ringkasan operasional PSB periode ${esc(state.config.ACTIVE_YEAR||'2027/2028')}.</p></div><span class="pill info">${esc(state.config.RELEASE_STAGE||'PRODUCTION')} · v${esc(state.config.APP_VERSION||'30.14')}</span></div></section><div id="dashboardPanel"><div class="empty-state">${local?'Memperbarui ringkasan...':'Memuat dashboard...'}</div></div>`;
+    $('content').innerHTML=`<section class="hero"><div style="display:flex;gap:10px;align-items:flex-start;justify-content:space-between;flex-wrap:wrap"><div><h2>Dashboard</h2><p>Ringkasan operasional PSB periode ${esc(state.config.ACTIVE_YEAR||'2027/2028')}.</p></div></div></section><div id="dashboardPanel"><div class="empty-state">${local?'Memperbarui ringkasan...':'Memuat dashboard...'}</div></div>`;
     if(local){state.cache.pages.dashboard={data:local,ts:Date.now()};renderAdminDashboard(local);}
     try{const r=await server('getDashboardPageData',state.token);if(!r.success){if(!local)$('dashboardPanel').innerHTML=showMessage(r.message);return;}state.cache.pages.dashboard={data:r,ts:Date.now()};writeDashboardLocal(r);renderAdminDashboard(r);scheduleWarmNavigationData();}catch(e){if(!local)$('dashboardPanel').innerHTML=showMessage('Gagal memuat dashboard.');}
     return;
