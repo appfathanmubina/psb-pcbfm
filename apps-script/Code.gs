@@ -613,6 +613,8 @@ function createSession_(userId) {
   const sessionId = generateId_('SES');
   const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('SESSIONS');
   sheet.appendRow([sessionId, userId, tokenHash, now, expires, now, 'ACTIVE']);
+  // Seed the row index immediately so finalizeLogin and the first API call do not scan SESSIONS.
+  try { CacheService.getScriptCache().put('PSB_SESSION_ROW_V1_' + tokenHash.substring(0, 40), String(sheet.getLastRow()), 21600); } catch (e) {}
   return { token: token, expiresAt: expires.toISOString(), sessionId: sessionId };
 }
 
@@ -787,7 +789,10 @@ function findUser_(key) {
   const cachedRowNumber = Number(cache.get(cacheKey) || 0);
   if (cachedRowNumber >= 2 && cachedRowNumber <= lastRow) {
     const row = sheet.getRange(cachedRowNumber, 1, 1, 15).getValues()[0];
-    if (matches(row)) return userFromRow_(row, cachedRowNumber);
+    if (matches(row)) {
+      try { cache.put('PSB_USER_ROW_ID_V1_' + sha256Hex_(String(row[0] || '')).substring(0, 32), String(cachedRowNumber), 21600); } catch (e) {}
+      return userFromRow_(row, cachedRowNumber);
+    }
     cache.remove(cacheKey);
   }
 
@@ -795,7 +800,10 @@ function findUser_(key) {
   const rows = sheet.getRange(2, 1, lastRow - 1, 15).getValues();
   for (let i = 0; i < rows.length; i++) {
     if (matches(rows[i])) {
-      try { cache.put(cacheKey, String(i + 2), 21600); } catch (e) {}
+      try {
+        cache.put(cacheKey, String(i + 2), 21600);
+        cache.put('PSB_USER_ROW_ID_V1_' + sha256Hex_(String(rows[i][0] || '')).substring(0, 32), String(i + 2), 21600);
+      } catch (e) {}
       return userFromRow_(rows[i], i + 2);
     }
   }
