@@ -8,6 +8,8 @@
   const BRIDGE_ORIGIN = new URL(BRIDGE_URL).origin;
   const BRIDGE_SOURCE = 'psb-fm-api-bridge';
   const TIMEOUT_MS = 30000;
+  // Allow one-time PBKDF2 verification and conversion for the remaining legacy accounts.
+  const LOGIN_TIMEOUT_MS = 60000;
   const TOKEN_TTL_MS = 150000;
   const TOKEN_MAX_USES = 20;
   const MAX_PAYLOAD_CHARS = 20 * 1024 * 1024;
@@ -190,6 +192,7 @@
       iframe.style.cssText = 'position:fixed;left:-10000px;top:-10000px;width:1px;height:1px;border:0;opacity:0;pointer-events:none;';
       const item = { iframe: iframe, requestId: requestId, functionName: String(functionName || ''), startedAt: Date.now(), resolve: resolve, reject: reject, timer: null };
       pending.set(challenge, item);
+      const requestTimeoutMs = item.functionName === 'login' ? LOGIN_TIMEOUT_MS : TIMEOUT_MS;
       item.timer = setTimeout(() => {
         console.error('[PSB Bridge] Timeout menunggu respons Apps Script.', {
           functionName: item.functionName,
@@ -200,7 +203,7 @@
         pending.delete(challenge);
         removeFrame(iframe);
         reject(new Error('Koneksi ke server timeout saat menunggu hasil permintaan.'));
-      }, TIMEOUT_MS);
+      }, requestTimeoutMs);
 
       const payload = JSON.stringify({
         origin: location.origin,
