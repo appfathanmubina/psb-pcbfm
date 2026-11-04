@@ -38,18 +38,22 @@
 - [ ] Penggantian/reset password mencabut sesi sesuai kebijakan.
 - [ ] Setiap peran hanya dapat membuka menu dan menjalankan aksi yang diizinkan.
 - [ ] Uji akses langsung ke endpoint backend tanpa hak peran; harus ditolak di server.
-- [ ] Uji kepemilikan Wali: Wali A tidak dapat membaca/mengubah pendaftaran, dokumen, pembayaran, atau chat milik Wali B.
+- [ ] Uji kepemilikan Wali: Wali A tidak dapat membaca/mengubah pendaftaran, dokumen, atau pembayaran milik Wali B.
 
-## 4. Registrasi Wali dan Email OTP
+## 4. Registrasi Wali langsung tanpa verifikasi email
 
-- [ ] Email valid menerima OTP pada inbox; periksa juga spam/promosi.
-- [ ] OTP benar membuat akun hanya setelah verifikasi berhasil.
-- [ ] OTP salah tidak membuat akun.
-- [ ] OTP kedaluwarsa setelah 5 menit ditolak.
-- [ ] Batas 5 percobaan, cooldown kirim ulang 60 detik, dan batas 5 pengiriman per email per 24 jam bekerja.
-- [ ] Email duplikat ditangani tanpa membocorkan keberadaan akun sebelum verifikasi.
-- [ ] Kuota MailApp habis/gagal kirim menghasilkan pesan yang aman dan dapat dipahami.
-- [ ] Password tidak pernah muncul dalam log, respons, atau data OTP tertunda.
+- [ ] Pendaftaran berhasil dengan nomor HP saja.
+- [ ] Pendaftaran berhasil dengan email saja.
+- [ ] Pendaftaran ditolak bila nomor HP dan email sama-sama kosong.
+- [ ] Email dan nomor HP yang diberikan divalidasi formatnya.
+- [ ] Nomor HP/email yang sudah terdaftar ditolak tanpa membuat akun duplikat.
+- [ ] Password 6–128 karakter diterima; password kosong atau melebihi batas ditolak.
+- [ ] Password tersimpan sebagai hash PBKDF2, bukan plaintext.
+- [ ] Akun baru berstatus ACTIVE dengan role WALI dan sesi langsung diterbitkan.
+- [ ] Setelah pendaftaran berhasil, pengguna otomatis masuk dan dapat logout/login kembali.
+- [ ] Uji dua pendaftaran serentak dengan identitas sama; hanya satu akun boleh tercipta.
+- [ ] Pastikan tidak ada pengiriman email/OTP dan tidak ada data OTP baru yang dibuat.
+
 
 ## 5. Pendaftaran, dokumen, pembayaran, dan seleksi
 
@@ -79,8 +83,8 @@
 - [ ] `PSB_PUBLIC_GALLERY_FOLDER_ID` menunjuk folder galeri yang benar; nama file asli tidak tampil pada respons publik.
 - [ ] Folder `Dokumen Santri` dan `Bukti Pembayaran` beserta file di dalamnya tidak dapat diakses publik; uji dengan akun/peramban tanpa sesi PSB.
 - [ ] Pastikan setiap gambar galeri memiliki persetujuan publik yang sesuai; allowlist bukan pengganti persetujuan.
-- [ ] Kuota MailApp, waktu login PBKDF2, dan batas eksekusi Apps Script diukur pada proyek uji.
-- [ ] Trigger terjadwal pada proyek uji berjalan sekali dan tidak terduplikasi.
+- [ ] Waktu login PBKDF2, waktu validasi sesi, dan batas eksekusi Apps Script diukur pada proyek uji.
+- [ ] Jalankan `cleanupLegacyChatAutomationTriggers()` pada project uji dan pastikan hanya trigger lama `runChatAutomation`/`runChatAutomation_` yang dihapus; setup database tidak dijalankan untuk keperluan ini.
 - [ ] Log audit merekam aksi penting tanpa password, OTP, token, atau rahasia.
 - [ ] Backup dan prosedur pemulihan telah diuji pada salinan.
 - [ ] Tidak ada kredensial atau ID sensitif yang tidak semestinya di-commit.
