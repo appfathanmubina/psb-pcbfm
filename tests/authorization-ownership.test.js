@@ -93,7 +93,7 @@ mustMatch(waliRegistration, /LockService\.getScriptLock\(\)/,
   'WALI registration must serialize duplicate checks and account creation');
 mustMatch(waliRegistration, /const duplicate = users\.some/,
   'WALI registration must reject duplicate phone/email identifiers');
-mustMatch(waliRegistration, /hashPassword_\(input\.password,passwordSalt\)/,
+mustMatch(waliRegistration, /hashPassword_\(input\.password,\\s*passwordSalt\)/,
   'WALI registration must hash passwords before storage');
 mustMatch(waliRegistration, /'WALI','ACTIVE'/,
   'WALI registration must create an active WALI account only');
