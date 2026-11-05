@@ -313,8 +313,8 @@ Branch: `perf/document-history-verification-batch-reads`
 
 | ID | Finding | Change | Status |
 |---|---|---|---|
-| PERF-DOC-002 | `getCurrentDocuments_()` converted every row in DOCUMENTS into an object before filtering by registration and replacement status. It also issued separate range reads for headers and data. | Read the table once, filter raw rows by registration and non-REPLACED status, then convert only matching rows. Preserve newest-first ordering and sheet row numbers. | Regression checks added; CI pending |
-| PERF-VER-002 | `getVerificationDetail()` used `findRegistration_()`, which separately reread the header and body for each of five related sheets. `getDocumentOptions()` used the same lookup pattern. | Add `findRegistrationBatch_()`: read each related table once and preserve first registration/candidate match plus first-primary guardian/address/school selection. Reuse it in verification detail and document options. | Regression checks added; CI pending |
+| PERF-DOC-002 | `getCurrentDocuments_()` converted every row in DOCUMENTS into an object before filtering by registration and replacement status. It also issued separate range reads for headers and data. | Read the table once, filter raw rows by registration and non-REPLACED status, then convert only matching rows. Preserve newest-first ordering and sheet row numbers. | Regression checks added; CI passed (34 checks), runtime/staging test pending |
+| PERF-VER-002 | `getVerificationDetail()` used `findRegistration_()`, which separately reread the header and body for each of five related sheets. `getDocumentOptions()` used the same lookup pattern. | Add `findRegistrationBatch_()`: read each related table once and preserve first registration/candidate match plus first-primary guardian/address/school selection. Reuse it in verification detail and document options. | Regression checks added; CI passed (34 checks), runtime/staging test pending |
 
 ### Scope and safety
 
