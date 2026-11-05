@@ -55,7 +55,7 @@ assert.match(apiBridge, /host\.endsWith\('-script\.googleusercontent\.com'\)/,
 assert.match(apiBridge, /isTrustedBridgeOrigin\(event\.origin\)/, 'PWA must validate the response origin');
 assert.match(apiBridge, /Pesan bridge diabaikan: origin tidak dikenal/, 'Rejected origins must be diagnosable');
 assert.match(apiBridge, /Timeout menunggu respons Apps Script/, 'RPC timeout must log safe transport diagnostics');
-assert.match(indexHtml, /api-bridge\.js\?v=32\.11\.0/, 'PWA HTML must cache-bust the updated bridge client');
+assert.match(indexHtml, /api-bridge\.js\?v=32\.13\.0/, 'PWA HTML must cache-bust the updated bridge client');
 assert.match(serviceWorker, /psb-pwa-shell-v32-12-0/, 'PWA shell cache must use the current cache version after the desktop refresh update');
 
 assert.match(apiBridge, /pending\.get\(challenge\)/, 'PWA must correlate every response with its unpredictable challenge');
