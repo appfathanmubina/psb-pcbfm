@@ -313,7 +313,7 @@ function finalizeLogin(sessionToken) {
  */
 function decodeAndValidateUpload_(base64Input, mimeTypeInput, maxBytes) {
   const mimeType = String(mimeTypeInput || '').trim().toLowerCase();
-  const encoded = String(base64Input || '').replace(/\\s+/g, '');
+  const encoded = String(base64Input || '').replace(/\s+/g, '');
   const limit = Math.max(1, Math.floor(Number(maxBytes) || 0));
   if (!encoded) return { success: false, message: 'File belum diterima server.' };
   if (!limit || encoded.length > Math.ceil(limit / 3) * 4) {
@@ -361,7 +361,7 @@ function validateWaliRegistrationPayload_(payload) {
 
   if (!name || name.length > 120) return {success:false,message:'Nama lengkap wajib diisi (maksimal 120 karakter).'};
   if (phone && !/^62\d{8,13}$/.test(phoneNormalized)) return {success:false,message:'Nomor HP tidak valid. Periksa kembali nomor yang dimasukkan.'};
-  if (email && (email.length > 254 || !/^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(email))) return {success:false,message:'Format email tidak valid. Kosongkan jika tidak ingin mengisi email.'};
+  if (email && (email.length > 254 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))) return {success:false,message:'Format email tidak valid. Kosongkan jika tidak ingin mengisi email.'};
   if (!phoneNormalized && !emailNormalized) return {success:false,message:'Isi minimal salah satu: nomor HP atau email agar dapat digunakan untuk login.'};
   if (password.trim().length === 0 || password.length < 6 || password.length > 128) return {success:false,message:'Password harus terdiri dari 6 sampai 128 karakter dan tidak boleh kosong.'};
   if (password !== confirmPassword) return {success:false,message:'Konfirmasi password tidak sama.'};
