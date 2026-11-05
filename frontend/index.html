@@ -41,7 +41,7 @@
   </div>
 </section>
 <script src="./api-bridge.js?v=32.14.0"></script>
-<script src="./app.js?v=32.25.0"></script>
+<script src="./app.js?v=32.26.0"></script>
 <script>
 (function(){
   'use strict';
@@ -53,7 +53,7 @@
       window.location.reload();
     });
     window.addEventListener('load',function(){
-      navigator.serviceWorker.register('./sw.js?v=32.25.0',{updateViaCache:'none'})
+      navigator.serviceWorker.register('./sw.js?v=32.26.0',{updateViaCache:'none'})
         .then(function(reg){return reg.update().catch(function(e){console.warn('Service worker update:',e);});})
         .catch(function(e){console.warn('Service worker:',e);});
     });
@@ -68,6 +68,17 @@
   const info=document.getElementById('installText');
   const steps=document.getElementById('installSteps');
   const installMode=new URLSearchParams(location.search).has('install');
+  const appRoot=document.getElementById('app');
+  function syncInstallButtonVisibility(){
+    const onPublicHome=!!appRoot.querySelector('.public-hero');
+    const onLogin=!!appRoot.querySelector('.login-card #identifier');
+    const allowedPage=onPublicHome||onLogin;
+    openButton.hidden=installed||!allowedPage;
+    if(!allowedPage&&!overlay.hidden)hide();
+  }
+  const installPageObserver=new MutationObserver(syncInstallButtonVisibility);
+  installPageObserver.observe(appRoot,{childList:true,subtree:true});
+  syncInstallButtonVisibility();
   const standalone=function(){
     return window.matchMedia('(display-mode: standalone)').matches ||
       window.matchMedia('(display-mode: minimal-ui)').matches ||
@@ -137,14 +148,14 @@
   }
   async function syncInstallState(){
     installed=standalone();
-    openButton.hidden=installed;
+    syncInstallButtonVisibility();
     if(installed){hide();return;}
     if(typeof navigator.getInstalledRelatedApps==='function'){
       try{
         const relatedApps=await navigator.getInstalledRelatedApps();
         if(relatedApps.some(function(app){return app.platform==='webapp';})){
           installed=true;
-          openButton.hidden=true;
+          syncInstallButtonVisibility();
           hide();
         }
       }catch(error){
@@ -187,14 +198,14 @@
     event.preventDefault();
     deferredInstallPrompt=event;
     if(!installed){
-      openButton.hidden=false;
+      syncInstallButtonVisibility();
       if(!overlay.hidden)renderGuide();
     }
   });
   window.addEventListener('appinstalled',function(){
     installed=true;
     deferredInstallPrompt=null;
-    openButton.hidden=true;
+    syncInstallButtonVisibility();
     hide();
   });
   window.addEventListener('load',async function(){
