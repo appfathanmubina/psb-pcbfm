@@ -18,7 +18,7 @@ assert.match(css, /@media\s*\(min-width:\s*900px\)\s*and\s*\(max-width:\s*1100px
   'Desktop layout must also adapt to narrower laptop screens');
 assert.match(html, /styles\.css\?v=32\.22\.0/,
   'HTML must request the updated responsive stylesheet');
-assert.match(fs.readFileSync('frontend/sw.js', 'utf8'), /psb-pwa-shell-v32-30-0/,
+assert.match(fs.readFileSync('frontend/sw.js', 'utf8'), /psb-pwa-shell-v32-31-0/,
   'Service worker cache must be versioned for the current PWA shell v32.14.0');
 assert.match(app, /function renderPublicHome\(/,
   'Existing public home renderer must remain in place');
