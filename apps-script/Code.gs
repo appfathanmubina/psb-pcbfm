@@ -1850,7 +1850,7 @@ function getPaymentPageData(sessionToken, registrationId) {
     let items = rows.map((r,i)=>rowObject_(headers,r,i+2));
 
     // Simpan baris pertama dari seluruh sheet untuk mempertahankan perilaku
-    // findRegistration_() jika terdapat registrationId duplikat.
+    // helper pencarian lama jika terdapat registrationId duplikat.
     items.forEach(item => {
       const id = String(item.registrationId || '');
       if (id && !Object.prototype.hasOwnProperty.call(registrationsById, id)) {
