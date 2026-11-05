@@ -48,8 +48,8 @@ mustMatch(registrationDetail, /String\(reg\.registration\.userId\)\s*===\s*Strin
 const paymentPage = functionSource('getPaymentPageData');
 mustMatch(paymentPage, /if\s*\(isWali\)\s*items\s*=\s*items\.filter\(x\s*=>\s*String\(x\.userId\)\s*===\s*String\(actor\.userId\)\)/,
   'WALI payment page must list only the authenticated owner registrations');
-mustMatch(paymentPage, /canAccessRegistration_\(actor,\s*found\.registration\)/,
-  'Selected payment registration must pass an ownership check');
+mustMatch(paymentPage, /canAccessRegistration_\(actor,\s*selectedRegistration\)/,
+  'Selected payment registration must pass an ownership check using the already-read registration row');
 
 const paymentRead = functionSource('getPaymentsForRegistration');
 mustMatch(paymentRead, /requireRole_\(sessionToken,\s*PSB_PAYMENT_VIEW_ROLES\)/,
