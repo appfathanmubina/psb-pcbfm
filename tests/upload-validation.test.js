@@ -47,7 +47,7 @@ assert.match(frontend, /if\(prepared\.fileSize>5\*1024\*1024\)/);
 assert.match(frontend, /fileName:prepared\.fileName,mimeType:prepared\.mimeType,fileSize:prepared\.fileSize,base64/);
 assert.match(frontend, /function getDocumentMaxSizeMb\(type\)/);
 assert.ok(frontend.includes('Maks. ${esc(getDocumentMaxSizeMb(x))} MB'));
-assert.ok(frontend.includes('Maksimum ${esc(maxSizeMb)} MB'));
+assert.ok(frontend.includes("' · Maksimum '+maxSizeMb+' MB"), 'Document upload guidance must display the effective capped size');
 assert.equal((source.match(/Utilities\.base64Decode\(/g) || []).length, 1,
   'raw Base64 decoding should be centralized in the bounded validation helper');
 
