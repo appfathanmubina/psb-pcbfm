@@ -3159,28 +3159,58 @@ function getReportingPageData(sessionToken, filters) {
   if(jenjangId) rows=rows.filter(r=>String(r.jenjangId)===jenjangId);
   if(gender) rows=rows.filter(r=>normalizeReportGender_(candidateMap[String(r.candidateId)]?.gender)===gender);
   if(status) rows=rows.filter(r=>String(r.status||'').toUpperCase()===status);
-  const billMap={}; bills.forEach(b=>{const k=String(b.registrationId);if(!billMap[k])billMap[k]=[];billMap[k].push(b);});
-  const paymentMap={}; payments.forEach(p=>{const k=String(p.registrationId);if(!paymentMap[k])paymentMap[k]=[];paymentMap[k].push(p);});
+
+  // Agregasi tagihan sekali per baris, bukan filter + reduce + some untuk setiap pendaftaran.
+  const billSummaryByRegistration={};
+  bills.forEach(b=>{
+    const key=String(b.registrationId);
+    if(!billSummaryByRegistration[key]) billSummaryByRegistration[key]={hasPaid:false,paidAmount:0};
+    if(String(b.status||'').toUpperCase()==='PAID'){
+      billSummaryByRegistration[key].hasPaid=true;
+      billSummaryByRegistration[key].paidAmount+=(Number(b.amount)||0);
+    }
+  });
+
+  // Indeks pembayaran terbaru sekali. Timestamp sama mempertahankan baris pertama.
+  // Grup dengan timestamp tidak valid memakai comparator lama agar perilaku sort tetap identik.
+  const paymentRowsByRegistration={};
+  const latestPaymentByRegistration={};
+  const invalidPaymentTimestampByRegistration={};
+  payments.forEach(p=>{
+    const key=String(p.registrationId);
+    if(!paymentRowsByRegistration[key]) paymentRowsByRegistration[key]=[];
+    paymentRowsByRegistration[key].push(p);
+    const timestamp=new Date(p.createdAt||0).getTime();
+    const current=latestPaymentByRegistration[key];
+    if(!Number.isFinite(timestamp)){
+      invalidPaymentTimestampByRegistration[key]=true;
+    } else if(!current || timestamp>current.timestamp){
+      latestPaymentByRegistration[key]={row:p,timestamp};
+    }
+  });
+  Object.keys(invalidPaymentTimestampByRegistration).forEach(key=>{
+    const sorted=(paymentRowsByRegistration[key]||[]).slice().sort((a,b)=>new Date(b.createdAt||0)-new Date(a.createdAt||0));
+    latestPaymentByRegistration[key]={row:sorted[0]||{},timestamp:null};
+  });
+
   const participantMap={}; participants.forEach(p=>participantMap[String(p.registrationId)]=p);
   const resultMap={}; results.forEach(r=>resultMap[String(r.registrationId)]=r);
   const reregMap={}; rereg.forEach(r=>reregMap[String(r.registrationId)]=r);
   const dataRows=rows.map(r=>{
     const c=candidateMap[String(r.candidateId)]||{};
     const jenjangName=jenjangMap[String(r.jenjangId)]?.name||'-';
-    const billList=billMap[String(r.registrationId)]||[];
-    const paid=billList.filter(b=>String(b.status||'').toUpperCase()==='PAID').reduce((sum,b)=>sum+(Number(b.amount)||0),0);
-    const latestPayment=(paymentMap[String(r.registrationId)]||[]).slice().sort((a,b)=>new Date(b.createdAt||0)-new Date(a.createdAt||0))[0]||{};
+    const billSummary=billSummaryByRegistration[String(r.registrationId)]||{hasPaid:false,paidAmount:0};
+    const latestPayment=latestPaymentByRegistration[String(r.registrationId)]?.row||{};
     const participant=participantMap[String(r.registrationId)]||{};
     const result=resultMap[String(r.registrationId)]||{};
     const rr=reregMap[String(r.registrationId)]||{};
-    return {registrationId:r.registrationId,registrationNumber:r.registrationNumber,candidateName:c.fullName||'-',tahunAjaranName:yearMap[String(r.tahunAjaranId)]?.name||'-',gelombangName:gelombangMap[String(r.gelombangId)]?.name||'-',jenjangName,gender:normalizeReportGender_(c.gender),genderName:reportGenderName_(c.gender),reportGroup:reportGroupName_(jenjangName,c.gender),status:String(r.status||''),submittedAt:r.submittedAt||'',verifiedAt:r.verifiedAt||'',paymentStatus:billList.some(b=>String(b.status).toUpperCase()==='PAID')?'PAID':latestPayment.status||'UNPAID',paidAmount:paid,selectionStatus:result.status||'',announcementDate:result.announcementDate||'',reregistrationStatus:rr.status||'',createdAt:r.createdAt||''};
+    return {registrationId:r.registrationId,registrationNumber:r.registrationNumber,candidateName:c.fullName||'-',tahunAjaranName:yearMap[String(r.tahunAjaranId)]?.name||'-',gelombangName:gelombangMap[String(r.gelombangId)]?.name||'-',jenjangName,gender:normalizeReportGender_(c.gender),genderName:reportGenderName_(c.gender),reportGroup:reportGroupName_(jenjangName,c.gender),status:String(r.status||''),submittedAt:r.submittedAt||'',verifiedAt:r.verifiedAt||'',paymentStatus:billSummary.hasPaid?'PAID':latestPayment.status||'UNPAID',paidAmount:billSummary.paidAmount,selectionStatus:result.status||'',announcementDate:result.announcementDate||'',reregistrationStatus:rr.status||'',createdAt:r.createdAt||''};
   });
   const summary={total:dataRows.length,paid:dataRows.filter(x=>x.paymentStatus==='PAID').length,passed:dataRows.filter(x=>String(x.selectionStatus).toUpperCase()==='PASSED').length,completed:dataRows.filter(x=>String(x.reregistrationStatus).toUpperCase()==='COMPLETED'||String(x.status).toUpperCase()==='COMPLETED').length};
   const groupMap={}; dataRows.forEach(x=>{const k=x.reportGroup||'Jenjang · Gender belum diisi'; groupMap[k]=(groupMap[k]||0)+1;});
   const groupBreakdown=Object.keys(groupMap).map(k=>({label:k,count:groupMap[k]})).sort((a,b)=>b.count-a.count||a.label.localeCompare(b.label,'id'));
   return {success:true,activeYear,filters:{tahunAjaranId:year||activeYearId,gelombangId,jenjangId,gender,status},summary,groupBreakdown,rows:dataRows,options:{tahunAjaran:years.slice().sort((a,b)=>String(b.name||'').localeCompare(String(a.name||''))),gelombang:gelombangs.filter(x=>year?String(x.tahunAjaranId)===year:String(x.tahunAjaranId)===String(activeYearId)),jenjang:jenjangs.filter(x=>String(x.isActive).toUpperCase()==='TRUE'),gender:[{value:'L',name:'Laki-laki',groupName:'Putra'},{value:'P',name:'Perempuan',groupName:'Putri'}],statuses:['DRAFT','SUBMITTED','UNDER_REVIEW','REVISION','VERIFIED','PAYMENT_VERIFIED','SELECTION','PASSED','NOT_PASSED','REREGISTRATION','COMPLETED']},generatedAt:new Date().toISOString()};
 }
-
 
 function getAdvancedReportingData(sessionToken, filters) {
   const actor = requireRole_(sessionToken, PSB_REPORT_ROLES);
