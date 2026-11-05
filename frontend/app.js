@@ -1577,7 +1577,7 @@ async function savePassword(){const a=$('oldPass').value,b=$('newPass').value,c=
 async function doLogout(){
   const token=state.token;
   // Tutup sesi di UI segera agar tidak ada dialog/status keluar yang tertinggal.
-  state.token='';state.user=null;state.appInitialized=false;state.preloadRunning=false;state.preloadReady=false;state.cache={registration:null,documents:{},payments:{},pages:{}};state.prefetchPromises={};state.pageSnapshots={};sessionStorage.removeItem('psb_current_page');state.registrationList=[];state.documentData=null;state.paymentData=null;
+  state.token='';state.user=null;state.appInitialized=false;state.preloadRunning=false;state.preloadReady=false;state.cache={registration:null,documents:{},payments:{},pages:{}};state.prefetchPromises={};state.pageSnapshots={};state.registrationList=[];state.documentData=null;state.paymentData=null;
   localStorage.removeItem('psb_session');
   try{sessionStorage.clear();}catch(e){}
   loading(false);
