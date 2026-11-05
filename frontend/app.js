@@ -101,7 +101,12 @@ function hydrateSplashLogo(){
   splashLogo.innerHTML='<img class="app-logo-img splash-app-logo" src="'+src+'" alt="PSB Fathan Mubina" loading="eager" fetchpriority="high" decoding="async" onerror="this.style.display=\'none\';this.nextElementSibling.style.display=\'grid\'"><span class="app-logo-fallback" aria-hidden="true"></span>';
 }
 
-function loading(show,text='Memproses...'){ const t=$('loadingText'); if(t)t.textContent=text; if(state.appInitialized){if(show)bootProgress(true,text);else bootProgress(false);return;} $('loading').classList.toggle('hidden',!show); }
+function processLabelFor(fn){const labels={validateSession:'Memeriksa sesi akun',login:'Memeriksa akun',registerWali:'Membuat akun Wali',getDashboardPageData:'Memuat Dashboard',getWaliHomeData:'Memuat beranda',getMyRegistrations:'Memuat daftar pendaftaran',getRegistrationFormOptions:'Menyiapkan formulir',getRegistrationDetail:'Memuat detail pendaftaran',saveRegistration:'Menyimpan data pendaftaran',submitRegistration:'Mengirim pendaftaran',getDocumentPageData:'Memuat daftar dokumen',getDocumentOptions:'Memuat dokumen pendaftaran',uploadDocument:'Mengunggah dokumen',submitPayment:'Mengirim bukti pembayaran',getPaymentPageData:'Memuat tagihan pembayaran',finalizeVerification:'Menyimpan hasil verifikasi',verifyDocument:'Memverifikasi dokumen',getVerificationQueue:'Memuat antrean verifikasi'};return labels[fn]||(/^get|^load/i.test(fn)?'Memuat data aplikasi':'Memproses permintaan');}
+function processPopupEnsure(){let root=$('psbProcessPopup');if(root)return root;document.body.insertAdjacentHTML('beforeend',`<div class="psb-process-backdrop" id="psbProcessPopup" role="status" aria-live="polite" aria-atomic="true"><div class="psb-process-card"><div class="psb-process-head"><span class="psb-process-spinner" id="psbProcessIcon"></span><div class="psb-process-copy"><b id="psbProcessTitle">Memproses...</b><span id="psbProcessDetail">Menyiapkan permintaan ke server.</span></div><strong id="psbProcessPercent">15%</strong></div><div class="psb-process-track"><span id="psbProcessBar" style="width:15%"></span></div><div class="psb-process-foot" id="psbProcessFoot">Mohon jangan tutup aplikasi selama proses berlangsung.</div></div></div>`);return $('psbProcessPopup');}
+function processPopupUpdate(percent,title,detail,done){const root=processPopupEnsure(),bar=$('psbProcessBar'),pct=$('psbProcessPercent'),heading=$('psbProcessTitle'),copy=$('psbProcessDetail'),icon=$('psbProcessIcon'),foot=$('psbProcessFoot');root.classList.toggle('is-done',!!done);root.classList.toggle('is-error',done==='error');if(bar)bar.style.width=Math.max(0,Math.min(100,Number(percent)||0))+'%';if(pct)pct.textContent=Math.max(0,Math.min(100,Number(percent)||0))+'%';if(heading)heading.textContent=title||'Memproses...';if(copy)copy.textContent=detail||'';if(icon)icon.textContent=done===true?'✓':done==='error'?'!':'';if(foot)foot.textContent=done===true?'Proses berhasil diselesaikan.':done==='error'?'Periksa pesan hasil proses sebelum mencoba kembali.':'Persentase menunjukkan tahapan proses, bukan durasi server yang terukur.';}
+function processBegin(label){if(!state.appInitialized)return false;const p=window.PSBProcessUI||(window.PSBProcessUI={count:0,timer:null,hideTimer:null,cycle:0});p.count++;p.cycle++;clearTimeout(p.hideTimer);clearTimeout(p.timer);processPopupUpdate(Math.max(15,Number($('psbProcessPercent')?.textContent?.replace('%',''))||15),label||'Memproses...','Menyiapkan permintaan...',false);const cycle=p.cycle;p.timer=setTimeout(()=>{if(p.count>0&&p.cycle===cycle)processPopupUpdate(68,label||'Memproses...','Permintaan telah dikirim. Menunggu konfirmasi server.',false);},450);return true;}
+function processEnd(result,error){const p=window.PSBProcessUI;if(!p||p.count<1)return;p.count=Math.max(0,p.count-1);if(p.count>0)return;clearTimeout(p.timer);const failed=!!error||result?.success===false;const message=error?.message||result?.message||(failed?'Server belum dapat menyelesaikan permintaan.':'');processPopupUpdate(100,failed?'Proses belum berhasil':'Proses selesai',message||'Data berhasil diproses.',failed?'error':true);p.hideTimer=setTimeout(()=>{if(p.count===0)$('psbProcessPopup')?.remove();},failed?2200:850);}
+function loading(show,text='Memproses...'){const t=$('loadingText');if(t)t.textContent=text;if(!state.appInitialized){$('loading').classList.toggle('hidden',!show);return;}if(show)processBegin(text);else processEnd({success:true,message:'Proses selesai.'});}
 async function refreshPublicConfig(){
   try{
     const result=await server('getPublicConfig',true);
@@ -120,38 +125,15 @@ async function refreshPublicConfig(){
 }
 const MUTATING_SERVER_FUNCTIONS=new Set(['registerWali','changePassword','saveRegistration','submitRegistration','uploadDocument','verifyDocument','finalizeVerification','submitPayment','verifyPayment','createBill','createSelectionSchedule','updateSelectionScheduleStatus','addSelectionParticipant','addSelectionParticipantsBulk','updateSelectionParticipantStatus','saveSelectionScore','saveSelectionResult','publishAnnouncement','markNotificationRead','markAllNotificationsRead','finalizeReregistration','openReregistration','saveMasterItem','deactivateMasterItem','setActiveAcademicYear','createManualUser','adminResetUserPassword','runSecurityMaintenance','sendCommunication']);
 function invalidatePageSnapshots(){state.pageSnapshots={};}
-function server(fn,...args){
-  return new Promise((resolve,reject)=>{
-    try{
-      if(window.PSBBridge && typeof window.PSBBridge.call==='function'){
-        Promise.resolve(window.PSBBridge.call(fn,args))
-          .then(result=>{
-            if(MUTATING_SERVER_FUNCTIONS.has(fn)&&result?.success){invalidatePageSnapshots();invalidatePageDataCache();}
-            resolve(result);
-          }).catch(reject);
-        return;
-      }
-      if(window.google?.script?.run){
-        window.google.script.run
-          .withSuccessHandler(result=>{
-            if(MUTATING_SERVER_FUNCTIONS.has(fn)&&result?.success){invalidatePageSnapshots();invalidatePageDataCache();}
-            resolve(result);
-          })
-          .withFailureHandler(reject)[fn](...args);
-        return;
-      }
-      reject(new Error('PSBBridge belum tersedia. Jalankan melalui Apps Script atau konfigurasi API bridge.'));
-    }catch(e){reject(e);}
-  });
-}
-const SNAPSHOT_PAGES=new Set(['home','documents','notifications','announcement','payments','reregistration','reports','audit','master']);
+function server(fn,...args){return new Promise((resolve,reject)=>{const tracked=!!state.appInitialized&&!(Number(state.processSilentDepth||0)>0);if(tracked)processBegin(processLabelFor(fn));let settled=false;const finish=(result,error)=>{if(settled)return;settled=true;if(tracked)processEnd(result,error);};const success=result=>{if(MUTATING_SERVER_FUNCTIONS.has(fn)&&result?.success){invalidatePageSnapshots();invalidatePageDataCache();}finish(result,null);resolve(result);};const failure=error=>{finish(null,error);reject(error);};try{if(window.PSBBridge&&typeof window.PSBBridge.call==='function'){Promise.resolve(window.PSBBridge.call(fn,args)).then(success).catch(failure);return;}if(window.google?.script?.run){window.google.script.run.withSuccessHandler(success).withFailureHandler(failure)[fn](...args);return;}failure(new Error('PSBBridge belum tersedia. Jalankan melalui Apps Script atau konfigurasi API bridge.'));}catch(e){failure(e);}});}
+const SNAPSHOT_PAGES=new Set(['documents','notifications','announcement','payments','reregistration','reports','audit','master']);
 function pageSnapshotKey(page){let key=String(page||'');if(page==='documents')key+=':'+String(state.documentRegistrationId||'');if(page==='payments')key+=':'+String(state.paymentRegistrationId||'');if(page==='selection')key+=':'+String(state.selectionRegistrationId||'');if(page==='master')key+=':'+String(state.masterKey||'');return key;}
 function savePageSnapshot(page){if(!SNAPSHOT_PAGES.has(page)||!$('content')?.innerHTML)return;state.pageSnapshots[pageSnapshotKey(page)]={html:$('content').innerHTML,ts:Date.now()};}
 function restorePageSnapshot(page){if(!SNAPSHOT_PAGES.has(page))return false;const key=pageSnapshotKey(page),snap=state.pageSnapshots[key];if(!snap||Date.now()-snap.ts>state.pageSnapshotTtlMs){if(snap)delete state.pageSnapshots[key];return false;}$('content').innerHTML=snap.html;return true;}
 function pageDataCached(page,ttl=180000){const x=state.cache.pages?.[page];if(!x||Date.now()-x.ts>ttl){if(x)delete state.cache.pages[page];return null;}return x.data;}
 function setPageDataCache(page,data){state.cache.pages[page]={data:data,ts:Date.now()};return data;}
 function invalidatePageDataCache(){if(state.cache.pages)state.cache.pages={};}
-function warmPageData(page,loader){if(!state.prefetchPromises)state.prefetchPromises={};if(state.prefetchPromises[page])return state.prefetchPromises[page];const cached=pageDataCached(page);if(cached)return Promise.resolve(cached);const p=Promise.resolve().then(loader).then(data=>{if(data?.success!==false)setPageDataCache(page,data);return data;}).catch(()=>null).finally(()=>{delete state.prefetchPromises[page]});state.prefetchPromises[page]=p;return p;}
+function warmPageData(page,loader){if(!state.prefetchPromises)state.prefetchPromises={};if(state.prefetchPromises[page])return state.prefetchPromises[page];const cached=pageDataCached(page);if(cached)return Promise.resolve(cached);const p=Promise.resolve().then(()=>{state.processSilentDepth=Number(state.processSilentDepth||0)+1;return Promise.resolve().then(loader).finally(()=>{state.processSilentDepth=Math.max(0,Number(state.processSilentDepth||1)-1);});}).then(data=>{if(data?.success!==false)setPageDataCache(page,data);return data;}).catch(()=>null).finally(()=>{delete state.prefetchPromises[page]});state.prefetchPromises[page]=p;return p;}
 async function warmNavigationData(){
   if(!state.token||state.page!=='home'||document.visibilityState==='hidden')return;
   // Hanya hangatkan dua menu ringan yang sering dibuka. Data berat seperti
@@ -656,10 +638,8 @@ async function renderHome(){
   const wali=hasAnyRole(['WALI']);
   const admin=hasAnyRole(['SUPERADMIN','ADMIN_PSB','VERIFIKATOR']);
   if(!wali){
-    const local=readDashboardLocal();
-    $('content').innerHTML=`<section class="hero"><div style="display:flex;gap:10px;align-items:flex-start;justify-content:space-between;flex-wrap:wrap"><div><h2>Dashboard</h2><p>Ringkasan operasional PSB periode ${esc(state.config.ACTIVE_YEAR||'2027/2028')}.</p></div></div></section><div id="dashboardPanel"><div class="empty-state">${local?'Memperbarui ringkasan...':'Memuat dashboard...'}</div></div>`;
-    if(local){state.cache.pages.dashboard={data:local,ts:Date.now()};renderAdminDashboard(local);}
-    try{const r=await server('getDashboardPageData',state.token);if(!r.success){if(!local)$('dashboardPanel').innerHTML=showMessage(r.message);return;}state.cache.pages.dashboard={data:r,ts:Date.now()};writeDashboardLocal(r);renderAdminDashboard(r);scheduleWarmNavigationData();}catch(e){if(!local)$('dashboardPanel').innerHTML=showMessage('Gagal memuat dashboard.');}
+    $('content').innerHTML=`<section class="hero"><div style="display:flex;gap:10px;align-items:flex-start;justify-content:space-between;flex-wrap:wrap"><div><h2>Dashboard</h2><p>Ringkasan operasional PSB periode ${esc(state.config.ACTIVE_YEAR||'2027/2028')}.</p></div></div></section><div id="dashboardPanel"><div class="empty-state">Memuat ringkasan terbaru...</div></div>`;
+    try{const r=await server('getDashboardPageData',state.token);if(!r.success){$('dashboardPanel').innerHTML=showMessage(r.message||'Dashboard belum dapat dimuat.');return;}state.cache.pages.dashboard={data:r,ts:Date.now()};renderAdminDashboard(r);scheduleWarmNavigationData();}catch(e){$('dashboardPanel').innerHTML=showMessage('Gagal memuat dashboard. Silakan coba kembali.');}
     return;
   }
   const maintenanceBanner=String(state.config.MAINTENANCE_MODE||'').toUpperCase()==='TRUE'?`<div class="status-card" style="margin-bottom:12px"><div class="status-row"><div><b>Sistem dalam pemeliharaan</b><div class="muted" style="font-size:10px;margin-top:3px">Akses informasi tetap tersedia, tetapi tindakan perubahan data sementara dinonaktifkan.</div></div><span class="pill warning">Maintenance</span></div></div>`:''; $('content').innerHTML=`<section class="hero"><h2>Selamat datang, ${esc(state.user.name)}</h2><p>Pantau tahapan setiap pendaftaran anak dan lanjutkan langkah yang masih harus dilakukan.</p></section>${maintenanceBanner}<div id="waliHomeFlow"><div class="empty-state">Memuat alur pendaftaran...</div></div>`;
