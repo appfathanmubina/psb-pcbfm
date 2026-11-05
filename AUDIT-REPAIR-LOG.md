@@ -324,3 +324,23 @@ Branch: `perf/document-history-verification-batch-reads`
 - Active document master filtering, checklist construction, response fields, and upload eligibility logic are unchanged.
 - No spreadsheet schema, stored data, role definitions, verification decisions, or payment/reregistration business rules were changed.
 - No Apps Script deployment or production data mutation was performed.
+
+
+## Repair batch 08 — reregistration page batch-read optimization
+
+Branch: `perf/reregistration-page-batch-reads`
+
+| ID | Finding | Change | Status |
+|---|---|---|---|
+| PERF-REREG-001 | `getReregistrationPageData()` reread selection results, five registration-related tables, current documents, required-document masters, bills, payments, and payment-type masters inside the registration loop. | Read each required table once per request, build first-match indexes by registration/candidate ID, group current documents and payment data by registration, and reuse active masters. Preserve newest-first document selection and last-payment-row lookup semantics. | Regression test added; CI passed on implementation commit `f7eb47d` (35 workflow steps); runtime/staging test pending |
+
+### Scope and safety
+
+- The role gate remains before Spreadsheet reads, and Wali results remain restricted to registrations owned by the signed-in user.
+- Only registrations with a PASSED result and a published announcement are included. A missing reregistration remains a read-only `needsOpen` item; this endpoint does not open or mutate reregistration state.
+- First matching registration, selection result, reregistration, and candidate rows are retained to match the previous lookup helpers.
+- Current documents still exclude `REPLACED`, sort newest first, and use active required document types only.
+- Bills retain sheet order, the first matching Daftar Ulang bill is selected, and the last payment row for a bill remains the payment attached to it.
+- Response fields, summary counts, readiness rules, payment status rules, and management permission output are unchanged.
+- No spreadsheet schema, stored data, role definitions, payment rules, or reregistration transitions were changed.
+- No Apps Script deployment or production data mutation was performed.
