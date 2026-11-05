@@ -344,3 +344,24 @@ Branch: `perf/reregistration-page-batch-reads`
 - Response fields, summary counts, readiness rules, payment status rules, and management permission output are unchanged.
 - No spreadsheet schema, stored data, role definitions, payment rules, or reregistration transitions were changed.
 - No Apps Script deployment or production data mutation was performed.
+
+
+## Repair batch 09 — monitoring page batch-read and index optimization
+
+Branch: `perf/monitoring-page-batch-reads`
+
+| ID | Finding | Change | Status |
+|---|---|---|---|
+| PERF-MON-001 | `getMonitoringPageData()` loaded DOCUMENTS, BILLS, PAYMENTS, SELECTION_PARTICIPANTS, SELECTION_RESULTS, and REREGISTRATIONS once for active-period processing and then reread all six tables for orphan reconciliation. | Read each child table once per request and reuse the same rows for active-period filtering and orphan reconciliation. | Implemented; CI pending |
+| PERF-MON-002 | Payment queue and reconciliation repeatedly filtered/sorted PAYMENTS by bill and PAYMENT_VERIFICATIONS by payment. | Build request-local payment-by-bill, latest-payment-by-bill, and verification-by-payment indexes once; use schedule ID set for participant validation. | Implemented; CI pending |
+| PERF-MON-003 | Participant schedule validation scanned the full schedule array for every participant. | Build a schedule ID membership map once and use constant-time lookups. | Implemented; CI pending |
+
+### Scope and safety
+
+- The monitoring role gate remains the first operation before database access.
+- Active-year filtering for operational queues and reconciliation remains unchanged.
+- Full child-table rows are still used for orphan checks, including records outside the active year.
+- Payment queue selection preserves the previous newest-payment ordering; equal or invalid timestamps retain first-row behavior.
+- Payment amount mismatch tolerance, duplicate-bill detection, exception types, severity, response fields, queue ordering, and result limits are unchanged.
+- Verification rows without a corresponding payment retain the existing filtering behavior; no reconciliation semantics were broadened in this performance-only patch.
+- No spreadsheet schema, stored data, role definitions, business transitions, or production deployment changed.
