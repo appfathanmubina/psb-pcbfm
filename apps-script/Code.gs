@@ -2125,13 +2125,13 @@ function submitPayment(sessionToken,payload){
       }
     }
     const paymentRoot=getOrCreateFolderInParent_(yearFolder,'Bukti Pembayaran');
-    const registrationFolder=getOrCreateFolderInParent_(paymentRoot,sanitizeFolderName_(found.registration.registrationNumber||found.registration.registrationId));
+    const regFolder=getOrCreateFolderInParent_(paymentRoot,sanitizeFolderName_(found.registration.registrationNumber||found.registration.registrationId));
 
     lock.releaseLock();
     lockAcquired=false;
 
     stage='CREATE_DRIVE_FILE';
-    uploadedFile=registrationFolder.createFile(Utilities.newBlob(bytes,mimeType,fileName));
+    uploadedFile=regFolder.createFile(Utilities.newBlob(bytes,mimeType,fileName));
 
     stage='VERIFY_DRIVE_FILE';
     const detectedMime=String(uploadedFile.getMimeType()||'').toLowerCase();
