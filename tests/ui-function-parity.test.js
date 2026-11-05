@@ -9,7 +9,7 @@ const onlyInPwa = ['goPublicVideo', 'refreshPublicConfig', 'renderPublicVideoSec
 const intentionallyDifferentBodies = [
   'appLogoMarkup', 'applyAppIcon', 'boot', 'configAssetSources', 'initializeAfterLogin', 'renderLogin',
   'hydrateSplashLogo', 'movePublicVideo',
-  'playPublicVideo', 'renderPublicHome', 'renderWaliHomeFlow', 'server', 'submitLogin'
+  'playPublicVideo', 'renderPublicHome', 'renderWaliHomeFlow', 'submitLogin'
 ];
 
 function extractFunctionBodies(source) {
