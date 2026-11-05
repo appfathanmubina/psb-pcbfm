@@ -631,7 +631,7 @@ async function reloadCurrentData(){
     document.querySelectorAll('.user-name,.side-user-name').forEach(el=>{el.textContent=state.user?.name||el.textContent;});
     // Jangan membangun ulang seluruh shell/header. Paksa hanya menu aktif
     // melewati snapshot dan cache agar renderer mengambil data baru dari server.
-    if(state.page===currentPage)goPage(currentPage,{forceReload:true});
+    if(state.page===currentPage)await goPage(currentPage,{forceReload:true});
     showToast('Data berhasil dimuat ulang.','success');
   }catch(e){
     showToast('Gagal memuat ulang data. Silakan coba lagi.','error');
@@ -645,13 +645,14 @@ function toggleSidebar(){
   if(!document.body.classList.contains('desktop-device'))return;
   document.body.classList.toggle('sidebar-collapsed');
 }
-function goPage(page,options={}){
+async function goPage(page,options={}){
   const forceReload=options===true||options?.forceReload===true;
+  if(forceReload)invalidatePageSnapshots();
   if(!forceReload&&state.page===page){
     savePageSnapshot(page);
     if(restorePageSnapshot(page)){window.scrollTo({top:0,behavior:'auto'});return;}
   }
-  if(state.page&&!forceReload)savePageSnapshot(state.page);
+  if(state.page&&!forceReload&&!state.reloadingData)savePageSnapshot(state.page);
   state.page=page;
   try{sessionStorage.setItem('psb_current_page',page);}catch(e){}
   document.querySelectorAll('.nav-btn,.side-btn').forEach(x=>x.classList.remove('active'));
@@ -659,22 +660,22 @@ function goPage(page,options={}){
   const mobileNavPage=hasAnyRole(['WALI'])&&waliMorePages.includes(page)?'more':page;
   $('nav-'+mobileNavPage)?.classList.add('active');$('side-'+page)?.classList.add('active');
   if(!forceReload&&restorePageSnapshot(page)){window.scrollTo({top:0,behavior:'auto'});return;}
-  if(page==='home')renderHome();
-  else if(page==='verificationStatus')renderWaliVerificationStatus();
+  if(page==='home')await renderHome();
+  else if(page==='verificationStatus')await renderWaliVerificationStatus();
   else if(page==='profile')renderProfile();
-  else if(page==='master')renderMasterData(forceReload);
-  else if(page==='registration')renderRegistrationHub(forceReload);
-  else if(page==='applicants')renderApplicants(forceReload);
-  else if(page==='documents')renderDocuments(state.documentRegistrationId,forceReload);
-  else if(page==='notifications')renderNotifications(forceReload);
-  else if(page==='announcement')renderAnnouncements(forceReload);
-  else if(page==='verification')renderVerification(forceReload);
-  else if(page==='payments')renderPayments(state.paymentRegistrationId,forceReload);
-  else if(page==='selection')renderSelection(forceReload);
-  else if(page==='reregistration')renderReregistration(forceReload);
-  else if(page==='reports')renderReports(forceReload);
-  else if(page==='audit')renderAudit(forceReload);
-  else if(page==='userManagement')renderUserManagementPage();
+  else if(page==='master')await renderMasterData(forceReload);
+  else if(page==='registration')await renderRegistrationHub(forceReload);
+  else if(page==='applicants')await renderApplicants(forceReload);
+  else if(page==='documents')await renderDocuments(state.documentRegistrationId,forceReload);
+  else if(page==='notifications')await renderNotifications(forceReload);
+  else if(page==='announcement')await renderAnnouncements(forceReload);
+  else if(page==='verification')await renderVerification(forceReload);
+  else if(page==='payments')await renderPayments(state.paymentRegistrationId,forceReload);
+  else if(page==='selection')await renderSelection(forceReload);
+  else if(page==='reregistration')await renderReregistration(forceReload);
+  else if(page==='reports')await renderReports(forceReload);
+  else if(page==='audit')await renderAudit(forceReload);
+  else if(page==='userManagement')await renderUserManagementPage();
   else renderMore();
   window.scrollTo({top:0,behavior:'auto'});
 }
