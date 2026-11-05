@@ -7,7 +7,7 @@ const bridge = fs.readFileSync('frontend/api-bridge.js', 'utf8');
 assert.match(html, /sw\.js\?v=32\.14\.0/, 'HTML must request the current service worker');
 assert.match(html, /controllerchange/, 'HTML must reload when a new worker takes control');
 assert.match(html, /window\.location\.reload\(\)/, 'A newly activated worker must refresh the open PWA');
-assert.match(html, /app\.js\?v=32\.14\.0/, 'Application script must have a fresh URL');
+assert.match(html, /app\.js\?v=32\.16\.0/, 'Application script must have a fresh URL after the Wali workflow update');
 assert.match(html, /styles\.css\?v=32\.14\.0/, 'Stylesheet must have a fresh URL');
 assert.match(sw, /psb-pwa-shell-v32-14-0/, 'Service worker must use a new cache namespace');
 assert.match(sw, /new Request\(asset,\{cache:'reload'\}\)/, 'Precache must bypass browser HTTP cache');
