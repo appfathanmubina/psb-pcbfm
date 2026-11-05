@@ -24,11 +24,11 @@ assert.doesNotMatch(reload, /renderApp\\(\\)/,
   'Reload must not rebuild the whole shell or route through Home');
 assert.match(reload, /invalidateCurrentPageData\\(\\)/,
   'Reload must invalidate page snapshots and per-menu data caches');
-assert.match(reload, /goPage\\(currentPage,\\{forceReload:true\\}\\)/,
+assert.match(reload, /await goPage\\(currentPage,\\{forceReload:true\\}\\)/,
   'Reload must force-fetch only the currently active menu');
 assert.match(reload, /const activeBtn=\\$\\('reloadDataBtn'\\)/,
   'Reload completion must reacquire the current header button before resetting its loading state');
-assert.match(app, /function goPage\\(page,options=\\{\\}\\)/,
+assert.match(app, /async function goPage\\(page,options=\\{\\}\\)/,
   'Navigation must support an explicit force-reload path');
 assert.match(app, /if\\(!forceReload&&restorePageSnapshot\\(page\\)\\)/,
   'A forced reload must bypass the current page snapshot');
