@@ -1804,7 +1804,9 @@ function getWaliHomeData(sessionToken) {
     const regBills = bills.filter(b => String(b.registrationId) === String(reg.registrationId));
     const formBill = regBills.find(b => /formulir/i.test(String(paymentTypes[String(b.paymentTypeId)]?.name || '')));
     const formPayment = formBill ? paymentByBill[String(formBill.billId)] : null;
-    const formPaid = String(reg.status).toUpperCase() === 'PAYMENT_VERIFIED' || String(formBill?.status).toUpperCase() === 'PAID' || String(formPayment?.status).toUpperCase() === 'VERIFIED';
+    // Status bayar ditentukan hanya dari tagihan formulir aktif dan pembayaran
+    // yang terkait; status registrasi lama tidak boleh membuka akses sendiri.
+    const formPaid = String(formBill?.status).toUpperCase() === 'PAID' || String(formPayment?.status).toUpperCase() === 'VERIFIED';
     const regDocuments = documents.filter(d => String(d.registrationId) === String(reg.registrationId));
     const uploadedByType = Object.create(null);
     regDocuments.filter(d=>String(d.status||'').toUpperCase()!=='REPLACED')
