@@ -3989,11 +3989,11 @@ function submitRegistration(sessionToken, registrationId) {
   const submittedIdx = headers.indexOf('submittedAt');
   const updatedIdx = headers.indexOf('updatedAt');
   const now = new Date();
+  const autoBill=ensureFormBillForRegistration_(found.registration.registrationId,null,actor.userId);
+  if(!autoBill.success) return fail_('Tagihan formulir belum dapat dibuat otomatis: '+autoBill.message+' Hubungi Superadmin untuk memeriksa Master Data → Jenis Pembayaran.');
   if (statusIdx >= 0) sheet.getRange(row,statusIdx+1).setValue('SUBMITTED');
   if (submittedIdx >= 0) sheet.getRange(row,submittedIdx+1).setValue(now);
   if (updatedIdx >= 0) sheet.getRange(row,updatedIdx+1).setValue(now);
-  const autoBill=ensureFormBillForRegistration_(found.registration.registrationId,null,actor.userId);
-  if(!autoBill.success) return fail_('Pendaftaran terkirim, tetapi tagihan formulir belum dapat dibuat otomatis: '+autoBill.message+' Hubungi Superadmin untuk memeriksa Master Data → Jenis Pembayaran.');
   writeAudit_(actor.userId, 'SUBMIT', 'REGISTRATION', found.registration.registrationId, JSON.stringify({status:found.registration.status}), JSON.stringify({status:'SUBMITTED'}), 'Pendaftaran dikirim dan tagihan formulir dibuat otomatis');
   const candidateName=String(found.candidate?.fullName||'calon santri');
   notifyUsersByRoles_(['SUPERADMIN','ADMIN_PSB','KEUANGAN'],'Pendaftaran Baru — Verifikasi Pembayaran Formulir',candidateName+' telah mengirim pendaftaran '+String(found.registration.registrationNumber||found.registration.registrationId)+'. Tagihan formulir telah dibuat otomatis. Silakan periksa bukti pembayaran dan verifikasi setelah Wali mengunggahnya.','INFO');
