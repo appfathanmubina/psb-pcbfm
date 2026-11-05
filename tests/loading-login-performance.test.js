@@ -46,7 +46,7 @@ assert.doesNotMatch(boot, /await\s+configTask/,
 const login = functionSource('submitLogin');
 assert.match(login, /server\('login',\s*identifier,\s*password\)/,
   'Login must make one direct authentication request');
-assert.match(login, /server\('finalizeLogin',\s*state\.token\)\.catch\(\(\)=>\{\}\)/,
+assert.match(login, /finalizeLoginTask\.catch\(\(\)=>\{\}\)/,
   'Last-login and audit bookkeeping must remain best-effort after UI entry');
 assert.match(login, /initializeAfterLogin\(\);[\s\S]*?\$\('loading'\)\?\.classList\.add\('hidden'\);[\s\S]*?renderApp\(\)/,
   'Successful login must activate tracked loading before rendering the first page');
