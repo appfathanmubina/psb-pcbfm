@@ -30,9 +30,9 @@ assert.match(upload, /LOCK_PAYMENT_PREPARE\|\|stage==='LOCK_PAYMENT_COMMIT'/,
   'lock contention must return a retryable message');
 assert.match(upload, /5\*1024\*1024/,
   'the existing 5 MB payment proof limit must remain unchanged');
-assert.match(upload, /application\\/pdf/,
+assert.ok(upload.includes(String.raw`mimeType!=='application/pdf'`),
   'PDF proof uploads must remain supported');
-assert.match(upload, /image\\\/(jpeg\|png\|webp)/,
+assert.ok(upload.includes(String.raw`/^image\\/(jpeg|png|webp)$/i`),
   'JPG, PNG, and WEBP proof uploads must remain supported');
 
 console.log('Payment proof upload resilience safeguards passed.');
