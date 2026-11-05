@@ -39,8 +39,10 @@
 - Pendaftaran Wali saat ini tidak menggunakan Email OTP atau verifikasi email.
 - Email dan nomor HP opsional, tetapi minimal satu identitas login wajib diisi.
 - Akun dibuat aktif dengan role WALI dan sesi diterbitkan setelah validasi dan pemeriksaan duplikasi.
-- Password baru menggunakan PBKDF2-HMAC-SHA256 dengan salt per pengguna dan 60.000 iterasi.
-- Login masih mendukung hash SHA-256 lama; migrasi dilakukan setelah autentikasi lama berhasil dan hanya memperbarui hash/salt.
+- Seluruh pembuatan password baru (registrasi Wali, pembuatan pengguna manual, perubahan/reset password, dan bootstrap Superadmin) menggunakan PBKDF2-HMAC-SHA256 dengan salt per pengguna dan 60.000 iterasi.
+- Login tetap memverifikasi hash SHA-256 lama dan memigrasikannya ke PBKDF2 setelah password lama terbukti benar; akun tidak perlu reset password dan identitas/role/data pendaftaran tidak diubah.
+- Hash PBKDF2 dengan jumlah iterasi berbeda dari kebijakan saat ini juga ditingkatkan setelah login berhasil; hash PBKDF2 tidak pernah diturunkan menjadi SHA-256.
+- Derivasi hash yang mahal dilakukan sebelum ScriptLock pada jalur pendaftaran, perubahan password, reset, dan pembuatan pengguna agar waktu lock global lebih singkat.
 - Perubahan password dan reset admin mencabut sesi sesuai kebijakan.
 - Login lockout menggunakan CacheService; mekanisme cache adalah best-effort dan bukan rate limiter yang kuat terhadap serangan terdistribusi.
 
