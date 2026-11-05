@@ -2987,10 +2987,10 @@ function getMonitoringPageData(sessionToken){
     if(!k)return;
     if(!paymentsByBill[k])paymentsByBill[k]=[];
     paymentsByBill[k].push(x);
-    const current=latestPaymentByBill[k];
-    const stamp=new Date(x.createdAt||0).getTime()||0;
-    const currentStamp=current?(new Date(current.createdAt||0).getTime()||0):-1;
-    if(!current||stamp>currentStamp)latestPaymentByBill[k]=x;
+  });
+  Object.keys(paymentsByBill).forEach(k=>{
+    // Keep the original comparator exactly, including stable ordering when dates are invalid or equal.
+    latestPaymentByBill[k]=paymentsByBill[k].slice().sort((a,z)=>new Date(z.createdAt||0)-new Date(a.createdAt||0))[0];
   });
   const billMap={};bills.forEach(x=>billMap[String(x.billId)]=x);
   const participantMap={};participants.forEach(x=>participantMap[String(x.participantId)]=x);
