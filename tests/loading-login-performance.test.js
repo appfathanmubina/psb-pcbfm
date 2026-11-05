@@ -45,6 +45,13 @@ assert.match(app, /value="\$\{esc\(identifier\)\}"/,
 
 assert.match(app, /function warmNavigationData\(\)/,
   'Lazy navigation prefetch remains available after the active page loads');
+const warmData = functionSource('warmNavigationData');
+assert.match(warmData, /getAnnouncementPageData/,
+  'Only lightweight announcements may be warmed in the background');
+assert.match(warmData, /getNotifications/,
+  'Only lightweight notifications may be warmed in the background');
+assert.doesNotMatch(warmData, /getRegistrationList|getVerificationQueue|getReportingPageData|getAuditLogPageData|getMasterData/,
+  'Heavy menus must load on demand instead of competing with the active page');
 assert.match(app, /scheduleWarmNavigationData\(\);/,
   'Navigation prefetch must be scheduled outside the initial render path');
 
