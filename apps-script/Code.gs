@@ -2045,7 +2045,7 @@ function createBill(sessionToken,payload){
   sheet.appendRow(headers.map(h=>record[h]));
   writeAudit_(actor.userId,'CREATE','PAYMENT',billId,'',JSON.stringify(record),'Tagihan pembayaran dibuat');
   if(/formulir/i.test(String(type.name||''))) {
-    try { notifyRegistrationOwner_(registrationId,'Tagihan Formulir Telah Diterbitkan','Tagihan biaya formulir sebesar Rp '+amount.toLocaleString('id-ID')+' telah tersedia. Silakan buka menu Pembayaran untuk mengunggah bukti transfer. Dokumen persyaratan tetap dapat dilengkapi secara bersamaan.','INFO'); } catch(notificationError) { console.error('Bill notification failed: '+notificationError); }
+    try { notifyRegistrationOwner_(registrationId,'Tagihan Formulir Telah Diterbitkan','Tagihan biaya formulir sebesar Rp '+amount.toLocaleString('id-ID')+' telah tersedia. Silakan buka menu Pembayaran untuk mengunggah bukti transfer. Menu Upload Dokumen akan aktif setelah pembayaran dikonfirmasi oleh Keuangan.','INFO'); } catch(notificationError) { console.error('Bill notification failed: '+notificationError); }
   }
   return {success:true,message:'Tagihan berhasil dibuat.',bill:JSON.parse(JSON.stringify(record))};
   });
