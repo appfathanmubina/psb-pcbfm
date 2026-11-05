@@ -287,3 +287,21 @@ Branch: `perf/document-verification-batch-reads`
 - Queue status matching, search fields, ordering, and response cap are unchanged.
 - No spreadsheet schema, stored data, authentication, role definitions, or business status transitions changed.
 - No Apps Script deployment or production data mutation was performed.
+
+
+## Repair batch 06 — payment page registration and master batch reads
+
+Branch: `perf/payment-page-batch-reads`
+
+| ID | Finding | Change | Status |
+|---|---|---|---|
+| PERF-PAY-001 | `getPaymentPageData()` loaded and enriched the registration list, then called `findRegistration()` for the selected registration, rereading REGISTRATIONS, CANDIDATES, GUARDIANS, ADDRESSES, and SCHOOLS. | Reuse the registration row already read for the page and preload candidate, academic-year, admission-wave, and education-level maps once for enrichment. Preserve the first raw registration row for duplicate-ID compatibility. | Regression test added; CI pending |
+| PERF-PAY-002 | Payment types were read separately by the page response and `buildPaymentData()`. | Load active payment types once and pass them into `buildPaymentData()`; other callers retain the original default lookup. | Regression test added; CI pending |
+
+### Scope and safety
+
+- Wali ownership filtering remains unchanged, and the selected registration is still checked with `canAccessRegistration_()` before payment data is returned.
+- Existing role checks, registration ordering, 200-item cap, payment/bill filtering, payment status handling, and response fields are unchanged.
+- The first matching raw registration row is retained for compatibility with the previous `findRegistration_()` behavior if duplicate IDs exist.
+- No spreadsheet schema, stored data, payment business rules, or role definitions were changed.
+- No Apps Script deployment or production data mutation was performed.
