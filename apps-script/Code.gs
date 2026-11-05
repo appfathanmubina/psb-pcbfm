@@ -2221,20 +2221,36 @@ function getAnnouncementPageData(sessionToken) {
   const ss = getDatabaseSpreadsheet_();
   const resultSheet = ss.getSheetByName(PSB_SHEETS.SELECTION_RESULTS);
   const rows = resultSheet && resultSheet.getLastRow() >= 2 ? sheetRows_(resultSheet) : [];
-  const registrations = ss.getSheetByName(PSB_SHEETS.REGISTRATIONS);
+  const registrationSheet = ss.getSheetByName(PSB_SHEETS.REGISTRATIONS);
+  const candidateSheet = ss.getSheetByName(PSB_SHEETS.CANDIDATES);
   const activeYear = String(getConfig_('ACTIVE_YEAR') || '2027/2028');
   const yearItems = getActiveMasterItems_('MASTER_TAHUN_AJARAN');
   const activeYearId = yearItems.find(x=>String(x.name)===activeYear)?.tahunAjaranId || '';
+
+  // Batch-read registration and candidate rows once. findRegistration_ inside
+  // the result loop performed up to five full-sheet reads per result row.
+  // Keep the first matching ID to preserve findRowById_ duplicate-ID behavior.
+  const registrationsById = Object.create(null);
+  sheetRows_(registrationSheet).forEach(reg => {
+    const id = String(reg.registrationId || '');
+    if (id && !Object.prototype.hasOwnProperty.call(registrationsById, id)) registrationsById[id] = reg;
+  });
+  const candidatesById = Object.create(null);
+  sheetRows_(candidateSheet).forEach(candidate => {
+    const id = String(candidate.candidateId || '');
+    if (id && !Object.prototype.hasOwnProperty.call(candidatesById, id)) candidatesById[id] = candidate;
+  });
+
   const visible = rows.filter(r=>{
-    const found = findRegistration_(String(r.registrationId||''));
-    if (!found) return false;
-    if (activeYearId && String(found.registration.tahunAjaranId)!==String(activeYearId)) return false;
-    if (hasRoleDirect_(actor,['WALI'])) return String(found.registration.userId)===String(actor.userId) && String(r.announcementDate||'').trim()!=='';
+    const reg = registrationsById[String(r.registrationId || '')];
+    if (!reg) return false;
+    if (activeYearId && String(reg.tahunAjaranId)!==String(activeYearId)) return false;
+    if (hasRoleDirect_(actor,['WALI'])) return String(reg.userId)===String(actor.userId) && String(r.announcementDate||'').trim()!=='';
     return true;
   });
   const items = visible.map(r=>{
-    const found=findRegistration_(String(r.registrationId||''));
-    const reg=found?.registration||{}; const c=found?.candidate||{};
+    const reg = registrationsById[String(r.registrationId || '')] || {};
+    const c = candidatesById[String(reg.candidateId || '')] || {};
     return Object.assign({},r,{candidateName:c.fullName||c.name||'-',registrationNumber:reg.registrationNumber||reg.registrationId||'-',userId:reg.userId||'',isPublished:String(r.announcementDate||'').trim()!==''});
   }).sort((a,b)=>String(b.announcementDate||b.updatedAt||'').localeCompare(String(a.announcementDate||a.updatedAt||'')));
   return {success:true,items,canPublish:hasRoleDirect_(actor,PSB_ANNOUNCEMENT_ADMIN_ROLES),activeYear};
