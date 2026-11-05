@@ -75,7 +75,8 @@ const context = {
   sheetRows_: name => fixtures[name] || [],
   Utilities: { formatDate: () => '2026-11-05' },
   Session: { getScriptTimeZone: () => 'Asia/Jakarta' },
-  statusLabel_: value => value
+  statusLabel_: value => value,
+  findParticipantRegistration_: participant => participant && participant.registrationId ? participant.registrationId : ''
 };
 vm.createContext(context);
 vm.runInContext(page, context);
