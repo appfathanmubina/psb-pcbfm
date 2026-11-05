@@ -42,7 +42,7 @@ assert.match(submitRegistration, /Verifikasi PSB dimulai setelah pembayaran diko
 const verifyPayment = section(backend, 'function verifyPayment(sessionToken,payload)', 'function getSelectionPageData(sessionToken, registrationId)');
 assert.match(verifyPayment, /notifyUsersByRoles_\(\['SUPERADMIN','ADMIN_PSB','VERIFIKATOR'\]/);
 assert.match(verifyPayment, /notifyRegistrationOwner_\(String\(regFound\.registration\.registrationId\)/);
-assert.match(verifyPayment, /Tuliskan alasan penolakan/i);
+
 
 const paymentData = section(backend, 'function buildPaymentData_(registrationId, paymentTypes)', 'function createBill(sessionToken,payload)');
 assert.match(paymentData, /PAYMENT_VERIFICATIONS/);
@@ -59,6 +59,10 @@ assert.match(waliDashboard, /waliFlowAction\('documents'/);
 assert.match(waliDashboard, /waliFlowAction\('payments'/);
 assert.match(waliDashboard, /stageIndex<7/);
 assert.match(waliDashboard, /repeat\(auto-fit/);
+
+const verifyPaymentUi = section(frontend, 'async function verifyPaymentUI(paymentId,status)', 'function openCreateBill()');
+assert.match(verifyPaymentUi, /Tuliskan alasan penolakan/i);
+assert.match(verifyPaymentUi, /if\(status==='REJECTED'&&!note\)/);
 
 const paymentPage = section(frontend, 'function renderPaymentContent()', 'function openPaymentUpload(billId)');
 assert.match(paymentPage, /Tagihan formulir belum diterbitkan/);
