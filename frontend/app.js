@@ -1424,7 +1424,7 @@ async function submitDocumentUpload(type){
         const r=await server('uploadDocument',state.token,{registrationId:state.documentRegistrationId,documentTypeId:type.documentTypeId,fileName:prepared.fileName,mimeType:prepared.mimeType,fileSize:prepared.fileSize,base64});
         if(!r.success){msg.innerHTML=showMessage(r.message);return}
         closeDocumentUpload();showToast(r.message,'success');delete state.cache.documents[state.documentRegistrationId];await loadDocumentsForRegistration(state.documentRegistrationId);
-      }catch(e){if($('documentUploadMsg'))$('documentUploadMsg').innerHTML=showMessage('Gagal mengunggah dokumen. Silakan coba lagi.')}
+      }catch(e){if($('documentUploadMsg'))$('documentUploadMsg').innerHTML=showMessage('Koneksi terputus saat mengunggah. Tunggu sebentar, lalu periksa status dokumen sebelum mencoba unggah ulang.')}
       finally{loading(false);if(btn?.isConnected){btn.disabled=false;btn.textContent=type.document?.fileId?'Ganti File':'Unggah Sekarang'}if(input?.isConnected)input.disabled=false}
     };
     reader.onerror=()=>{if(msg)msg.innerHTML=showMessage('File tidak dapat dibaca. Silakan pilih file lain.','error');loading(false);if(btn?.isConnected){btn.disabled=false;btn.textContent=type.document?.fileId?'Ganti File':'Unggah Sekarang'}if(input?.isConnected)input.disabled=false};
