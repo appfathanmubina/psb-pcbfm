@@ -4,7 +4,7 @@ const ASSETS=[
   './',
   './index.html',
   './manifest.webmanifest?v=32.15.0',
-  './styles.css?v=32.22.0',
+  './styles.css?v=32.21.0',
   './api-bridge.js?v=32.14.0',
   './app.js?v=32.20.0',
   './assets/logo-fathanmubina.svg?v=32.7.0',
