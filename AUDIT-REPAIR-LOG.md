@@ -365,3 +365,26 @@ Branch: `perf/monitoring-page-batch-reads`
 - Payment amount mismatch tolerance, duplicate-bill detection, exception types, severity, response fields, queue ordering, and result limits are unchanged.
 - Verification rows without a corresponding payment retain the existing filtering behavior; no reconciliation semantics were broadened in this performance-only patch.
 - No spreadsheet schema, stored data, role definitions, business transitions, or production deployment changed.
+
+
+## Repair batch 10 — selection page batch-read and lookup-index optimization
+
+Branch: `perf/selection-page-batch-indexes`
+
+| ID | Finding | Change | Status |
+|---|---|---|---|
+| PERF-SEL-001 | `getSelectionPageData()` called `findRegistration_()` while enriching participants and again when opening detail, causing repeated reads of REGISTRATIONS, CANDIDATES, GUARDIANS, ADDRESSES, and SCHOOLS. | Read REGISTRATIONS once, build a first-match registration index, and reuse it for participant enrichment and detail lookup. Candidate names are resolved from the preloaded CANDIDATES map. | Implemented; CI pending |
+| PERF-SEL-002 | Registration enrichment reread CANDIDATES and each master table even though candidate/master maps can be shared within the request. | Preload candidate, academic-year, wave, and level maps and pass them to `enrichRegistrationList_()` for both list and detail. | Implemented; CI pending |
+| PERF-SEL-003 | Wali score filtering scanned all participants for each score; detail lookup filtered scores and searched participants/results repeatedly. | Build request-local participant-by-registration, score-by-participant, and first-result-by-registration indexes; use a participant-ID membership map for Wali score filtering. | Implemented; CI pending |
+
+### Scope and safety
+
+- The selection role gate remains the first operation before database access.
+- Wali registration filtering remains restricted to the signed-in `userId`; Wali participants, scores, and results remain restricted to the visible registration list and its participants.
+- The 300-registration response cap and registration ordering by `updatedAt` remain unchanged.
+- Participant order and first participant per registration in detail remain unchanged; first matching registration and result rows are retained for detail lookup.
+- Schedule active-year filtering and ordering by `selectionDate` remain unchanged.
+- The detail ownership check through `canAccessRegistration_()` and the existing admin-role exception remain in place.
+- Response fields and all selection business rules remain unchanged.
+- No spreadsheet schema, stored data, role definitions, or production deployment changed.
+- Apps Script runtime/staging data tests remain pending; CI regression guards validate static contracts only.
