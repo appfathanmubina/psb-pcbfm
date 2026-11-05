@@ -1465,8 +1465,8 @@ async function submitDocumentUpload(type){
   loading(true,'Mengoptimalkan foto dokumen...');
   try{
     const prepared=await prepareUploadFile(file,type.allowedMimeTypes),max=getDocumentMaxSizeMb(type);
-    if(prepared.fileSize>max*1024*1024){msg.innerHTML=showMessage('Ukuran file setelah diproses masih melebihi batas '+max+' MB untuk dokumen '+(type.name||'ini')+'. Silakan pilih foto beresolusi lebih rendah atau file yang lebih kecil.','warning');return}
-    if(!uploadMimeAllowed(prepared.mimeType,type.allowedMimeTypes)){msg.innerHTML=showMessage('Tipe file tidak diizinkan untuk dokumen ini. Gunakan format yang tercantum pada petunjuk upload.','warning');return}
+    if(prepared.fileSize>max*1024*1024){msg.innerHTML=showMessage('Ukuran file setelah diproses masih melebihi batas '+max+' MB untuk dokumen '+(type.name||'ini')+'. Silakan pilih foto beresolusi lebih rendah atau file yang lebih kecil.','warning');loading(false);if(btn){btn.disabled=false;btn.textContent=type.document?.fileId?'Ganti File':'Unggah Sekarang'}if(input)input.disabled=false;return}
+    if(!uploadMimeAllowed(prepared.mimeType,type.allowedMimeTypes)){msg.innerHTML=showMessage('Tipe file tidak diizinkan untuk dokumen ini. Gunakan format yang tercantum pada petunjuk upload.','warning');loading(false);if(btn){btn.disabled=false;btn.textContent=type.document?.fileId?'Ganti File':'Unggah Sekarang'}if(input)input.disabled=false;return}
     if(prepared.compressed)processPopupUpdate(22,'Foto berhasil dioptimalkan',formatFileSize(file.size)+' menjadi '+formatFileSize(prepared.fileSize),false);
     const reader=new FileReader();
     reader.onprogress=e=>{if(e.lengthComputable)processPopupUpdate(25+Math.round(e.loaded/e.total*25),'Membaca file dokumen...','Menyiapkan '+prepared.fileName,false)};
@@ -1646,8 +1646,8 @@ async function submitPaymentUpload(billId){
   loading(true,'Mengoptimalkan bukti pembayaran...');
   try{
     const allowed='image/jpeg,image/png,image/webp,application/pdf',prepared=await prepareUploadFile(file,allowed);
-    if(prepared.fileSize>5*1024*1024){msg.innerHTML=showMessage('Ukuran file setelah diproses masih melebihi batas 5 MB. Silakan pilih foto beresolusi lebih rendah atau file yang lebih kecil.','warning');return}
-    if(!uploadMimeAllowed(prepared.mimeType,allowed)){msg.innerHTML=showMessage('Format bukti pembayaran tidak didukung. Gunakan JPG, PNG, WEBP, atau PDF.','warning');return}
+    if(prepared.fileSize>5*1024*1024){msg.innerHTML=showMessage('Ukuran file setelah diproses masih melebihi batas 5 MB. Silakan pilih foto beresolusi lebih rendah atau file yang lebih kecil.','warning');loading(false);return}
+    if(!uploadMimeAllowed(prepared.mimeType,allowed)){msg.innerHTML=showMessage('Format bukti pembayaran tidak didukung. Gunakan JPG, PNG, WEBP, atau PDF.','warning');loading(false);return}
     if(prepared.compressed)processPopupUpdate(22,'Foto berhasil dioptimalkan',formatFileSize(file.size)+' menjadi '+formatFileSize(prepared.fileSize),false);
     const reader=new FileReader();
     reader.onprogress=e=>{if(e.lengthComputable)processPopupUpdate(25+Math.round(e.loaded/e.total*25),'Membaca bukti pembayaran...','Menyiapkan '+prepared.fileName,false)};
