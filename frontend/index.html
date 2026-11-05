@@ -135,10 +135,22 @@
     installButton.textContent='Lihat Petunjuk';
     installButton.disabled=false;
   }
-  function syncInstallState(){
+  async function syncInstallState(){
     installed=standalone();
     openButton.hidden=installed;
-    if(installed)hide();
+    if(installed){hide();return;}
+    if(typeof navigator.getInstalledRelatedApps==='function'){
+      try{
+        const relatedApps=await navigator.getInstalledRelatedApps();
+        if(relatedApps.some(function(app){return app.platform==='webapp';})){
+          installed=true;
+          openButton.hidden=true;
+          hide();
+        }
+      }catch(error){
+        console.warn('Installed PWA detection:',error);
+      }
+    }
   }
   openButton.addEventListener('click',function(){
     renderGuide();
