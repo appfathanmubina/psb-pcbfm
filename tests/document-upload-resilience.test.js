@@ -35,7 +35,7 @@ assert.match(upload, /Server sedang memproses permintaan lain/,
 
 assert.match(bridge, /const UPLOAD_TIMEOUT_MS = 120000/,
   'document upload must have a bounded timeout suitable for Drive processing');
-assert.match(bridge, /item\.functionName === 'uploadDocument' \? UPLOAD_TIMEOUT_MS/,
+assert.match(bridge, /\(item\.functionName === 'uploadDocument' \|\| item\.functionName === 'submitPayment'\) \? UPLOAD_TIMEOUT_MS : TIMEOUT_MS/,
   'the extended timeout must apply only to document upload RPCs');
 assert.match(bridge, /MAX_PAYLOAD_CHARS = 20 \* 1024 \* 1024/,
   'the existing bounded request payload limit must remain in place');
