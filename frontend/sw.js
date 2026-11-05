@@ -34,13 +34,14 @@ self.addEventListener('fetch',event=>{
   // Aset aplikasi memakai network-first agar reload tidak terus menampilkan
   // JavaScript/CSS lama. Cache hanya menjadi fallback ketika perangkat offline.
   if(CACHE_FIRST_ASSETS.has(request.url)){
-    event.respondWith(fetch(request,{cache:'no-cache'}).then(response=>{
+    const update=fetch(request,{cache:'no-cache'}).then(response=>{
       if(response&&response.ok&&response.type==='basic'){
-        const copy=response.clone();
-        event.waitUntil(caches.open(CACHE).then(cache=>cache.put(request,copy)));
+        return caches.open(CACHE).then(cache=>cache.put(request,response.clone())).then(()=>response);
       }
       return response;
-    }).catch(()=>caches.match(request)));
+    });
+    event.waitUntil(update.catch(()=>{}));
+    event.respondWith(update.catch(()=>caches.match(request)));
     return;
   }
 
