@@ -671,6 +671,7 @@ async function renderHome(){
 }
 function waliFlowAction(key,id){
   if(key==='registration') goPage('registration');
+  else if(key==='documents'){state.documentRegistrationId=id;goPage('documents');}
   else if(key==='payments'){state.paymentRegistrationId=id;goPage('payments');}
   else if(key==='selection'){state.selectionRegistrationId=id;state.selectionData=null;goPage('selection');}
   else if(key==='announcement') goPage('announcement');
@@ -681,20 +682,21 @@ function renderWaliHomeFlow(data){
   if(!items.length){el.innerHTML=`<section class="card wali-flow-card"><div class="wali-flow-head"><div><div class="wali-flow-title">Alur Pendaftaran</div><div class="wali-flow-sub">Belum ada pendaftaran pada tahun ajaran ${esc(data.activeYear||'berjalan')}.</div></div></div><div class="wali-flow-next"><div class="wali-flow-next-title">Mulai pendaftaran pertama</div><div class="wali-flow-next-desc">Buat pendaftaran calon santri untuk memulai seluruh proses PSB.</div><div class="wali-flow-actions"><button class="btn btn-primary" onclick="goPage('registration')">+ Pendaftaran Baru</button></div></div></section>`;return}
   const stages=[
     ['Pendaftaran','Isi dan kirim data calon santri.'],
-    ['Verifikasi','Data dan dokumen diperiksa petugas.'],
-    ['Pembayaran Formulir','Lakukan pembayaran setelah pendaftaran terverifikasi.'],
+    ['Dokumen','Unggah seluruh dokumen persyaratan yang diwajibkan.'],
+    ['Pembayaran Formulir','Bayar biaya formulir dan unggah bukti pembayaran.'],
+    ['Verifikasi PSB','Petugas memeriksa data dan dokumen setelah pembayaran dikonfirmasi.'],
     ['Tes & Seleksi','Ikuti tes sesuai jadwal dan tunggu hasil seleksi.'],
     ['Pengumuman','Lihat hasil seleksi setelah diumumkan.'],
     ['Daftar Ulang','Jika lulus, lanjutkan proses daftar ulang.']
   ];
   el.innerHTML=items.map(r=>{
-    const completed=Math.max(0,Math.min(6,Number(r.completed||0)));
-    const flow=stages.map((st,i)=>{const n=i+1,done=n<=completed,current=n===completed+1&&!((r.result?.published)&&r.result?.status==='NOT_PASSED');let badge=done?'Sudah dilewati':current?'Berikutnya':'Selanjutnya';if(r.result?.published&&r.result?.status==='NOT_PASSED'&&n===6)badge='Tidak diperlukan';if(r.result?.published&&r.result?.status==='WAITLIST'&&n===6)badge='Menunggu informasi';return `<div class="wali-flow-item ${done?'done':''} ${current?'current':''}"><div class="wali-flow-dot">${done?'✓':n}</div><div class="wali-flow-copy"><b>${esc(st[0])}</b><span>${esc(st[1])}</span><span class="wali-flow-badge">${esc(badge)}</span></div></div>`}).join('');
+    const completed=Math.max(0,Math.min(7,Number(r.completed||0)));
+    const flow=stages.map((st,i)=>{const n=i+1,done=n<=completed,current=n===completed+1&&!((r.result?.published)&&r.result?.status==='NOT_PASSED');let badge=done?'Sudah dilewati':current?'Berikutnya':'Selanjutnya';if(r.result?.published&&r.result?.status==='NOT_PASSED'&&n===7)badge='Tidak diperlukan';if(r.result?.published&&r.result?.status==='WAITLIST'&&n===7)badge='Menunggu informasi';return `<div class="wali-flow-item ${done?'done':''} ${current?'current':''}"><div class="wali-flow-dot">${done?'✓':n}</div><div class="wali-flow-copy"><b>${esc(st[0])}</b><span>${esc(st[1])}</span><span class="wali-flow-badge">${esc(badge)}</span></div></div>`}).join('');
     const next=r.next||{};
-    const stageIndex=Math.max(0,Math.min(6,completed));
-    const progress=Math.round((stageIndex/6)*100);
-    const currentStage=stageIndex<6?stages[stageIndex][0]:'Selesai';
-    const progressLabel=stageIndex===0?'Belum mulai':stageIndex>=6?'Semua tahap selesai':`Tahap ${stageIndex} dari 6`;
+    const stageIndex=Math.max(0,Math.min(7,completed));
+    const progress=Math.round((stageIndex/7)*100);
+    const currentStage=stageIndex<7?stages[stageIndex][0]:'Selesai';
+    const progressLabel=stageIndex===0?'Belum mulai':stageIndex>=7?'Semua tahap selesai':`Tahap ${stageIndex} dari 7`;
     return `<section class="card wali-flow-card">
       <div class="wali-flow-head">
         <div><div class="wali-flow-title">${esc(r.candidateName)}</div><div class="wali-flow-sub">${esc(r.registrationNumber)} · ${esc(r.statusLabel||r.status||'-')}</div></div>
@@ -704,6 +706,10 @@ function renderWaliHomeFlow(data){
       <div class="wali-flow-progress"><span style="width:${progress}%"></span></div>
       ${stageIndex<6?`<div class="wali-flow-current"><div class="wali-flow-current-icon">${ico('arrow-right')}</div><div><b>Tahap berikutnya: ${esc(currentStage)}</b><span>${esc(next.description||stages[stageIndex][1])}</span></div></div>`:`<div class="wali-flow-current complete"><div class="wali-flow-current-icon">✓</div><div><b>Alur pendaftaran selesai</b><span>Tidak ada tindakan yang perlu dilakukan saat ini.</span></div></div>`}
       <div class="wali-flow-list">${flow}</div>
+      ${['SUBMITTED','UNDER_REVIEW','REVISION'].includes(String(r.status||'').toUpperCase())? `<div class="wali-flow-parallel" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px;margin-top:12px">
+        <article class="status-card"><b>1. Dokumen Persyaratan</b><div class="muted" style="font-size:12px;line-height:1.5;margin:7px 0">${Number(r.documents?.uploadedRequiredCount||0)} dari ${Number(r.documents?.requiredCount||0)} dokumen wajib sudah diunggah. ${Number(r.documents?.missingRequiredCount||0)>0?'Silakan unggah dokumen yang masih kurang.':'Dokumen wajib sudah tersedia; petugas akan memeriksa setelah pembayaran dikonfirmasi.'}</div><button class="btn btn-secondary" onclick="waliFlowAction('documents','${esc(r.registrationId)}')">${Number(r.documents?.missingRequiredCount||0)>0?'Lengkapi Dokumen':'Lihat Dokumen'}</button></article>
+        <article class="status-card"><b>2. Pembayaran Formulir</b><div class="muted" style="font-size:12px;line-height:1.5;margin:7px 0">${r.formPaid?'Pembayaran formulir telah dikonfirmasi oleh Keuangan.':r.formPayment?.paymentRejected?'Pembayaran ditolak. Silakan periksa catatan penolakan dan unggah ulang bukti.':r.formPayment?.paymentSubmitted?'Bukti pembayaran sudah dikirim dan sedang diperiksa Keuangan.':r.formPayment?.billExists?'Tagihan sebesar '+formatRupiah(r.formPayment.amount)+' tersedia. Silakan unggah bukti pembayaran.':'Tagihan formulir belum diterbitkan. Bagian Keuangan akan menyiapkan tagihan; Anda tetap dapat melengkapi dokumen sambil menunggu.'}</div><button class="btn btn-primary" onclick="waliFlowAction('payments','${esc(r.registrationId)}')">${r.formPaid?'Lihat Pembayaran':r.formPayment?.paymentSubmitted?'Pantau Pembayaran':'Buka Pembayaran'}</button></article>
+      </div>` : r.formPaid?`<div class="status-card" style="margin-top:12px"><b>Pembayaran formulir terkonfirmasi</b><div class="muted" style="font-size:12px;line-height:1.5;margin-top:6px">Petugas PSB akan memulai atau melanjutkan verifikasi data dan dokumen. Jika ada kekurangan, instruksi perbaikan akan dikirimkan.</div></div>`:''}
       <div class="wali-flow-next"><div class="wali-flow-next-title">${esc(next.title||'Proses selesai')}</div><div class="wali-flow-next-desc">${esc(next.description||'Tidak ada tindakan yang perlu dilakukan saat ini.')}</div>${next.key?`<div class="wali-flow-actions"><button class="btn btn-primary" onclick="waliFlowAction('${esc(next.key)}','${esc(r.registrationId)}')">${esc(next.button||'Buka')}</button></div>`:''}</div>
     </section>`;
   }).join('');
@@ -1272,7 +1278,7 @@ async function saveRegistrationUI(andSubmit){
     buttons.forEach(b=>b.disabled=false);
   }
 }
-async function submitRegistrationUI(id){showConfirm('Kirim pendaftaran?','Setelah dikirim, data masuk ke proses verifikasi dan tidak dapat diedit sampai ada revisi.',async()=>{loading(true,'Mengirim pendaftaran...');try{const r=await server('submitRegistration',state.token,id);if(r.success){showToast(r.message,'success');await renderRegistrationHub();}else showAlert('Belum dapat dikirim',r.message||'Silakan periksa kembali data pendaftaran.','warning')}catch(e){showAlert('Gagal mengirim', 'Terjadi gangguan saat mengirim pendaftaran. Silakan coba lagi.','error')}finally{loading(false)}} ,'Kirim Pendaftaran')}
+async function submitRegistrationUI(id){showConfirm('Kirim pendaftaran?','Setelah dikirim, Anda dapat melengkapi dokumen dan melakukan pembayaran secara bersamaan. Verifikasi PSB dimulai setelah pembayaran formulir dikonfirmasi oleh Keuangan.',async()=>{loading(true,'Mengirim pendaftaran...');try{const r=await server('submitRegistration',state.token,id);if(r.success){showToast(r.message,'success');await renderRegistrationHub();}else showAlert('Belum dapat dikirim',r.message||'Silakan periksa kembali data pendaftaran.','warning')}catch(e){showAlert('Gagal mengirim', 'Terjadi gangguan saat mengirim pendaftaran. Silakan coba lagi.','error')}finally{loading(false)}} ,'Kirim Pendaftaran')}
 async function viewRegistration(id){
   const key='registrationDetail';if(state.detailLoadingLocks[key])return;state.detailLoadingLocks[key]=true;
   let modal=$('registrationDetailModal');
