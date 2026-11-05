@@ -2052,7 +2052,7 @@ function getSelectionPageData(sessionToken, registrationId) {
   const results = sheetRows_(ss.getSheetByName(PSB_SHEETS.SELECTION_RESULTS));
 
   // Request-local indexes avoid repeated full-array scans and per-participant
-  // findRegistration_() calls. Arrays retain sheet order and first-match behavior.
+  // related-sheet lookups. Arrays retain sheet order and first-match behavior.
   const participantsByRegistration = {};
   participants.forEach(p => {
     const key = String(p.registrationId || '');
