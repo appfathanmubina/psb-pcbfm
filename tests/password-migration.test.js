@@ -31,7 +31,7 @@ assert.match(source, /migratePbkdf2PasswordToLegacySha256AfterLogin_\(user, pass
 assert.match(source, /pbkdf2Sha256Hex_\(String\(password\), salt, iterations\)/);
 assert.match(setup, /hashPassword_\(secret, salt\)/);
 assert.match(bridge, /const LOGIN_TIMEOUT_MS = 60000/);
-assert.match(bridge, /item\.functionName === 'login' \? LOGIN_TIMEOUT_MS : TIMEOUT_MS/);
+assert.match(bridge, /item\.functionName === 'login' \? LOGIN_TIMEOUT_MS :\s*item\.functionName === 'uploadDocument' \? UPLOAD_TIMEOUT_MS : TIMEOUT_MS/);
 
 // New account, password change, admin reset, and manual user creation use the shared helper.
 for (const functionName of ['registerWali', 'changePassword', 'adminResetUserPassword', 'createManualUser']) {

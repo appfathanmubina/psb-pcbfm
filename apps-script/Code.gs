@@ -3677,71 +3677,106 @@ function getDocumentPageData(sessionToken, registrationId) {
 function uploadDocument(sessionToken, payload) {
   const actor = requireRole_(sessionToken, PSB_DOCUMENT_ACCESS_ROLES);
   assertOperationalMutation_(actor);
-  payload = payload || {};
-  const registrationId = String(payload.registrationId || '').trim();
-  const documentTypeId = String(payload.documentTypeId || '').trim();
-  const fileName = sanitizeFileName_(payload.fileName || 'dokumen');
-  const mimeType = String(payload.mimeType || '').trim().toLowerCase();
-  const base64 = String(payload.base64 || '').trim();
-  const clientSize = Number(payload.fileSize || 0);
-
-  if (!registrationId) return fail_('Pendaftaran belum dipilih.');
-  if (!documentTypeId) return fail_('Jenis dokumen wajib dipilih.');
-  if (!base64) return fail_('File dokumen belum diterima server.');
-
-  const found = findRegistration_(registrationId);
-  if (!found) return fail_('Pendaftaran tidak ditemukan.');
-  if (!canAccessRegistration_(actor, found.registration)) return fail_('Anda tidak memiliki akses ke dokumen pendaftaran ini.');
-
-  const canEditByStatus = PSB_DOCUMENT_EDITABLE_REGISTRATION_STATUSES.indexOf(String(found.registration.status)) >= 0;
-  if (!canEditByStatus && !hasRoleDirect_(actor, ['SUPERADMIN','ADMIN_PSB','VERIFIKATOR'])) return fail_('Dokumen tidak dapat diubah pada status pendaftaran saat ini.');
-
-  const type = findMasterItemById_('MASTER_DOKUMEN', 'documentTypeId', documentTypeId);
-  if (!type || !type.isActive) return fail_('Jenis dokumen tidak aktif atau tidak ditemukan.');
-  if (!mimeType) return fail_('Tipe file tidak terbaca.');
-
-  const allowed = String(type.allowedMimeTypes || '').split(',').map(x => x.trim().toLowerCase()).filter(Boolean);
-  if (allowed.length && !allowed.some(rule => rule === mimeType || (rule.endsWith('/*') && mimeType.indexOf(rule.slice(0,-1)) === 0))) {
-    return fail_('Tipe file tidak diizinkan untuk dokumen "' + String(type.name || '') + '".');
-  }
-
-  // Batas upload dokumen PSB ditetapkan konsisten: maksimal 10 MB per file.
-  const maxSizeMb = 10;
-  const upload = decodeAndValidateUpload_(base64, mimeType, maxSizeMb * 1024 * 1024);
-  if (!upload.success) {
-    return fail_(upload.message === 'Ukuran file melebihi batas yang diizinkan.'
-      ? 'Ukuran file melebihi batas ' + maxSizeMb + ' MB.'
-      : upload.message);
-  }
-  const bytes = upload.bytes;
-  const actualSize = upload.size;
-  if (clientSize > 0 && Math.abs(clientSize - actualSize) > 1024) {
-    return fail_('Ukuran file tidak sesuai. Silakan pilih file kembali.');
-  }
 
   const lock = LockService.getScriptLock();
-  lock.waitLock(10000);
+  let lockAcquired = false;
   let uploadedFile = null;
   let documentRowWritten = false;
+  let savedDocument = null;
+  let stage = 'VALIDATE_REQUEST';
+
   try {
+    payload = payload || {};
+    const registrationId = String(payload.registrationId || '').trim();
+    const documentTypeId = String(payload.documentTypeId || '').trim();
+    const fileName = sanitizeFileName_(payload.fileName || 'dokumen');
+    const mimeType = String(payload.mimeType || '').trim().toLowerCase();
+    const base64 = String(payload.base64 || '').trim();
+    const clientSize = Number(payload.fileSize || 0);
+
+    if (!registrationId) return fail_('Pendaftaran belum dipilih.');
+    if (!documentTypeId) return fail_('Jenis dokumen wajib dipilih.');
+    if (!base64) return fail_('File dokumen belum diterima server.');
+
+    stage = 'READ_REGISTRATION';
+    const found = findRegistration_(registrationId);
+    if (!found) return fail_('Pendaftaran tidak ditemukan.');
+    if (!canAccessRegistration_(actor, found.registration)) return fail_('Anda tidak memiliki akses ke dokumen pendaftaran ini.');
+
+    const canEditByStatus = PSB_DOCUMENT_EDITABLE_REGISTRATION_STATUSES.indexOf(String(found.registration.status)) >= 0;
+    if (!canEditByStatus && !hasRoleDirect_(actor, ['SUPERADMIN','ADMIN_PSB','VERIFIKATOR'])) return fail_('Dokumen tidak dapat diubah pada status pendaftaran saat ini.');
+
+    stage = 'READ_DOCUMENT_TYPE';
+    const type = findMasterItemById_('MASTER_DOKUMEN', 'documentTypeId', documentTypeId);
+    if (!type || !type.isActive) return fail_('Jenis dokumen tidak aktif atau tidak ditemukan.');
+    if (!mimeType) return fail_('Tipe file tidak terbaca.');
+
+    const allowed = String(type.allowedMimeTypes || '').split(',').map(x => x.trim().toLowerCase()).filter(Boolean);
+    if (allowed.length && !allowed.some(rule => rule === mimeType || (rule.endsWith('/*') && mimeType.indexOf(rule.slice(0,-1)) === 0))) {
+      return fail_('Tipe file tidak diizinkan untuk dokumen "' + String(type.name || '') + '".');
+    }
+
+    // Batas upload dokumen PSB ditetapkan konsisten: maksimal 10 MB per file.
+    const maxSizeMb = 10;
+    stage = 'DECODE_FILE';
+    const upload = decodeAndValidateUpload_(base64, mimeType, maxSizeMb * 1024 * 1024);
+    if (!upload.success) {
+      return fail_(upload.message === 'Ukuran file melebihi batas yang diizinkan.'
+        ? 'Ukuran file melebihi batas ' + maxSizeMb + ' MB.'
+        : upload.message);
+    }
+    const bytes = upload.bytes;
+    const actualSize = upload.size;
+    if (clientSize > 0 && Math.abs(clientSize - actualSize) > 1024) {
+      return fail_('Ukuran file tidak sesuai. Silakan pilih file kembali.');
+    }
+
+    stage = 'CHECK_DATABASE';
     const ss = getDatabaseSpreadsheet_();
     const sheet = ss.getSheetByName(PSB_SHEETS.DOCUMENTS);
     if (!sheet) return fail_('Sheet DOCUMENTS belum tersedia. Jalankan setup database terlebih dahulu.');
 
+    // Folder lookup/creation is serialized, but the potentially slow Drive file
+    // upload runs without holding the global ScriptLock.
+    stage = 'LOCK_DRIVE_FOLDER';
+    lock.waitLock(20000);
+    lockAcquired = true;
+
+    stage = 'GET_DRIVE_FOLDER';
     const folder = getRegistrationDocumentFolder_(found.registration);
+    lock.releaseLock();
+    lockAcquired = false;
+
+    stage = 'CREATE_DRIVE_FILE';
     const blob = Utilities.newBlob(bytes, mimeType, fileName);
     const file = folder.createFile(blob);
     uploadedFile = file;
+
+    stage = 'VERIFY_DRIVE_FILE';
     const detectedMime = String(file.getMimeType() || '').toLowerCase();
-    if (detectedMime && detectedMime !== mimeType && !(mimeType === 'application/pdf' && detectedMime === 'application/pdf')) {
-      try { file.setTrashed(true); } catch (trashError) {}
+    if (detectedMime && detectedMime !== mimeType) {
+      try {
+        file.setTrashed(true);
+        uploadedFile = null;
+      } catch (trashError) {
+        console.error('PSB_DOCUMENT_UPLOAD_CLEANUP_FAILED: ' + String(trashError && trashError.message || trashError));
+      }
       return fail_('Tipe file aktual tidak sesuai dengan tipe file yang diizinkan.');
     }
+    const fileId = file.getId();
+    const storedFileName = file.getName();
+    const fileUrl = file.getUrl();
+
+    // Keep the database commit atomic while avoiding a long-held lock during
+    // Drive upload. A second lock protects the one-active-document-per-type rule.
+    stage = 'LOCK_DOCUMENT_RECORD';
+    lock.waitLock(20000);
+    lockAcquired = true;
+
+    stage = 'WRITE_DOCUMENT_RECORD';
     const now = new Date();
     const documentId = generateId_('DOC');
     const headers = sheet.getRange(1,1,1,sheet.getLastColumn()).getValues()[0].map(String);
-
-    // Satu dokumen aktif per jenis dokumen. Riwayat lama tetap disimpan untuk audit.
     const rows = sheet.getLastRow() < 2 ? [] : sheet.getRange(2,1,sheet.getLastRow()-1,sheet.getLastColumn()).getValues();
     const regIdx = headers.indexOf('registrationId');
     const typeIdx = headers.indexOf('documentTypeId');
@@ -3757,9 +3792,9 @@ function uploadDocument(sessionToken, payload) {
     record.documentId = documentId;
     record.registrationId = registrationId;
     record.documentTypeId = documentTypeId;
-    record.fileId = file.getId();
-    record.fileName = file.getName();
-    record.fileUrl = file.getUrl();
+    record.fileId = fileId;
+    record.fileName = storedFileName;
+    record.fileUrl = fileUrl;
     record.mimeType = mimeType;
     record.fileSize = actualSize;
     record.status = 'PENDING';
@@ -3768,26 +3803,62 @@ function uploadDocument(sessionToken, payload) {
     record.verifiedBy = '';
     record.revisionNote = '';
 
-    // Simpan dokumen baru terlebih dahulu agar dokumen lama tetap aktif
-    // apabila penulisan dokumen pengganti gagal.
+    // Calculate the row before append so a later display-mapping failure cannot
+    // make a committed upload look like a failed upload to the caller.
+    const savedRowNumber = sheet.getLastRow() + 1;
     const recordRow = safeSheetRow_(headers.map(h => record[h] !== undefined ? record[h] : ''));
     sheet.appendRow(recordRow);
     documentRowWritten = true;
-    const savedRowNumber = sheet.getLastRow();
+    savedDocument = rowObject_(headers, recordRow, savedRowNumber);
+
+    stage = 'REPLACE_OLD_DOCUMENTS';
     oldDocuments.forEach(old => {
       if (statusIdx >= 0) sheet.getRange(old.rowNumber, statusIdx + 1).setValue('REPLACED');
     });
-    writeAudit_(actor.userId, 'UPLOAD', 'DOCUMENT', documentId, oldDocuments.length ? JSON.stringify(oldDocuments.map(x => x.object)) : '', JSON.stringify({documentId:documentId,registrationId:registrationId,documentTypeId:documentTypeId,fileId:file.getId(),fileName:file.getName(),mimeType:mimeType,fileSize:actualSize,status:'PENDING'}), 'Dokumen diunggah ke Google Drive');
 
-    return { success:true, message:'Dokumen berhasil diunggah.', document:rowObject_(headers, recordRow, savedRowNumber) };
+    stage = 'WRITE_AUDIT';
+    writeAudit_(actor.userId, 'UPLOAD', 'DOCUMENT', documentId, oldDocuments.length ? JSON.stringify(oldDocuments.map(x => x.object)) : '', JSON.stringify({documentId:documentId,registrationId:registrationId,documentTypeId:documentTypeId,fileId:fileId,fileName:storedFileName,mimeType:mimeType,fileSize:actualSize,status:'PENDING'}), 'Dokumen diunggah ke Google Drive');
+
+    return { success:true, message:'Dokumen berhasil diunggah.', document:savedDocument };
   } catch (e) {
-    if (uploadedFile && !documentRowWritten) {
-      try { uploadedFile.setTrashed(true); } catch (cleanupError) {}
+    console.error('PSB_DOCUMENT_UPLOAD_FAILED stage=' + stage + ': ' + String(e && e.stack || e));
+
+    // Once the document row exists, do not tell the user to retry the upload:
+    // that could create a duplicate file. Report the committed upload as success.
+    if (documentRowWritten) {
+      return {
+        success:true,
+        message:stage === 'REPLACE_OLD_DOCUMENTS'
+          ? 'Dokumen berhasil diunggah. Status dokumen sebelumnya perlu diperiksa petugas.'
+          : 'Dokumen berhasil diunggah.',
+        document:savedDocument
+      };
     }
-    console.error(e);
-    return fail_('Gagal mengunggah dokumen ke Google Drive.');
+
+    if (uploadedFile) {
+      try { uploadedFile.setTrashed(true); }
+      catch (cleanupError) {
+        console.error('PSB_DOCUMENT_UPLOAD_CLEANUP_FAILED: ' + String(cleanupError && cleanupError.message || cleanupError));
+      }
+    }
+
+    if (stage === 'LOCK_DRIVE_FOLDER' || stage === 'LOCK_DOCUMENT_RECORD') {
+      return fail_('Server sedang memproses permintaan lain. Dokumen belum disimpan. Silakan coba kembali beberapa saat lagi.');
+    }
+    if (stage === 'GET_DRIVE_FOLDER' || stage === 'CREATE_DRIVE_FILE' || stage === 'VERIFY_DRIVE_FILE') {
+      return fail_('Google Drive belum dapat menyimpan file. Periksa koneksi dan coba kembali.');
+    }
+    if (stage === 'READ_REGISTRATION' || stage === 'READ_DOCUMENT_TYPE' || stage === 'CHECK_DATABASE') {
+      return fail_('Data pendaftaran belum dapat dibaca dari server. Silakan coba kembali beberapa saat lagi.');
+    }
+    if (stage === 'DECODE_FILE') {
+      return fail_('File belum dapat diproses. Silakan pilih file kembali.');
+    }
+    return fail_('Dokumen belum berhasil disimpan. Silakan coba kembali.');
   } finally {
-    lock.releaseLock();
+    if (lockAcquired) {
+      try { lock.releaseLock(); } catch (releaseError) {}
+    }
   }
 }
 
