@@ -1882,6 +1882,36 @@ const PSB_PAYMENT_VIEW_ROLES = ['WALI','SUPERADMIN','ADMIN_PSB','KEUANGAN'];
 const PSB_PAYMENT_MANAGE_ROLES = ['SUPERADMIN','ADMIN_PSB','KEUANGAN'];
 const PSB_PAYMENT_EDITABLE_STATUSES = ['SUBMITTED','UNDER_REVIEW','REVISION','VERIFIED'];
 
+function ensureFormBillForRegistration_(registrationId, paymentTypes, actorUserId) {
+  const id=String(registrationId||'').trim();
+  if(!id) return fail_('ID pendaftaran tidak valid.');
+  const found=findRegistration_(id);
+  if(!found) return fail_('Pendaftaran tidak ditemukan.');
+  const types=paymentTypes||getActiveMasterItems_('MASTER_JENIS_PEMBAYARAN');
+  const formType=(types||[]).find(x=>x&&x.isActive!==false&&/formulir/i.test(String(x.name||'')));
+  if(!formType) return fail_('Jenis pembayaran Formulir yang aktif belum tersedia di Master Data.');
+  const amount=Number(formType.amount||0);
+  if(!(amount>0)||!isFinite(amount)) return fail_('Nominal jenis pembayaran Formulir belum diatur atau tidak valid.');
+  const sheet=getDatabaseSpreadsheet_().getSheetByName(PSB_SHEETS.BILLS);
+  if(!sheet||sheet.getLastColumn()<1) return fail_('Sheet BILLS belum tersedia.');
+  const headers=sheet.getRange(1,1,1,sheet.getLastColumn()).getValues()[0].map(String);
+  const registrationIdx=headers.indexOf('registrationId'),typeIdx=headers.indexOf('paymentTypeId'),statusIdx=headers.indexOf('status');
+  if(registrationIdx<0||typeIdx<0||statusIdx<0) return fail_('Struktur kolom tagihan belum sesuai.');
+  const rows=sheet.getLastRow()<2?[]:sheet.getRange(2,1,sheet.getLastRow()-1,sheet.getLastColumn()).getValues();
+  const existing=rows.find(r=>String(r[registrationIdx])===id&&String(r[typeIdx])===String(formType.paymentTypeId)&&String(r[statusIdx]).toUpperCase()!=='CANCELLED');
+  if(existing){
+    const record={};headers.forEach((h,i)=>record[h]=existing[i]);
+    return {success:true,created:false,bill:record};
+  }
+  const now=new Date(),billId=generateId_('BIL'),record={};
+  headers.forEach(h=>record[h]='');
+  Object.assign(record,{billId,registrationId:id,paymentTypeId:String(formType.paymentTypeId),amount,dueDate:'',status:'UNPAID',createdAt:now,updatedAt:now});
+  sheet.appendRow(headers.map(h=>record[h]));
+  try{writeAudit_(actorUserId||'SYSTEM','CREATE','PAYMENT',billId,'',JSON.stringify(record),'Tagihan formulir dibuat otomatis saat pendaftaran dikirim');}catch(auditError){console.error('Auto form bill audit failed: '+auditError);}
+  try{notifyRegistrationOwner_(id,'Tagihan Formulir Telah Tersedia','Tagihan biaya formulir sebesar Rp '+amount.toLocaleString('id-ID')+' telah dibuat otomatis. Silakan buka menu Pembayaran untuk mengunggah bukti transfer. Dokumen persyaratan tetap dapat dilengkapi secara bersamaan.','INFO');}catch(notificationError){console.error('Auto form bill notification failed: '+notificationError);}
+  return {success:true,created:true,bill:record};
+}
+
 function getPaymentPageData(sessionToken, registrationId) {
   const actor = requireRole_(sessionToken, PSB_PAYMENT_VIEW_ROLES);
   const isWali = hasRoleDirect_(actor, ['WALI']);
@@ -1933,10 +1963,21 @@ function getPaymentPageData(sessionToken, registrationId) {
     return fail_('Anda tidak memiliki akses ke pembayaran ini.');
   }
 
+  // Pemulihan otomatis untuk pendaftaran lama yang sudah dikirim tetapi
+  // belum memiliki tagihan formulir. Helper bersifat idempoten dan terkunci.
+  let autoBillResult=null;
+  if(String(selectedRegistration.status||'').toUpperCase()!=='DRAFT'){
+    autoBillResult=withScriptLock_(10000,function(){
+      return ensureFormBillForRegistration_(selected,paymentTypes,actor.userId);
+    });
+  }
+  const paymentData=buildPaymentData_(selected,paymentTypes);
+  if(autoBillResult&&!autoBillResult.success) paymentData.autoBillMessage=autoBillResult.message;
+
   return {
     success:true,
     registrations,
-    paymentData:buildPaymentData_(selected,paymentTypes),
+    paymentData,
     paymentTypes
   };
 }
@@ -1964,7 +2005,7 @@ function buildPaymentData_(registrationId, paymentTypes) {
 }
 
 function createBill(sessionToken,payload){
-  const actor=requireRole_(sessionToken,PSB_PAYMENT_MANAGE_ROLES);
+  const actor=requireRole_(sessionToken,['SUPERADMIN']);
   assertOperationalMutation_(actor); payload=payload||{};
   const registrationId=String(payload.registrationId||'').trim(), paymentTypeId=String(payload.paymentTypeId||'').trim();
   const amount=Number(payload.amount||0), dueDate=String(payload.dueDate||'').trim();
@@ -3951,11 +3992,13 @@ function submitRegistration(sessionToken, registrationId) {
   if (statusIdx >= 0) sheet.getRange(row,statusIdx+1).setValue('SUBMITTED');
   if (submittedIdx >= 0) sheet.getRange(row,submittedIdx+1).setValue(now);
   if (updatedIdx >= 0) sheet.getRange(row,updatedIdx+1).setValue(now);
-  writeAudit_(actor.userId, 'SUBMIT', 'REGISTRATION', found.registration.registrationId, JSON.stringify({status:found.registration.status}), JSON.stringify({status:'SUBMITTED'}), 'Pendaftaran dikirim untuk verifikasi');
+  const autoBill=ensureFormBillForRegistration_(found.registration.registrationId,null,actor.userId);
+  if(!autoBill.success) return fail_('Pendaftaran terkirim, tetapi tagihan formulir belum dapat dibuat otomatis: '+autoBill.message+' Hubungi Superadmin untuk memeriksa Master Data → Jenis Pembayaran.');
+  writeAudit_(actor.userId, 'SUBMIT', 'REGISTRATION', found.registration.registrationId, JSON.stringify({status:found.registration.status}), JSON.stringify({status:'SUBMITTED'}), 'Pendaftaran dikirim dan tagihan formulir dibuat otomatis');
   const candidateName=String(found.candidate?.fullName||'calon santri');
-  notifyUsersByRoles_(['SUPERADMIN','ADMIN_PSB','KEUANGAN'],'Pendaftaran Baru — Siapkan Tagihan Formulir',candidateName+' telah mengirim pendaftaran '+String(found.registration.registrationNumber||found.registration.registrationId)+'. Silakan terbitkan tagihan formulir agar Wali dapat melakukan pembayaran.','INFO');
-  notifyRegistrationOwner_(found.registration.registrationId,'Pendaftaran Berhasil Dikirim','Formulir berhasil dikirim. Silakan lengkapi dokumen persyaratan dan lakukan pembayaran formulir; kedua langkah ini dapat dikerjakan secara bersamaan. Verifikasi PSB dimulai setelah pembayaran dikonfirmasi oleh bagian Keuangan. Jika tagihan belum muncul, bagian Keuangan sedang menyiapkannya.','SUCCESS');
-  return { success:true, message:'Pendaftaran berhasil dikirim. Silakan lanjutkan unggah dokumen dan pembayaran formulir secara bersamaan.', status:'SUBMITTED' };
+  notifyUsersByRoles_(['SUPERADMIN','ADMIN_PSB','KEUANGAN'],'Pendaftaran Baru — Verifikasi Pembayaran Formulir',candidateName+' telah mengirim pendaftaran '+String(found.registration.registrationNumber||found.registration.registrationId)+'. Tagihan formulir telah dibuat otomatis. Silakan periksa bukti pembayaran dan verifikasi setelah Wali mengunggahnya.','INFO');
+  notifyRegistrationOwner_(found.registration.registrationId,'Pendaftaran Berhasil Dikirim','Formulir berhasil dikirim dan tagihan pembayaran formulir telah tersedia. Silakan unggah bukti pembayaran melalui menu Pembayaran. Dokumen persyaratan tetap dapat dilengkapi secara bersamaan. Verifikasi PSB dimulai setelah pembayaran dikonfirmasi oleh bagian Keuangan.','SUCCESS');
+  return { success:true, message:'Pendaftaran berhasil dikirim. Tagihan formulir telah dibuat otomatis; silakan unggah bukti pembayaran dan lengkapi dokumen secara bersamaan.', status:'SUBMITTED', bill:autoBill.bill };
   } finally { lock.releaseLock(); }
 }
 
