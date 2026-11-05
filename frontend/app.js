@@ -1645,12 +1645,12 @@ async function submitPaymentUpload(billId){
   if(!file){msg.innerHTML=showMessage('Pilih file bukti pembayaran terlebih dahulu.','warning');return}
   loading(true,'Mengoptimalkan bukti pembayaran...');
   try{
-    const prepared=await prepareUploadFile(file,'image/jpeg,image/png,image/webp,application/pdf');
-    if(prepared.fileSize>5*1024*1024){msg.innerHTML=showMessage('Ukuran file setelah diproses masih melebihi batas 5 MB. Silakan pilih foto dengan resolusi lebih rendah atau file yang lebih kecil.','warning');return}
-    if(!uploadMimeAllowed(prepared.mimeType,'image/jpeg,image/png,image/webp,application/pdf')){msg.innerHTML=showMessage('Format bukti pembayaran tidak didukung. Gunakan JPG, PNG, WEBP, atau PDF.','warning');return}
+    const allowed='image/jpeg,image/png,image/webp,application/pdf',prepared=await prepareUploadFile(file,allowed);
+    if(prepared.fileSize>5*1024*1024){msg.innerHTML=showMessage('Ukuran file setelah diproses masih melebihi batas 5 MB. Silakan pilih foto beresolusi lebih rendah atau file yang lebih kecil.','warning');return}
+    if(!uploadMimeAllowed(prepared.mimeType,allowed)){msg.innerHTML=showMessage('Format bukti pembayaran tidak didukung. Gunakan JPG, PNG, WEBP, atau PDF.','warning');return}
     if(prepared.compressed)processPopupUpdate(22,'Foto berhasil dioptimalkan',formatFileSize(file.size)+' menjadi '+formatFileSize(prepared.fileSize),false);
     const reader=new FileReader();
-    reader.onprogress=event=>{if(event.lengthComputable)processPopupUpdate(25+Math.round(event.loaded/event.total*25),'Membaca bukti pembayaran...','Menyiapkan '+prepared.fileName,false);};
+    reader.onprogress=e=>{if(e.lengthComputable)processPopupUpdate(25+Math.round(e.loaded/e.total*25),'Membaca bukti pembayaran...','Menyiapkan '+prepared.fileName,false)};
     reader.onload=async()=>{
       const dataUrl=String(reader.result||''),base64=dataUrl.split(',')[1]||'';
       processPopupUpdate(55,'Mengirim bukti pembayaran...','File siap dikirim untuk diproses server.',false);
@@ -1658,13 +1658,13 @@ async function submitPaymentUpload(billId){
         const r=await server('submitPayment',state.token,{billId,fileName:prepared.fileName,mimeType:prepared.mimeType,fileSize:prepared.fileSize,base64});
         if(!r.success){msg.innerHTML=showMessage(r.message||'Bukti pembayaran belum dapat disimpan.');return}
         closePaymentUpload();showToast(r.message||'Bukti pembayaran berhasil dikirim.','success');delete state.cache.payments[state.paymentRegistrationId];
-        try{await renderPayments(state.paymentRegistrationId,true);}catch(refreshError){/* Data sudah berhasil disimpan; refresh hanya pelengkap. */}
+        try{await renderPayments(state.paymentRegistrationId,true)}catch(refreshError){/* Data sudah berhasil disimpan; refresh hanya pelengkap. */}
       }catch(e){if($('paymentUploadMsg'))$('paymentUploadMsg').innerHTML=showMessage('Koneksi terputus setelah pengiriman. Silakan cek status pembayaran.','warning')}
       finally{loading(false)}
     };
     reader.onerror=()=>{if(msg)msg.innerHTML=showMessage('File tidak dapat dibaca. Silakan pilih file lain.','error');loading(false)};
     reader.readAsDataURL(prepared.blob);
-  }catch(error){msg.innerHTML=showMessage('Foto tidak dapat diproses. Silakan pilih file JPG, PNG, atau WEBP lain.','error');loading(false)}
+  }catch(e){msg.innerHTML=showMessage('Foto tidak dapat diproses. Silakan pilih file JPG, PNG, atau WEBP lain.','error');loading(false)}
 }
 async function verifyPaymentUI(paymentId,status){const note=status==='REJECTED'?(prompt('Tuliskan alasan penolakan pembayaran:')||'').trim():'';if(status==='REJECTED'&&!note){showAlert('Alasan diperlukan','Tuliskan alasan agar Wali mengetahui perbaikan yang harus dilakukan.','warning');return}showConfirm(status==='VERIFIED'?'Verifikasi pembayaran?':'Tolak pembayaran?',status==='VERIFIED'?'Pembayaran akan dikonfirmasi dan pendaftaran masuk antrean verifikasi PSB.':'Pembayaran akan ditolak. Alasan penolakan akan dikirimkan kepada Wali.',async()=>{loading(true,status==='VERIFIED'?'Memverifikasi pembayaran...':'Menolak pembayaran...');try{const r=await server('verifyPayment',state.token,{paymentId,status,note});if(r.success){showToast(r.message,'success');await renderPayments(state.paymentRegistrationId,true)}else showAlert('Belum dapat diproses',r.message||'Operasi gagal.','warning')}catch(e){showAlert('Gagal menyimpan','Terjadi gangguan saat menyimpan.','error')}finally{loading(false)}} ,status==='VERIFIED'?'Verifikasi':'Tolak')}
 function openCreateBill(){const types=state.paymentTypes||[];document.body.insertAdjacentHTML('beforeend',`<div class="modal-backdrop" id="createBillModal"><div class="modal"><h3>Buat Tagihan</h3><div id="createBillMsg"></div><div class="field"><label>Jenis Pembayaran</label><select id="billType">${types.map(x=>`<option value="${esc(x.paymentTypeId)}">${esc(x.name)} · Rp ${Number(x.amount||0).toLocaleString('id-ID')}</option>`).join('')}</select></div><div class="field"><label>Nominal</label><input id="billAmount" type="number" min="1" value="${Number(types[0]?.amount||0)}"></div><div class="field"><label>Jatuh Tempo</label><input id="billDueDate" type="date"></div><div class="modal-actions"><button class="btn btn-primary" onclick="createBillUI()">Simpan</button><button class="btn btn-secondary" onclick="$('createBillModal')?.remove()">Batal</button></div></div></div>`)}
