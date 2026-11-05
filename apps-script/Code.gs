@@ -3969,6 +3969,14 @@ function sanitizeFolderName_(name) {
   return raw.substring(0, 120) || 'Pendaftaran';
 }
 
+function ensureCandidateNisnColumn_(sheet) {
+  if (!sheet) throw new Error('Sheet CANDIDATES tidak ditemukan.');
+  const lastColumn = Math.max(1, sheet.getLastColumn());
+  const headers = sheet.getRange(1,1,1,lastColumn).getValues()[0].map(String);
+  if (headers.indexOf('nisn') >= 0) return;
+  sheet.getRange(1,lastColumn+1).setValue('nisn');
+}
+
 function saveRegistration(sessionToken, payload) {
   const actor = requireRole_(sessionToken, PSB_REGISTRATION_EDIT_ROLES);
   assertOperationalMutation_(actor);
@@ -3983,6 +3991,7 @@ function saveRegistration(sessionToken, payload) {
     const addressSheet = ss.getSheetByName(PSB_SHEETS.ADDRESSES);
     const schoolSheet = ss.getSheetByName(PSB_SHEETS.SCHOOLS);
     if ([regSheet,candidateSheet,guardianSheet,addressSheet,schoolSheet].some(x => !x)) return fail_('Struktur database pendaftaran belum tersedia. Jalankan setup database terlebih dahulu.');
+    ensureCandidateNisnColumn_(candidateSheet);
 
     const registrationId = String(payload.registrationId || '').trim();
     // A new form may carry a stable client-side REG-* id so a retry updates
@@ -4019,7 +4028,7 @@ function saveRegistration(sessionToken, payload) {
     const registrationNumber = existing ? String(existing.registration.registrationNumber) : nextRegistrationNumber_(regSheet, payload.tahunAjaranId);
 
     const candidate = {
-      candidateId, fullName: clean_(payload.candidate?.fullName), nik: digits_(payload.candidate?.nik), birthPlace: clean_(payload.candidate?.birthPlace),
+      candidateId, fullName: clean_(payload.candidate?.fullName), nik: digits_(payload.candidate?.nik), nisn: digits_(payload.candidate?.nisn), birthPlace: clean_(payload.candidate?.birthPlace),
       birthDate: dateOrBlank_(payload.candidate?.birthDate), gender: clean_(payload.candidate?.gender), birthOrder: numberOrBlank_(payload.candidate?.birthOrder),
       familyStatus: clean_(payload.candidate?.familyStatus), photoFileId: existing?.candidate?.photoFileId || '', createdAt: existing?.candidate?.createdAt || now, updatedAt: now
     };
@@ -4034,7 +4043,7 @@ function saveRegistration(sessionToken, payload) {
       createdAt: existing?.address?.createdAt || now, updatedAt: now
     };
     const school = {
-      schoolId, candidateId, schoolName: clean_(payload.school?.schoolName), schoolType: clean_(payload.school?.schoolType), npsn: clean_(payload.school?.npsn),
+      schoolId, candidateId, schoolName: clean_(payload.school?.schoolName), schoolType: clean_(existing?.school?.schoolType || ''), npsn: clean_(payload.school?.npsn),
       address: clean_(payload.school?.address), graduationYear: numberOrBlank_(payload.school?.graduationYear), createdAt: existing?.school?.createdAt || now, updatedAt: now
     };
     const registration = {
@@ -4131,6 +4140,7 @@ function validateRegistrationPayload_(payload, strict) {
   if (c.gender && String(c.gender) !== 'L' && String(c.gender) !== 'P') return fail_('Jenis kelamin tidak valid.');
   if (String(g.phone || '').trim() && digits_(g.phone).length < 8) return fail_('No. HP wali tidak valid.');
   if (c.nik && digits_(c.nik).length !== 16) return fail_('NIK calon santri harus 16 digit jika diisi.');
+  if (c.nisn && digits_(c.nisn).length !== 10) return fail_('NISN calon santri harus 10 digit jika diisi.');
   if (g.nik && digits_(g.nik).length !== 16) return fail_('NIK wali harus 16 digit jika diisi.');
   if (String(s.graduationYear == null ? '' : s.graduationYear).trim()) {
     const year = Number(s.graduationYear);
