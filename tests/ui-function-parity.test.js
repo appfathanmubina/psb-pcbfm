@@ -9,7 +9,7 @@ const onlyInPwa = ['decodeUploadImage', 'goPublicVideo', 'prepareUploadFile', 'r
 const intentionallyDifferentBodies = [
   'appLogoMarkup', 'applyAppIcon', 'boot', 'configAssetSources', 'initializeAfterLogin', 'renderLogin',
   'hydrateSplashLogo', 'movePublicVideo',
-  'playPublicVideo', 'renderApp', 'renderPublicHome', 'submitDocumentUpload', 'submitLogin', 'submitPaymentUpload'
+  'playPublicVideo', 'renderApp', 'renderPublicHome', 'renderApplicants', 'renderRegistrationList', 'renderVerificationList', 'renderWaliVerificationStatus', 'statusLabel', 'submitDocumentUpload', 'submitLogin', 'submitPaymentUpload'
 ];
 
 function extractFunctionBodies(source) {
