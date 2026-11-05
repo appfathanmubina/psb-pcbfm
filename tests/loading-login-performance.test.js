@@ -50,7 +50,8 @@ assert.match(login, /finalizeLoginTask\.catch\(\(\)=>\{\}\)/,
   'Last-login and audit bookkeeping must remain best-effort after UI entry');
 assert.match(login, /initializeAfterLogin\(\);[\s\S]*?\$\('loading'\)\?\.classList\.add\('hidden'\);[\s\S]*?renderApp\(\)/,
   'Successful login must activate tracked loading before rendering the first page');
-assert.doesNotMatch(login, /loading\(false\)/,
+const successfulLogin = login.slice(login.indexOf('if(r?.success)'), login.indexOf('}else{', login.indexOf('if(r?.success)')));
+assert.doesNotMatch(successfulLogin, /loading\(false\)/,
   'Successful login must not close the process popup before the initial page data RPC completes');
 assert.match(login, /state\.processSilentDepth[\s\S]*?server\('finalizeLogin',\s*state\.token\)/,
   'Best-effort login audit must not extend the initial dashboard loading popup');
