@@ -2071,7 +2071,7 @@ function submitPayment(sessionToken,payload){
     const clientSize=Number(payload.fileSize||0);
 
     if(!billId||!base64) return fail_('Tagihan dan bukti pembayaran wajib diisi.');
-    if(!/^image\\/(jpeg|png|webp)$/i.test(mimeType) && mimeType!=='application/pdf') return fail_('Bukti pembayaran harus berupa JPG, PNG, WEBP, atau PDF.');
+    if(!/^image\/(jpeg|png|webp)$/i.test(mimeType) && mimeType!=='application/pdf') return fail_('Bukti pembayaran harus berupa JPG, PNG, WEBP, atau PDF.');
     if(clientSize>5*1024*1024) return fail_('Ukuran bukti pembayaran maksimal 5 MB.');
 
     stage='READ_BILL';
