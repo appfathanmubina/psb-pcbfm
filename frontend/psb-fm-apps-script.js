@@ -93,6 +93,26 @@ function restorePageSnapshot(page){if(!SNAPSHOT_PAGES.has(page))return false;con
 function pageDataCached(page,ttl=180000){const x=state.cache.pages?.[page];if(!x||Date.now()-x.ts>ttl){if(x)delete state.cache.pages[page];return null;}return x.data;}
 function setPageDataCache(page,data){state.cache.pages[page]={data:data,ts:Date.now()};return data;}
 function invalidatePageDataCache(){if(state.cache.pages)state.cache.pages={};}
+function invalidateCurrentPageData(){
+  invalidatePageSnapshots();
+  invalidatePageDataCache();
+  state.cache.registration=null;
+  state.cache.documents={};
+  state.cache.payments={};
+  state.registrationList=[];
+  state.documentData=null;
+  state.paymentData=null;
+  state.paymentTypes=[];
+  state.selectionData=null;
+  state.auditData=null;
+  state.masterDefinitions={};
+  state.masterItems=[];
+  state.masterCache={};
+  state.academicYearLifecycle=null;
+  state.registrationOptions=null;
+  state.registrationDetail=null;
+  state.prefetchPromises={};
+}
 function warmPageData(page,loader){if(!state.prefetchPromises)state.prefetchPromises={};if(state.prefetchPromises[page])return state.prefetchPromises[page];const cached=pageDataCached(page);if(cached)return Promise.resolve(cached);const p=Promise.resolve().then(()=>{state.processSilentDepth=Number(state.processSilentDepth||0)+1;return Promise.resolve().then(loader).finally(()=>{state.processSilentDepth=Math.max(0,Number(state.processSilentDepth||1)-1);});}).then(data=>{if(data?.success!==false)setPageDataCache(page,data);return data;}).catch(()=>null).finally(()=>{delete state.prefetchPromises[page]});state.prefetchPromises[page]=p;return p;}
 async function warmNavigationData(){
   if(!state.token||state.page!=='home'||document.visibilityState==='hidden')return;
@@ -494,11 +514,11 @@ function renderApp(){
 async function reloadCurrentData(){
   if(!state.token || state.reloadingData)return;
   state.reloadingData=true;
+  const currentPage=state.page||'home';
   const btn=$('reloadDataBtn');
   if(btn){btn.disabled=true;btn.classList.add('is-reloading');btn.title='Memuat ulang data...';}
   try{
-    invalidatePageSnapshots();
-    invalidatePageDataCache();
+    invalidateCurrentPageData();
     state.initialData=null;
     state.preloadReady=false;
     const [pub,session]=await Promise.all([
@@ -516,37 +536,56 @@ async function reloadCurrentData(){
     state.config=pub?.config||state.config||{};
     state.user=session.user||state.user;
     applyAppIcon();
-    const current=state.page||'home';
-    renderApp();
-    state.page=current;
-    goPage(current);
+    const yearLabel=document.querySelector('.brand-copy p');
+    if(yearLabel)yearLabel.textContent=String(state.config.ACTIVE_YEAR||'2027/2028');
+    document.querySelectorAll('.user-name,.side-user-name').forEach(el=>{el.textContent=state.user?.name||el.textContent;});
+    // Jangan membangun ulang seluruh shell/header. Paksa hanya menu aktif
+    // melewati snapshot dan cache agar renderer mengambil data baru dari server.
+    if(state.page===currentPage)goPage(currentPage,{forceReload:true});
     showToast('Data berhasil dimuat ulang.','success');
   }catch(e){
     showToast('Gagal memuat ulang data. Silakan coba lagi.','error');
   }finally{
     state.reloadingData=false;
-    if(btn){btn.disabled=false;btn.classList.remove('is-reloading');btn.title='Reload data';}
+    const activeBtn=$('reloadDataBtn');
+    if(activeBtn){activeBtn.disabled=false;activeBtn.classList.remove('is-reloading');activeBtn.title='Reload data';}
   }
 }
-
 function toggleSidebar(){
   if(!document.body.classList.contains('desktop-device'))return;
   document.body.classList.toggle('sidebar-collapsed');
 }
-function goPage(page){
-  if(state.page===page){
+function goPage(page,options={}){
+  const forceReload=options===true||options?.forceReload===true;
+  if(!forceReload&&state.page===page){
     savePageSnapshot(page);
     if(restorePageSnapshot(page)){window.scrollTo({top:0,behavior:'auto'});return;}
   }
-  if(state.page)savePageSnapshot(state.page);
+  if(state.page&&!forceReload)savePageSnapshot(state.page);
   state.page=page;
   try{sessionStorage.setItem('psb_current_page',page);}catch(e){}
   document.querySelectorAll('.nav-btn,.side-btn').forEach(x=>x.classList.remove('active'));
   const waliMorePages=['verificationStatus','selection','announcement','reregistration'];
   const mobileNavPage=hasAnyRole(['WALI'])&&waliMorePages.includes(page)?'more':page;
   $('nav-'+mobileNavPage)?.classList.add('active');$('side-'+page)?.classList.add('active');
-  if(restorePageSnapshot(page)){window.scrollTo({top:0,behavior:'auto'});return;}
-  if(page==='home')renderHome();else if(page==='verificationStatus')renderWaliVerificationStatus();else if(page==='profile')renderProfile();else if(page==='master')renderMasterData();else if(page==='registration')renderRegistrationHub();else if(page==='applicants')renderApplicants();else if(page==='documents')renderDocuments();else if(page==='notifications')renderNotifications();else if(page==='announcement')renderAnnouncements();else if(page==='verification')renderVerification();else if(page==='payments')renderPayments();else if(page==='selection')renderSelection();else if(page==='reregistration')renderReregistration();else if(page==='reports')renderReports();else if(page==='audit')renderAudit();else if(page==='userManagement')renderUserManagementPage();else renderMore();
+  if(!forceReload&&restorePageSnapshot(page)){window.scrollTo({top:0,behavior:'auto'});return;}
+  if(page==='home')renderHome();
+  else if(page==='verificationStatus')renderWaliVerificationStatus();
+  else if(page==='profile')renderProfile();
+  else if(page==='master')renderMasterData(forceReload);
+  else if(page==='registration')renderRegistrationHub(forceReload);
+  else if(page==='applicants')renderApplicants(forceReload);
+  else if(page==='documents')renderDocuments(state.documentRegistrationId,forceReload);
+  else if(page==='notifications')renderNotifications(forceReload);
+  else if(page==='announcement')renderAnnouncements(forceReload);
+  else if(page==='verification')renderVerification(forceReload);
+  else if(page==='payments')renderPayments(state.paymentRegistrationId,forceReload);
+  else if(page==='selection')renderSelection(forceReload);
+  else if(page==='reregistration')renderReregistration(forceReload);
+  else if(page==='reports')renderReports(forceReload);
+  else if(page==='audit')renderAudit(forceReload);
+  else if(page==='userManagement')renderUserManagementPage();
+  else renderMore();
   window.scrollTo({top:0,behavior:'auto'});
 }
 function dashboardLocalKey(){return 'psb_dashboard_'+String(state.user?.userId||'guest')+'_'+String(state.config?.ACTIVE_YEAR||'2027/2028');}
@@ -712,17 +751,19 @@ async function createProductionBackupUI(){
   try{const r=await server('createProductionBackup',state.token);if(!r.success){showAlert('Backup gagal',r.message||'Backup gagal dibuat.','error');return;}showAlert('Backup berhasil',`${r.fileName||'Backup spreadsheet'} berhasil dibuat di Drive produksi.`,'success');}catch(e){showAlert('Backup gagal','Terjadi gangguan saat membuat backup.','error')}finally{loading(false)}
 }
 
-async function renderReports(){
+async function renderReports(force=false){
   if(!hasAnyRole(['SUPERADMIN','ADMIN_PSB','VERIFIKATOR','SELEKSI','KEUANGAN'])){renderMore();return;}
   $('content').innerHTML=`<section class="hero"><h2>Laporan</h2><p>Ringkasan pendaftar, pembayaran, seleksi, dan Daftar Ulang. Data dapat difilter dan diunduh sebagai CSV.</p></section><section class="dashboard-section"><div class="report-filter-grid"><div class="field"><label>Tahun Ajaran</label><select id="reportYear" class="select-field professional-select"><option value="">Menyiapkan pilihan...</option></select></div><div class="field"><label>Gelombang</label><select id="reportGelombang" class="select-field professional-select"><option value="">Semua gelombang</option></select></div><div class="field"><label>Jenjang</label><select id="reportJenjang" class="select-field professional-select"><option value="">Semua jenjang</option></select></div><div class="field"><label>Jenis Kelamin</label><select id="reportGender" class="select-field professional-select"><option value="">Semua jenis kelamin</option></select></div><div class="field"><label>Status</label><select id="reportStatus" class="select-field professional-select"><option value="">Semua status</option></select></div><div class="field"><label>Dari tanggal</label><input id="reportFromDate" type="date" class="select-field"></div><div class="field"><label>Sampai tanggal</label><input id="reportToDate" type="date" class="select-field"></div></div><div class="report-actions"><button class="btn btn-primary" onclick="loadReports()">Terapkan Filter</button><button class="btn btn-secondary" onclick="exportReportCsv()">Export CSV</button><button class="btn btn-secondary" onclick="loadAdvancedReports()">Analisis Lanjutan</button></div></section><div id="reportPanel"><div class="empty-state">Memuat reporting...</div></div><div id="advancedReportPanel" style="margin-top:14px"><div class="empty-state">Analisis Lanjutan dimuat saat tombol dibuka.</div></div>`;
-  await loadReports();
+  await loadReports(force);
 }
-async function loadReports(){
+async function loadReports(force=false){
   const panel=$('reportPanel');if(panel)panel.innerHTML='<div class="empty-state">Memuat data reporting...</div>';
   try{
     const filters={tahunAjaranId:$('reportYear')?.value||'',gelombangId:$('reportGelombang')?.value||'',jenjangId:$('reportJenjang')?.value||'',gender:$('reportGender')?.value||'',status:$('reportStatus')?.value||'',fromDate:$('reportFromDate')?.value||'',toDate:$('reportToDate')?.value||''};
-    const isDefault=!filters.tahunAjaranId&&!filters.gelombangId&&!filters.jenjangId&&!filters.gender&&!filters.status&&!filters.fromDate&&!filters.toDate;const r=(isDefault&&pageDataCached('reports'))||await warmPageData(isDefault?'reports':'reports-filter',()=>server('getReportingPageData',state.token,filters));if(!r?.success){if(panel)panel.innerHTML=showMessage(r.message);return;}state.reportData=r;populateReportFilters(r);renderReportPanel(r);
-  }catch(e){if(panel)panel.innerHTML=showMessage('Gagal memuat reporting.');}
+    const isDefault=!filters.tahunAjaranId&&!filters.gelombangId&&!filters.jenjangId&&!filters.gender&&!filters.status&&!filters.fromDate&&!filters.toDate;
+    const r=force?await server('getReportingPageData',state.token,filters):((isDefault&&pageDataCached('reports'))||await warmPageData(isDefault?'reports':'reports-filter',()=>server('getReportingPageData',state.token,filters)));
+    if(!r?.success){if(panel)panel.innerHTML=showMessage(r?.message||'Gagal memuat reporting.');return;}state.reportData=r;populateReportFilters(r);renderReportPanel(r);
+  }catch(e){if(panel)panel.innerHTML=showMessage('Gagal memuat data reporting.');}
 }
 function populateReportFilters(data){
   const o=data.options||{};const year=$('reportYear'),gel=$('reportGelombang'),jen=$('reportJenjang'),gender=$('reportGender'),st=$('reportStatus');if(!year)return;
@@ -801,14 +842,14 @@ function exportReportCsv(){
   const blob=new Blob(['\ufeff'+lines.join('\n')],{type:'text/csv;charset=utf-8;'});const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download='PSB_Fathan_Mubina_Laporan.csv';document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),500);
 }
 
-async function renderAudit(){
+async function renderAudit(force=false){
   if(!hasAnyRole(['SUPERADMIN','ADMIN_PSB'])){renderMore();return;}
-  $('content').innerHTML=`<section class="hero"><h2>Audit</h2><p>Jejak aktivitas penting aplikasi. Data ditampilkan dari AUDIT_LOG dan dapat difilter.</p></section><section class="dashboard-section"><div class="report-filter-grid"><div class="field"><label>Pencarian</label><input id="auditSearch" class="select-field" placeholder="User, aksi, modul, record, deskripsi..."></div><div class="field"><label>Aksi</label><select id="auditAction" class="select-field"><option value="">Semua aksi</option></select></div><div class="field"><label>Modul</label><select id="auditModule" class="select-field"><option value="">Semua modul</option></select></div><div class="field"><label>Dari tanggal</label><input id="auditFrom" type="date" class="select-field"></div><div class="field"><label>Sampai tanggal</label><input id="auditTo" type="date" class="select-field"></div></div><div class="report-actions"><button class="btn btn-primary" onclick="loadAudit(1)">Terapkan Filter</button><button class="btn btn-secondary" onclick="exportAuditCsv()">Export CSV</button>${hasAnyRole(['SUPERADMIN'])?`<button class="btn btn-secondary" onclick="runSecurityMaintenanceUI()">Maintenance Security</button>`:''}</div></section><div id="auditPanel"><div class="empty-state">Memuat audit...</div></div>`;
-  await loadAudit(1);
+  $('content').innerHTML=`<section class="hero"><h2>Audit</h2><p>Jejak aktivitas penting aplikasi. Data ditampilkan dari AUDIT_LOG dan dapat difilter.</p></section><section class="dashboard-section"><div class="report-filter-grid"><div class="field"><label>Pencarian</label><input id="auditSearch" class="select-field" placeholder="User, aksi, modul, record, deskripsi..."></div><div class="field"><label>Aksi</label><select id="auditAction" class="select-field"><option value="">Semua aksi</option></select></div><div class="field"><label>Modul</label><select id="auditModule" class="select-field"><option value="">Semua modul</option></select></div><div class="field"><label>Dari tanggal</label><input id="auditFrom" type="date" class="select-field"></div><div class="field"><label>Sampai tanggal</label><input id="auditTo" type="date" class="select-field"></div></div><div class="report-actions"><button class="btn btn-primary" onclick="loadAudit(1)">Terapkan Filter</button><button class="btn btn-secondary" onclick="exportAuditCsv()">Export CSV</button>${hasAnyRole(['SUPERADMIN'])?'<button class="btn btn-secondary" onclick="runSecurityMaintenanceUI()">Maintenance Security</button>':''}</div></section><div id="auditPanel"><div class="empty-state">Memuat audit...</div></div>`;
+  await loadAudit(1,force);
 }
-async function loadAudit(page=1){
+async function loadAudit(page=1,force=false){
   const panel=$('auditPanel');if(panel)panel.innerHTML='<div class="empty-state">Memuat audit...</div>';
-  try{const filters={page:page,search:$('auditSearch')?.value||'',action:$('auditAction')?.value||'',module:$('auditModule')?.value||'',from:$('auditFrom')?.value||'',to:$('auditTo')?.value||'',pageSize:50};const isDefault=page===1&&!filters.search&&!filters.action&&!filters.module&&!filters.from&&!filters.to;const r=(isDefault&&pageDataCached('audit'))||await warmPageData(isDefault?'audit':'audit-filter',()=>server('getAuditLogPageData',state.token,filters));if(!r?.success){if(panel)panel.innerHTML=showMessage(r.message);return;}state.auditData=r;const action=$('auditAction'),module=$('auditModule');const keepA=filters.action,keepM=filters.module;if(action)action.innerHTML='<option value="">Semua aksi</option>'+(r.options?.actions||[]).map(x=>`<option value="${esc(x)}">${esc(x)}</option>`).join('');if(module)module.innerHTML='<option value="">Semua modul</option>'+(r.options?.modules||[]).map(x=>`<option value="${esc(x)}">${esc(x)}</option>`).join('');if(action)action.value=keepA;if(module)module.value=keepM;renderAuditPanel(r);}catch(e){if(panel)panel.innerHTML=showMessage('Gagal memuat audit.');}
+  try{const filters={page:page,search:$('auditSearch')?.value||'',action:$('auditAction')?.value||'',module:$('auditModule')?.value||'',from:$('auditFrom')?.value||'',to:$('auditTo')?.value||'',pageSize:50};const isDefault=page===1&&!filters.search&&!filters.action&&!filters.module&&!filters.from&&!filters.to;const r=force?await server('getAuditLogPageData',state.token,filters):((isDefault&&pageDataCached('audit'))||await warmPageData(isDefault?'audit':'audit-filter',()=>server('getAuditLogPageData',state.token,filters)));if(!r?.success){if(panel)panel.innerHTML=showMessage(r?.message||'Gagal memuat audit.');return;}state.auditData=r;const action=$('auditAction'),module=$('auditModule');const keepA=filters.action,keepM=filters.module;if(action)action.innerHTML='<option value="">Semua aksi</option>'+(r.options?.actions||[]).map(x=>`<option value="${esc(x)}">${esc(x)}</option>`).join('');if(module)module.innerHTML='<option value="">Semua modul</option>'+(r.options?.modules||[]).map(x=>`<option value="${esc(x)}">${esc(x)}</option>`).join('');if(action)action.value=keepA;if(module)module.value=keepM;renderAuditPanel(r);}catch(e){if(panel)panel.innerHTML=showMessage('Gagal memuat audit.');}
 }
 function renderAuditPanel(data){
   const el=$('auditPanel');if(!el)return;const rows=data.rows||[];const table=rows.length?`<div class="report-table-wrap"><table class="report-table"><thead><tr><th>Waktu</th><th>User</th><th>Aksi</th><th>Modul</th><th>Record</th><th>Deskripsi</th></tr></thead><tbody>${rows.map(x=>`<tr><td>${esc(x.timestamp||'-')}</td><td>${esc(x.userId||'-')}</td><td><span class="pill">${esc(x.action||'-')}</span></td><td>${esc(x.module||'-')}</td><td>${esc(x.recordId||'-')}</td><td>${esc(x.description||'-')}${(x.oldValue||x.newValue)?`<details style="margin-top:5px"><summary class="muted" style="font-size:10px;cursor:pointer">Detail perubahan</summary><div class="muted" style="font-size:10px;margin-top:5px;word-break:break-word"><b>Lama:</b> ${esc(x.oldValue||'-')}<br><b>Baru:</b> ${esc(x.newValue||'-')}</div></details>`:''}</td></tr>`).join('')}</tbody></table></div>`:'<div class="empty-state">Tidak ada aktivitas sesuai filter.</div>';const page=Number(data.page||1),size=Number(data.pageSize||50),total=Number(data.total||0),from=total?((page-1)*size+1):0,to=Math.min(page*size,total);el.innerHTML=`<div class="report-summary-grid"><article class="report-summary"><b>${total.toLocaleString('id-ID')}</b><span>Aktivitas terfilter</span></article><article class="report-summary"><b>${from.toLocaleString('id-ID')}–${to.toLocaleString('id-ID')}</b><span>Rentang halaman</span></article></div>${table}<div class="report-actions" style="margin-top:12px"><button class="btn btn-secondary" ${page<=1?'disabled':''} onclick="loadAudit(${page-1})">Sebelumnya</button><button class="btn btn-secondary" ${!data.hasMore?'disabled':''} onclick="loadAudit(${page+1})">Berikutnya</button></div>`;
@@ -817,16 +858,16 @@ function exportAuditCsv(){const rows=state.auditData?.rows||[];if(!rows.length){
 async function runSecurityMaintenanceUI(){showConfirm('Jalankan maintenance security?','Session yang sudah kedaluwarsa atau idle akan ditandai berakhir. Data utama tidak dihapus.',async()=>{loading(true,'Menjalankan maintenance security...');try{const r=await server('runSecurityMaintenance',state.token);if(r.success){showToast(`Maintenance selesai: ${Number(r.result?.processed||0)} session diproses.`,'success');await loadAudit(1);}else showAlert('Maintenance gagal',r.message||'Operasi gagal.','warning')}catch(e){showAlert('Maintenance gagal','Terjadi gangguan saat menjalankan maintenance security.','error')}finally{loading(false)}} ,'Jalankan');}
 
 function renderFeaturePlaceholder(title,desc){$('content').innerHTML=`<section class="hero"><h2>${esc(title)}</h2><p>${esc(desc)}</p></section><div class="empty-state">Modul ini belum aktif pada stage saat ini.</div>`;}
-async function renderSelection(){
+async function renderSelection(force=false){
   if(!hasAnyRole(['WALI','SUPERADMIN','ADMIN_PSB','SELEKSI','VERIFIKATOR'])){renderMore();return}
   state.selectionTab=state.selectionTab||'overview';
   $('content').innerHTML=`<section class="hero"><h2>Tes</h2><p>${hasAnyRole(['WALI'])?'Lihat jadwal tes, status peserta, dan hasil seleksi calon santri.':'Kelola jadwal tes, peserta, nilai, dan hasil seleksi.'}</p></section><div id="selectionPanel"><div class="selection-empty">Memuat data tes dan seleksi...</div></div>`;
   try{
     const id=state.selectionRegistrationId||'';
-    const cached=state.selectionData || (!id?pageDataCached('selection'):null);
-    if(cached && !id){renderSelectionPanel(cached);return}
-    const r=await warmPageData('selection',()=>server('getSelectionPageData',state.token,id));
-    if(!r.success){$('selectionPanel').innerHTML=showMessage(r.message);return}
+    const cached=!force&&(state.selectionData||(!id?pageDataCached('selection'):null));
+    if(cached&&!id){renderSelectionPanel(cached);return}
+    const r=force?await server('getSelectionPageData',state.token,id):await warmPageData('selection',()=>server('getSelectionPageData',state.token,id));
+    if(!r?.success){$('selectionPanel').innerHTML=showMessage(r?.message||'Gagal memuat data tes dan seleksi.');return}
     state.selectionData=r;
     renderSelectionPanel(r);
   }catch(e){$('selectionPanel').innerHTML=showMessage('Gagal memuat data tes dan seleksi.');}
@@ -946,10 +987,10 @@ function renderSelectionDetail(data,targetEl){const el=targetEl||$('selectionTab
 async function saveSelectionScoreUI(participantId){const component=String($('selScoreComponent')?.value||'').trim(),score=Number($('selScoreValue')?.value),note=String($('selScoreNote')?.value||'').trim();if(!component||!Number.isFinite(score)){showAlert('Nilai belum lengkap','Komponen dan nilai wajib diisi.','warning');return}loading(true,'Menyimpan nilai...');try{const r=await server('saveSelectionScore',state.token,{participantId,component,score,note});if(r.success){showToast(r.message,'success');await openSelectionDetailUI(state.selectionRegistrationId)}else showAlert('Nilai belum tersimpan',r.message,'warning')}catch(e){showAlert('Gagal menyimpan','Terjadi gangguan saat menyimpan nilai.','error')}finally{loading(false)}}
 async function saveSelectionResultUI(registrationId){const status=$('selResultStatus')?.value||'',note=String($('selResultNote')?.value||'').trim();loading(true,'Menyimpan hasil seleksi...');try{const r=await server('saveSelectionResult',state.token,{registrationId,status,note});if(r.success){showToast(r.message,'success');await openSelectionDetailUI(registrationId)}else showAlert('Hasil belum tersimpan',r.message,'warning')}catch(e){showAlert('Gagal menyimpan','Terjadi gangguan saat menyimpan hasil seleksi.','error')}finally{loading(false)}}
 
-async function renderAnnouncements(){
+async function renderAnnouncements(force=false){
   if(!hasAnyRole(['WALI','SUPERADMIN','ADMIN_PSB','SELEKSI','VERIFIKATOR'])){renderMore();return}
   $('content').innerHTML=`<section class="hero"><h2>Pengumuman</h2><p>${hasAnyRole(['WALI'])?'Lihat hasil seleksi yang sudah diumumkan untuk pendaftaran Anda.':'Kelola dan publikasikan hasil seleksi kepada wali santri.'}</p></section><div id="announcementPanel"><div class="announcement-empty">Memuat pengumuman...</div></div>`;
-  try{const r=pageDataCached('announcement')||await warmPageData('announcement',()=>server('getAnnouncementPageData',state.token));if(!r?.success){$('announcementPanel').innerHTML=showMessage(r.message);return}renderAnnouncementPanel(r)}catch(e){$('announcementPanel').innerHTML=showMessage('Gagal memuat pengumuman.')}
+  try{const r=force?await server('getAnnouncementPageData',state.token):(pageDataCached('announcement')||await warmPageData('announcement',()=>server('getAnnouncementPageData',state.token)));if(!r?.success){$('announcementPanel').innerHTML=showMessage(r?.message||'Gagal memuat pengumuman.');return}renderAnnouncementPanel(r)}catch(e){$('announcementPanel').innerHTML=showMessage('Gagal memuat pengumuman.')}
 }
 function announcementStatusLabel(s){return ({PASSED:'Lulus',NOT_PASSED:'Tidak lulus',WAITLIST:'Cadangan',PENDING:'Menunggu hasil'})[String(s||'').toUpperCase()]||String(s||'-')}
 function renderAnnouncementPanel(data){
@@ -1003,9 +1044,9 @@ async function sendCommunicationUI(){
   },'Kirim');
 }
 
-async function renderNotifications(){
+async function renderNotifications(force=false){
   $('content').innerHTML=`<section class="hero"><h2>Notifikasi</h2><p>Informasi penting terkait proses PSB akan muncul di sini.</p></section><div id="notificationPanel"><div class="announcement-empty">Memuat notifikasi...</div></div>`;
-  try{const r=pageDataCached('notifications')||await warmPageData('notifications',()=>server('getNotifications',state.token));if(!r?.success){$('notificationPanel').innerHTML=showMessage(r.message);return}renderNotificationPanel(r)}catch(e){$('notificationPanel').innerHTML=showMessage('Gagal memuat notifikasi.')}
+  try{const r=force?await server('getNotifications',state.token):(pageDataCached('notifications')||await warmPageData('notifications',()=>server('getNotifications',state.token)));if(!r?.success){$('notificationPanel').innerHTML=showMessage(r?.message||'Gagal memuat notifikasi.');return}renderNotificationPanel(r)}catch(e){$('notificationPanel').innerHTML=showMessage('Gagal memuat notifikasi.')}
 }
 function notificationTypeLabel(type){return ({SUCCESS:'Berhasil',WARNING:'Perlu perhatian',INFO:'Informasi',ERROR:'Kesalahan'})[String(type||'INFO').toUpperCase()]||'Informasi'}
 function formatNotificationDate(value){const d=new Date(value);if(Number.isNaN(d.getTime()))return String(value||'-');return d.toLocaleString('id-ID',{day:'2-digit',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'});}
@@ -1013,10 +1054,10 @@ function renderNotificationPanel(data){const el=$('notificationPanel');if(!el)re
 async function markNotificationReadUI(id){try{const r=await server('markNotificationRead',state.token,id);if(r.success){await renderNotifications();updateNotificationBadge();}}catch(e){}}
 async function markAllNotificationsReadUI(){loading(true,'Memperbarui notifikasi...');try{const r=await server('markAllNotificationsRead',state.token);if(r.success){showToast('Semua notifikasi ditandai sudah dibaca.','success');await renderNotifications();updateNotificationBadge()}}catch(e){showToast('Gagal memperbarui notifikasi.','error')}finally{loading(false)}}
 
-async function renderVerification(){
+async function renderVerification(force=false){
   if(!hasAnyRole(['SUPERADMIN','ADMIN_PSB','VERIFIKATOR'])){renderMore();return}
   $('content').innerHTML=`<section class="hero"><h2>Verifikasi</h2><p>Periksa data pendaftaran dan dokumen sebelum menetapkan hasil verifikasi.</p></section><div id="verificationPanel"><div class="empty-state">Memuat antrean verifikasi...</div></div>`;
-  try{const r=pageDataCached('verification')||await warmPageData('verification',()=>server('getVerificationQueue',state.token,{}));if(!r?.success){$('verificationPanel').innerHTML=showMessage(r.message);return}renderVerificationQueue(r.registrations||[]);}catch(e){$('verificationPanel').innerHTML=showMessage('Gagal memuat antrean verifikasi.')}
+  try{const r=force?await server('getVerificationQueue',state.token,{}):(pageDataCached('verification')||await warmPageData('verification',()=>server('getVerificationQueue',state.token,{})));if(!r?.success){$('verificationPanel').innerHTML=showMessage(r?.message||'Gagal memuat antrean verifikasi.');return}renderVerificationQueue(r.registrations||[]);}catch(e){$('verificationPanel').innerHTML=showMessage('Gagal memuat antrean verifikasi.')}
 }
 function renderVerificationQueue(items){
   const el=$('verificationPanel'); if(!el)return;
@@ -1054,10 +1095,10 @@ async function finalizeVerificationUI(decision,id){
 
 
 
-async function renderRegistrationHub(){
+async function renderRegistrationHub(force=false){
   if(!hasAnyRole(['WALI','SUPERADMIN','ADMIN_PSB'])){renderMore();return;}
   $('content').innerHTML=`<section class="hero"><h2>Pendaftaran</h2><p>Satu akun wali dapat mengelola beberapa pendaftaran anak.</p></section><div id="registrationPanel"><div class="empty-state">Memuat pendaftaran...</div></div>`;
-  if(state.cache.registration){state.registrationList=state.cache.registration;renderRegistrationList();return;}
+  if(!force&&state.cache.registration){state.registrationList=state.cache.registration;renderRegistrationList();return;}
   try{const r=await server('getMyRegistrations',state.token);if(!r.success){$('registrationPanel').innerHTML=showMessage(r.message);return}state.registrationList=r.registrations||[];state.cache.registration=state.registrationList;renderRegistrationList();}catch(e){$('registrationPanel').innerHTML=showMessage('Gagal memuat pendaftaran.');}
 }
 function renderRegistrationList(){
@@ -1181,19 +1222,17 @@ async function viewRegistration(id){
 }
 function closeRegistrationDetailUI(){state.detailLoadingLocks.registrationDetail=false;$('registrationDetailModal')?.remove()}
 function renderRegistrationDetail(d,target){const r=d.registration,c=d.candidate||{},g=d.guardian||{},a=d.address||{},s=d.school||{};const root=target||$('content');root.innerHTML=`<section class="hero"><h2>${esc(c.fullName||'Pendaftaran')}</h2><p>${esc(r.registrationNumber||'-')} · ${esc(statusLabel(r.status))}</p></section><section class="form-section"><h3>Data Pendaftaran</h3><div class="registration-meta"><span>Tahun Ajaran: ${esc(state.registrationOptions?.activeYearName||r.tahunAjaranId)}</span><span>Jenjang: ${esc(r.jenjangId)}</span><span>Gelombang: ${esc(r.gelombangId)}</span></div></section><section class="form-section"><h3>Calon Santri</h3><div class="registration-meta"><span>Nama: ${esc(c.fullName||'-')}</span><span>Tempat/Tanggal lahir: ${esc(c.birthPlace||'-')} / ${esc(String(c.birthDate||'-').substring(0,10))}</span><span>Jenis kelamin: ${esc(c.gender==='L'?'Laki-laki':c.gender==='P'?'Perempuan':'-')}</span></div></section><section class="form-section"><h3>Wali</h3><div class="registration-meta"><span>${esc(g.relationship||'-')} · ${esc(g.fullName||'-')}</span><span>${esc(g.phone||'-')} · ${esc(g.email||'-')}</span></div></section><section class="form-section"><h3>Alamat</h3><div class="registration-meta"><span>${esc(a.addressLine||'-')}</span><span>${esc(a.village||'-')}, ${esc(a.district||'-')}, ${esc(a.regency||'-')}, ${esc(a.province||'-')}</span></div></section><section class="form-section"><h3>Sekolah Asal</h3><div class="registration-meta"><span>${esc(s.schoolName||'-')} · ${esc(s.schoolType||'-')}</span><span>Tahun lulus: ${esc(s.graduationYear||'-')}</span></div></section><div style="display:grid;gap:9px"><button class="btn btn-primary" onclick="openDocumentsForRegistration('${esc(r.registrationId)}')">${ico('file')} &nbsp; Kelola Dokumen</button>${target?'':'<button class="btn btn-secondary" onclick="goPage(\'registration\')">Kembali</button>'}</div>`;}
-async function renderApplicants(){
+async function renderApplicants(force=false){
   if(!hasAnyRole(['SUPERADMIN','ADMIN_PSB','VERIFIKATOR'])){renderMore();return;}
   $('content').innerHTML=`<section class="hero"><h2>Pendaftar</h2><p>Daftar pendaftaran yang masuk ke sistem.</p></section><div id="applicantPanel"><div class="empty-state">Memuat pendaftar...</div></div>`;
-  try{const r=pageDataCached('applicants')||await warmPageData('applicants',()=>server('getRegistrationList',state.token,{}));if(!r?.success){$('applicantPanel').innerHTML=showMessage(r.message);return}const items=r.registrations||[];$('applicantPanel').innerHTML=items.length?`<div class="registration-list">${items.map(x=>`<article class="registration-item"><div class="registration-item-top"><div><div class="registration-name">${esc(x.candidateName||'-')}</div><div class="registration-number">${esc(x.registrationNumber||'-')}</div></div><span class="pill">${esc(statusLabel(x.status))}</span></div><div class="registration-meta"><span>${esc(x.jenjangName||'-')} · ${esc(x.gelombangName||'-')}</span></div><div class="registration-actions"><button class="btn btn-secondary" onclick="viewRegistration('${esc(x.registrationId)}')">Lihat</button><button class="btn btn-primary" onclick="openDocumentsForRegistration('${esc(x.registrationId)}')">Dokumen</button></div></article>`).join('')}</div>`:'<div class="empty-state">Belum ada pendaftaran masuk.</div>';}catch(e){$('applicantPanel').innerHTML=showMessage('Gagal memuat pendaftar.');}
+  try{const r=force?await server('getRegistrationList',state.token,{}):(pageDataCached('applicants')||await warmPageData('applicants',()=>server('getRegistrationList',state.token,{})));if(!r?.success){$('applicantPanel').innerHTML=showMessage(r?.message||'Gagal memuat pendaftar.');return}const items=r.registrations||[];$('applicantPanel').innerHTML=items.length?`<div class="registration-list">${items.map(x=>`<article class="registration-item"><div class="registration-item-top"><div><div class="registration-name">${esc(x.candidateName||'-')}</div><div class="registration-number">${esc(x.registrationNumber||'-')}</div></div><span class="pill">${esc(statusLabel(x.status))}</span></div><div class="registration-meta"><span>${esc(x.jenjangName||'-')} · ${esc(x.gelombangName||'-')}</span></div><div class="registration-actions"><button class="btn btn-secondary" onclick="viewRegistration('${esc(x.registrationId)}')">Lihat</button><button class="btn btn-primary" onclick="openDocumentsForRegistration('${esc(x.registrationId)}')">Dokumen</button></div></article>`).join('')}</div>':'<div class="empty-state">Belum ada pendaftaran masuk.</div>';}catch(e){$('applicantPanel').innerHTML=showMessage('Gagal memuat pendaftar.');}
 }
-
-
-async function renderDocuments(registrationId){
+async function renderDocuments(registrationId,force=false){
   if(!hasAnyRole(['WALI','SUPERADMIN','ADMIN_PSB','VERIFIKATOR'])){renderMore();return;}
   state.documentRegistrationId=registrationId||state.documentRegistrationId||'';
   $('content').innerHTML=`<section class="hero"><h2>Dokumen Pendaftaran</h2><p>Kelola berkas persyaratan dan simpan file secara terstruktur di Google Drive.</p></section><div id="documentPanel"><div class="empty-state">Memuat daftar pendaftaran...</div></div>`;
   try{
-    let r=state.cache.documents[state.documentRegistrationId]||null;
+    let r=!force?state.cache.documents[state.documentRegistrationId]||null:null;
     if(!r){r=await server('getDocumentPageData',state.token,state.documentRegistrationId);if(r?.success)state.cache.documents[state.documentRegistrationId]=r;}
     if(!r?.success){$('documentPanel').innerHTML=showMessage(r?.message||'Gagal memuat dokumen.');return;}
     const list=r.registrations||state.registrationList||[];state.registrationList=list;state.cache.registration=list;
@@ -1304,12 +1343,12 @@ async function openUserManagementModal(){
  goPage('userManagement');
 }
 function closeUserManagementModal(){$('userManagementModal')?.remove();state.detailLoadingLocks.userManagement=false}
-async function renderReregistration(){
+async function renderReregistration(force=false){
   if(!hasAnyRole(['WALI','SUPERADMIN','ADMIN_PSB','VERIFIKATOR','KEUANGAN'])){renderMore();return;}
   $('content').innerHTML=`<section class="hero"><h2>Daftar Ulang</h2><p>Lengkapi tahap akhir setelah dinyatakan lulus seleksi.</p></section><div id="reregPanel"><div class="empty-state">Memuat data daftar ulang...</div></div>`;
   try{
-    const r=pageDataCached('reregistration')||await warmPageData('reregistration',()=>server('getReregistrationPageData',state.token));
-    if(!r.success){$('reregPanel').innerHTML=showMessage(r.message);return;}
+    const r=force?await server('getReregistrationPageData',state.token):(pageDataCached('reregistration')||await warmPageData('reregistration',()=>server('getReregistrationPageData',state.token)));
+    if(!r?.success){$('reregPanel').innerHTML=showMessage(r?.message||'Gagal memuat data daftar ulang.');return;}
     renderReregistrationPanel(r);
   }catch(e){$('reregPanel').innerHTML=showMessage('Gagal memuat data daftar ulang.');}
 }
@@ -1397,21 +1436,21 @@ async function verifyPaymentUI(paymentId,status){const note=status==='REJECTED'?
 function openCreateBill(){const types=state.paymentTypes||[];document.body.insertAdjacentHTML('beforeend',`<div class="modal-backdrop" id="createBillModal"><div class="modal"><h3>Buat Tagihan</h3><div id="createBillMsg"></div><div class="field"><label>Jenis Pembayaran</label><select id="billType">${types.map(x=>`<option value="${esc(x.paymentTypeId)}">${esc(x.name)} · Rp ${Number(x.amount||0).toLocaleString('id-ID')}</option>`).join('')}</select></div><div class="field"><label>Nominal</label><input id="billAmount" type="number" min="1" value="${Number(types[0]?.amount||0)}"></div><div class="field"><label>Jatuh Tempo</label><input id="billDueDate" type="date"></div><div class="modal-actions"><button class="btn btn-primary" onclick="createBillUI()">Simpan</button><button class="btn btn-secondary" onclick="$('createBillModal')?.remove()">Batal</button></div></div></div>`)}
 async function createBillUI(){const msg=$('createBillMsg');loading(true,'Membuat tagihan...');try{const r=await server('createBill',state.token,{registrationId:state.paymentRegistrationId,paymentTypeId:$('billType').value,amount:Number($('billAmount').value||0),dueDate:$('billDueDate').value});if(r.success){$('createBillModal')?.remove();showToast(r.message,'success');await renderPayments(state.paymentRegistrationId)}else msg.innerHTML=showMessage(r.message)}catch(e){msg.innerHTML=showMessage('Gagal membuat tagihan.')}finally{loading(false)}}
 
-async function renderMasterData(){
+async function renderMasterData(force=false){
   if(!hasAnyRole(['SUPERADMIN','ADMIN_PSB'])){renderMore();return;}
   $('content').innerHTML=`<section class="hero"><h2>Data</h2><p>Data dasar yang menjadi referensi seluruh workflow PSB.</p></section><div id="masterPanel"><div class="empty-state">Memuat master data...</div></div>`;
   try{
-    const warmed=pageDataCached('master');
+    const warmed=!force?pageDataCached('master'):null;
     if(warmed?.success){
       state.masterDefinitions=warmed.definitions||state.masterDefinitions;
       state.masterItems=warmed.items||[];
       state.masterCache[state.masterKey]=state.masterItems;
       if(warmed.lifecycle)state.academicYearLifecycle=warmed.lifecycle;
     }
-    if(!Object.keys(state.masterDefinitions).length){const d=await server('getMasterDefinitions',state.token);if(!d.success){$('masterPanel').innerHTML=showMessage(d.message);return}state.masterDefinitions=d.definitions||{};}
-    if(!state.academicYearLifecycle){const lifecycle=await server('getAcademicYearLifecycleData',state.token);if(lifecycle?.success)state.academicYearLifecycle=lifecycle;}
+    if(force||!Object.keys(state.masterDefinitions).length){const d=await server('getMasterDefinitions',state.token);if(!d.success){$('masterPanel').innerHTML=showMessage(d.message);return}state.masterDefinitions=d.definitions||{};}
+    if(force||!state.academicYearLifecycle){const lifecycle=await server('getAcademicYearLifecycleData',state.token);if(lifecycle?.success)state.academicYearLifecycle=lifecycle;}
     renderMasterPanel();
-    await loadMasterData(state.masterKey,true,false);
+    await loadMasterData(state.masterKey,true,force);
   }catch(e){$('masterPanel').innerHTML=showMessage('Gagal memuat master data.');}
 }
 function renderMasterPanel(){
