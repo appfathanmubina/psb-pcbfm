@@ -27,8 +27,8 @@ assert.doesNotMatch(source, /Math\.min\(configuredMaxSizeMb/);
 const frontend = fs.readFileSync('frontend/app.js', 'utf8');
 assert.match(frontend, /const max=getDocumentMaxSizeMb\(type\);if\(file\.size>max\*1024\*1024\)/);
 assert.match(frontend, /function getDocumentMaxSizeMb\(type\)/);
-assert.match(frontend, /Maks\\. \\$\{esc\(getDocumentMaxSizeMb\(x\)\)\} MB/);
-assert.match(frontend, /Maksimum \\$\{esc\(maxSizeMb\)\} MB/);
+assert.ok(frontend.includes('Maks. ${esc(getDocumentMaxSizeMb(x))} MB'));
+assert.ok(frontend.includes('Maksimum ${esc(maxSizeMb)} MB'));
 assert.equal((source.match(/Utilities\.base64Decode\(/g) || []).length, 1,
   'raw Base64 decoding should be centralized in the bounded validation helper');
 
