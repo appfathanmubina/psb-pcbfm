@@ -42,7 +42,11 @@ assert.match(html, /api-bridge\.js\?v=32\.14\.0/,
   'PWA must load the updated upload transport');
 assert.match(serviceWorker, /api-bridge\.js\?v=32\.14\.0/,
   'service worker must precache the updated upload transport');
-assert.match(serviceWorker, /psb-pwa-shell-v32-30-0/,
-  'PWA shell cache must be versioned for the upload transport change');
+const appVersion = html.match(/app\.js\\?v=(\\d+\\.\\d+\\.\\d+)/)?.[1];
+assert.ok(appVersion, 'PWA HTML must declare an app shell version');
+assert.match(serviceWorker, new RegExp('app\\\\.js\\\\?v=' + appVersion.replace(/\\./g, '\\\\.')),
+  'service worker must precache the same app shell version as the HTML');
+assert.match(serviceWorker, new RegExp('psb-pwa-shell-v' + appVersion.replace(/\\./g, '-')),
+  'PWA shell cache namespace must match the current app shell version');
 
 console.log('Document upload resilience safeguards passed.');
