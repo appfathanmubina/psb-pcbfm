@@ -53,6 +53,8 @@ assert.match(apiBridge, /host === 'script\.google\.com'/, 'PWA must accept the A
 assert.match(apiBridge, /host\.endsWith\('-script\.googleusercontent\.com'\)/,
   'PWA must trust the actual Apps Script HTML Service host suffix');
 assert.match(apiBridge, /isTrustedBridgeOrigin\(event\.origin\)/, 'PWA must validate the response origin');
+assert.match(apiBridge, /event\.source === tokenHandshake\.iframe\.contentWindow/, 'Bridge token handshake must come from its own iframe window');
+assert.match(apiBridge, /event\.source !== item\.iframe\.contentWindow/, 'RPC responses must come from their own request iframe window');
 assert.match(apiBridge, /Pesan bridge diabaikan: origin tidak dikenal/, 'Rejected origins must be diagnosable');
 assert.match(apiBridge, /Timeout menunggu respons Apps Script/, 'RPC timeout must log safe transport diagnostics');
 assert.match(indexHtml, /api-bridge\.js\?v=32\.15\.0/, 'PWA HTML must cache-bust the updated bridge client');
