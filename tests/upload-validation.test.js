@@ -25,7 +25,18 @@ assert.match(source, /const maxSizeMb = Number\.isFinite\(configuredMaxSizeMb\)/
 assert.match(source, /decodeAndValidateUpload_\(base64, mimeType, maxBytes\)/);
 assert.doesNotMatch(source, /Math\.min\(configuredMaxSizeMb/);
 const frontend = fs.readFileSync('frontend/app.js', 'utf8');
-assert.match(frontend, /const max=getDocumentMaxSizeMb\(type\);if\(file\.size>max\*1024\*1024\)/);
+// Frontend image optimization must preserve server-side limits while validating
+// the actual payload that will be sent after optional client-side compression.
+assert.match(frontend, /const UPLOAD_IMAGE_MAX_SIDE=2000/);
+assert.match(frontend, /const UPLOAD_IMAGE_COMPRESSION_THRESHOLD=1\.5\*1024\*1024/);
+assert.match(frontend, /async function prepareUploadFile\(file,allowed\)/);
+assert.match(frontend, /if\(!\/^image\\\/(jpeg\|png\|webp)\$\/i\.test\(String\(file\.type\|\|''\)\)\)return original/);
+assert.match(frontend, /canvas\.toBlob\(resolve,outType,0\.82\)/);
+assert.match(frontend, /const prepared=await prepareUploadFile\(file,type\.allowedMimeTypes\),max=getDocumentMaxSizeMb\(type\)/);
+assert.match(frontend, /if\(prepared\.fileSize>max\*1024\*1024\)/);
+assert.match(frontend, /const allowed='image\/jpeg,image\/png,image\/webp,application\/pdf',prepared=await prepareUploadFile\(file,allowed\)/);
+assert.match(frontend, /if\(prepared\.fileSize>5\*1024\*1024\)/);
+assert.match(frontend, /fileName:prepared\.fileName,mimeType:prepared\.mimeType,fileSize:prepared\.fileSize,base64/);
 assert.match(frontend, /function getDocumentMaxSizeMb\(type\)/);
 assert.ok(frontend.includes('Maks. ${esc(getDocumentMaxSizeMb(x))} MB'));
 assert.ok(frontend.includes('Maksimum ${esc(maxSizeMb)} MB'));
