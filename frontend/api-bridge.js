@@ -59,6 +59,7 @@
     }
 
     if (data.type === 'ready' && tokenHandshake &&
+        event.source === tokenHandshake.iframe.contentWindow &&
         String(data.challenge || '') === tokenHandshake.challenge) {
       const token = String(data.token || '');
       if (!/^[a-f0-9]{64}$/i.test(token)) {
@@ -86,6 +87,13 @@
     const item = pending.get(challenge);
     if (!item) {
       console.warn('[PSB Bridge] Respons diterima tetapi challenge tidak lagi terdaftar.', {
+        challenge: challenge.slice(0, 8),
+        origin: event.origin
+      });
+      return;
+    }
+    if (event.source !== item.iframe.contentWindow) {
+      console.warn('[PSB Bridge] Respons diabaikan: sumber frame tidak cocok.', {
         challenge: challenge.slice(0, 8),
         origin: event.origin
       });
