@@ -588,3 +588,20 @@ input:focus,select:focus,textarea:focus{background:#fff!important;box-shadow:0 0
 .wali-more-copy b{display:block;font-size:13px;}
 .wali-more-copy span{display:block;margin-top:4px;font-size:11px;line-height:1.45;color:var(--muted);}
 .wali-verification-card+.wali-verification-card{margin-top:10px;}
+
+/* Desktop modal layout: center dialogs in the viewport and size them to their content. */
+@media (min-width: 760px) {
+  body.desktop-device .modal-backdrop:not(.alert-modal) {
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+  }
+  body.desktop-device .modal-backdrop:not(.alert-modal) > .modal {
+    width: min(680px, calc(100vw - 64px));
+    max-width: calc(100vw - 64px);
+    max-height: min(88vh, 900px);
+    margin: auto;
+    border-radius: 22px;
+    padding: 24px;
+  }
+}
