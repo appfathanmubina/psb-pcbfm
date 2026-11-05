@@ -37,6 +37,8 @@ assert.match(finalizeVerification, /isFormPaymentVerified_\(registrationId\)/);
 const submitRegistration = section(backend, 'function submitRegistration(sessionToken, registrationId)', 'function validateRegistrationPayload_(payload, strict)');
 assert.match(submitRegistration, /KEUANGAN/);
 assert.match(submitRegistration, /secara bersamaan/);
+assert.match(submitRegistration, /ensureFormBillForRegistration_/);
+assert.match(submitRegistration, /Tagihan formulir telah dibuat otomatis/);
 assert.match(submitRegistration, /Verifikasi PSB dimulai setelah pembayaran dikonfirmasi/i);
 
 const verifyPayment = section(backend, 'function verifyPayment(sessionToken,payload)', 'function getSelectionPageData(sessionToken, registrationId)');
@@ -57,20 +59,31 @@ assert.match(waliHome, /registrationStatus === 'COMPLETED'/);
 
 const waliDashboard = section(frontend, 'function renderWaliHomeFlow(data)', 'function dashboardTaskItems(items, emptyText)');
 assert.match(waliDashboard, /Pembayaran Formulir/);
-assert.match(waliDashboard, /Dokumen Persyaratan/);
 assert.match(waliDashboard, /waliFlowAction\('documents'/);
 assert.match(waliDashboard, /waliFlowAction\('payments'/);
-assert.match(waliDashboard, /stageIndex<7/);
-assert.match(waliDashboard, /repeat\(auto-fit/);
+assert.match(waliDashboard, /wali-flow-list/);
+assert.doesNotMatch(waliDashboard, /wali-flow-parallel|wali-flow-current|wali-flow-next/);
 
 const verifyPaymentUi = section(frontend, 'async function verifyPaymentUI(paymentId,status)', 'function openCreateBill()');
 assert.match(verifyPaymentUi, /Tuliskan alasan penolakan/i);
 assert.match(verifyPaymentUi, /if\(status==='REJECTED'&&!note\)/);
 
 const paymentPage = section(frontend, 'function renderPaymentContent()', 'function openPaymentUpload(billId)');
-assert.match(paymentPage, /Tagihan formulir belum diterbitkan/);
-assert.match(paymentPage, /melengkapi dokumen persyaratan sambil menunggu/);
+assert.match(paymentPage, /Tagihan formulir akan dibuat otomatis setelah pendaftaran dikirim/);
+assert.doesNotMatch(paymentPage, /openCreateBill\(\)/);
 assert.match(paymentPage, /Alasan penolakan/);
 assert.match(paymentPage, /verificationNote/);
 
 console.log('Wali parallel document/payment workflow safeguards passed.');
+
+const autoBill = section(backend, 'function ensureFormBillForRegistration_', 'function getPaymentPageData(sessionToken, registrationId)');
+assert.match(autoBill, /MASTER_JENIS_PEMBAYARAN/);
+assert.match(autoBill, /formulir/i);
+assert.match(autoBill, /amount>0/);
+assert.match(autoBill, /CANCELLED/);
+assert.match(autoBill, /Tagihan formulir dibuat otomatis/);
+const paymentPageData = section(backend, 'function getPaymentPageData(sessionToken, registrationId)', 'function getPaymentsForRegistration');
+assert.match(paymentPageData, /ensureFormBillForRegistration_/);
+assert.match(paymentPageData, /withScriptLock_/);
+const createBill = section(backend, 'function createBill(sessionToken,payload)', 'function submitPayment(sessionToken,payload)');
+assert.match(createBill, /requireRole_\(sessionToken,\['SUPERADMIN'\]\)/);
