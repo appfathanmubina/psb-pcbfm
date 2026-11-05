@@ -1838,21 +1838,60 @@ const PSB_PAYMENT_EDITABLE_STATUSES = ['SUBMITTED','UNDER_REVIEW','REVISION','VE
 function getPaymentPageData(sessionToken, registrationId) {
   const actor = requireRole_(sessionToken, PSB_PAYMENT_VIEW_ROLES);
   const isWali = hasRoleDirect_(actor, ['WALI']);
-  const regSheet = getDatabaseSpreadsheet_().getSheetByName(PSB_SHEETS.REGISTRATIONS);
+  const ss = getDatabaseSpreadsheet_();
+  const regSheet = ss.getSheetByName(PSB_SHEETS.REGISTRATIONS);
+  const paymentTypes = getActiveMasterItems_('MASTER_JENIS_PEMBAYARAN');
   let registrations = [];
+  let registrationsById = Object.create(null);
+
   if (regSheet && regSheet.getLastRow() >= 2) {
     const headers = regSheet.getRange(1,1,1,regSheet.getLastColumn()).getValues()[0].map(String);
     const rows = regSheet.getRange(2,1,regSheet.getLastRow()-1,regSheet.getLastColumn()).getValues();
     let items = rows.map((r,i)=>rowObject_(headers,r,i+2));
+
+    // Simpan baris pertama dari seluruh sheet untuk mempertahankan perilaku
+    // findRegistration_() jika terdapat registrationId duplikat.
+    items.forEach(item => {
+      const id = String(item.registrationId || '');
+      if (id && !Object.prototype.hasOwnProperty.call(registrationsById, id)) {
+        registrationsById[id] = item;
+      }
+    });
+
     if (isWali) items = items.filter(x=>String(x.userId)===String(actor.userId));
-    registrations = enrichRegistrationList_(items).slice(0,200);
+
+    // Semua master dan kandidat dibaca satu kali untuk kebutuhan halaman ini.
+    const preloadedMaps = {
+      candidates: sheetMapById_(ss.getSheetByName(PSB_SHEETS.CANDIDATES), 'candidateId'),
+      years: sheetMapById_(ss.getSheetByName(PSB_SHEETS.MASTER_TAHUN_AJARAN), 'tahunAjaranId'),
+      waves: sheetMapById_(ss.getSheetByName(PSB_SHEETS.MASTER_GELOMBANG), 'gelombangId'),
+      levels: sheetMapById_(ss.getSheetByName(PSB_SHEETS.MASTER_JENJANG), 'jenjangId')
+    };
+    registrations = enrichRegistrationList_(items, preloadedMaps).slice(0,200);
   }
-  if (!registrations.length) return {success:true,registrations:[],paymentData:null,paymentTypes:getActiveMasterItems_('MASTER_JENIS_PEMBAYARAN')};
+
+  if (!registrations.length) {
+    return {success:true,registrations:[],paymentData:null,paymentTypes};
+  }
+
   const selectedId = String(registrationId||'');
-  const selected = registrations.some(x=>String(x.registrationId)===selectedId) ? selectedId : String(registrations[0].registrationId);
-  const found = findRegistration_(selected);
-  if (!found || !canAccessRegistration_(actor,found.registration) && !hasRoleDirect_(actor,PSB_PAYMENT_MANAGE_ROLES)) return fail_('Anda tidak memiliki akses ke pembayaran ini.');
-  return {success:true,registrations,paymentData:buildPaymentData_(selected),paymentTypes:getActiveMasterItems_('MASTER_JENIS_PEMBAYARAN')};
+  const selected = registrations.some(x=>String(x.registrationId)===selectedId)
+    ? selectedId
+    : String(registrations[0].registrationId);
+  const selectedRegistration = registrationsById[selected];
+
+  if (!selectedRegistration ||
+      !canAccessRegistration_(actor,selectedRegistration) &&
+      !hasRoleDirect_(actor,PSB_PAYMENT_MANAGE_ROLES)) {
+    return fail_('Anda tidak memiliki akses ke pembayaran ini.');
+  }
+
+  return {
+    success:true,
+    registrations,
+    paymentData:buildPaymentData_(selected,paymentTypes),
+    paymentTypes
+  };
 }
 
 function getPaymentsForRegistration(sessionToken, registrationId) {
@@ -1863,12 +1902,12 @@ function getPaymentsForRegistration(sessionToken, registrationId) {
   return Object.assign({success:true},buildPaymentData_(registrationId));
 }
 
-function buildPaymentData_(registrationId) {
+function buildPaymentData_(registrationId, paymentTypes) {
   const ss=getDatabaseSpreadsheet_();
   const billsSheet=ss.getSheetByName(PSB_SHEETS.BILLS), paymentsSheet=ss.getSheetByName(PSB_SHEETS.PAYMENTS);
   const bills=billsSheet&&billsSheet.getLastRow()>=2 ? sheetRows_(billsSheet).filter(x=>String(x.registrationId)===String(registrationId)) : [];
   const payments=paymentsSheet&&paymentsSheet.getLastRow()>=2 ? sheetRows_(paymentsSheet).filter(x=>String(x.registrationId)===String(registrationId)) : [];
-  const types={}; getActiveMasterItems_('MASTER_JENIS_PEMBAYARAN').forEach(x=>types[String(x.paymentTypeId)]=x);
+  const types={}; (paymentTypes || getActiveMasterItems_('MASTER_JENIS_PEMBAYARAN')).forEach(x=>types[String(x.paymentTypeId)]=x);
   const paymentByBill={}; payments.forEach(x=>{paymentByBill[String(x.billId)]=x;});
   const items=bills.map(b=>Object.assign({},b,{paymentTypeName:types[String(b.paymentTypeId)]?.name||b.paymentTypeId,payment:paymentByBill[String(b.billId)]||null}));
   return {registrationId:String(registrationId),bills:items,payments};
