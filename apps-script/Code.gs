@@ -360,7 +360,7 @@ function validateWaliRegistrationPayload_(payload) {
   const emailNormalized = email.toLowerCase();
 
   if (!name || name.length > 120) return {success:false,message:'Nama lengkap wajib diisi (maksimal 120 karakter).'};
-  if (phone && !/^62\\d{8,13}$/.test(phoneNormalized)) return {success:false,message:'Nomor HP tidak valid. Periksa kembali nomor yang dimasukkan.'};
+  if (phone && !/^62\d{8,13}$/.test(phoneNormalized)) return {success:false,message:'Nomor HP tidak valid. Periksa kembali nomor yang dimasukkan.'};
   if (email && (email.length > 254 || !/^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(email))) return {success:false,message:'Format email tidak valid. Kosongkan jika tidak ingin mengisi email.'};
   if (!phoneNormalized && !emailNormalized) return {success:false,message:'Isi minimal salah satu: nomor HP atau email agar dapat digunakan untuk login.'};
   if (password.trim().length === 0 || password.length < 6 || password.length > 128) return {success:false,message:'Password harus terdiri dari 6 sampai 128 karakter dan tidak boleh kosong.'};
