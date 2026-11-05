@@ -76,7 +76,8 @@ const context = {
   Utilities: { formatDate: () => '2026-11-05' },
   Session: { getScriptTimeZone: () => 'Asia/Jakarta' },
   statusLabel_: value => value,
-  findParticipantRegistration_: participant => participant && participant.registrationId ? participant.registrationId : ''
+  findParticipantRegistration_: participant => participant && participant.registrationId ? participant.registrationId : '',
+  sortCountMap_: obj => Object.keys(obj || {}).map(name => ({ name, count: Number(obj[name] || 0) })).sort((a,b) => b.count-a.count || a.name.localeCompare(b.name))
 };
 vm.createContext(context);
 vm.runInContext(page, context);
