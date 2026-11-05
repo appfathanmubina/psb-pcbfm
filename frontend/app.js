@@ -1357,6 +1357,40 @@ function renderDocumentContent(){
   const cards=checks.length?checks.map(x=>{const doc=x.document;const st=String(doc?.status||'').toUpperCase();const statusClass=st==='VERIFIED'?'verified':st==='REVISION'?'revision':st==='PENDING'?'pending':'';return `<article class="doc-item"><div class="doc-item-top"><div class="doc-icon">${ico('file')}</div><div class="doc-copy"><div class="doc-title">${esc(x.name||'-')}</div><div class="doc-meta">${x.required?'Dokumen wajib':'Dokumen opsional'} · Maks. ${esc(getDocumentMaxSizeMb(x))} MB${x.allowedMimeTypes?' · '+esc(x.allowedMimeTypes):''}</div></div><span class="doc-required ${x.uploaded?'ok':''}">${x.uploaded?(st==='VERIFIED'?'Lengkap':'Sudah ada'):(x.required?'Wajib':'Opsional')}</span></div>${doc?`<div class="doc-meta" style="margin-top:10px"><b>${esc(doc.fileName||'-')}</b> · ${esc(formatFileSize(doc.fileSize))} · ${esc(statusLabel(doc.status))}${doc.revisionNote?`<br>Catatan: ${esc(doc.revisionNote)}`:''}</div>`:'<div class="doc-meta" style="margin-top:10px">Belum ada file yang diunggah.</div>'}<div class="doc-actions ${doc?'':'single'}">${doc?.fileUrl?`<button class="btn btn-secondary" onclick="window.open('${esc(doc.fileUrl)}','_blank')">Buka File</button>`:''}${canUpload?`<button class="btn btn-primary" onclick='openDocumentUpload(${JSON.stringify(x)})'>${doc?'Ganti File':'Unggah File'}</button>`:''}</div></article>`}).join(''):'<div class="doc-empty">Belum ada jenis dokumen aktif pada Master Data.</div>';
   $('documentContent').innerHTML=`${paymentNotice}<div class="status-card"><div class="status-row"><div><b>${esc(d.candidate?.fullName||'Pendaftaran')}</b><div class="muted" style="font-size:11px;margin-top:4px">${esc(d.registration?.registrationNumber||'-')} · ${esc(statusLabel(d.registration?.status))}</div></div></div></div><div class="doc-summary"><div class="doc-stat"><b>${uploadedRequired}/${required.length}</b><span>Dokumen wajib tersedia</span></div><div class="doc-stat"><b>${pending}</b><span>Menunggu verifikasi</span></div></div><div class="doc-list">${cards}</div>`;
 }
+
+const UPLOAD_IMAGE_MAX_SIDE=2000;
+const UPLOAD_IMAGE_COMPRESSION_THRESHOLD=1.5*1024*1024;
+function uploadMimeAllowed(mime,rulesText){
+  const rules=String(rulesText||'').split(',').map(x=>x.trim().toLowerCase()).filter(Boolean),type=String(mime||'').toLowerCase();
+  return !rules.length||rules.some(rule=>rule===type||(rule.endsWith('/*')&&type.startsWith(rule.slice(0,-1))));
+}
+async function decodeUploadImage(file){
+  if(typeof createImageBitmap==='function')return await createImageBitmap(file);
+  const url=URL.createObjectURL(file);
+  try{return await new Promise((resolve,reject)=>{const img=new Image();img.onload=()=>resolve(img);img.onerror=()=>reject(new Error('Format foto tidak dapat dibaca.'));img.src=url;});}
+  finally{URL.revokeObjectURL(url);}
+}
+async function prepareUploadFile(file,allowed){
+  const original={blob:file,fileName:file.name,mimeType:file.type||'application/octet-stream',fileSize:file.size,compressed:false};
+  if(!/^image\/(jpeg|png|webp)$/i.test(String(file.type||'')))return original;
+  let image;try{image=await decodeUploadImage(file);}catch(e){return original;}
+  try{
+    const w=Number(image.width||image.naturalWidth||0),h=Number(image.height||image.naturalHeight||0);
+    if(!w||!h)return original;
+    const scale=Math.min(1,UPLOAD_IMAGE_MAX_SIDE/Math.max(w,h));
+    if(scale===1&&file.size<=UPLOAD_IMAGE_COMPRESSION_THRESHOLD)return original;
+    const canvas=document.createElement('canvas');canvas.width=Math.max(1,Math.round(w*scale));canvas.height=Math.max(1,Math.round(h*scale));
+    const ctx=canvas.getContext('2d');if(!ctx)return original;ctx.drawImage(image,0,0,canvas.width,canvas.height);
+    const rules=String(allowed||'').toLowerCase(),jpegAllowed=!rules||rules.includes('image/jpeg')||rules.includes('image/*');
+    const outType=jpegAllowed?'image/jpeg':(uploadMimeAllowed(file.type,allowed)?file.type:'image/jpeg');
+    const blob=await new Promise(resolve=>canvas.toBlob(resolve,outType,0.82));if(!blob)return original;
+    if(blob.size>=file.size&&uploadMimeAllowed(file.type,allowed))return original;
+    const mime=blob.type||outType,ext=mime==='image/png'?'.png':mime==='image/webp'?'.webp':'.jpg';
+    const base=String(file.name||'dokumen').replace(/\.[^.]*$/,'')||'dokumen';
+    return {blob,fileName:base+ext,mimeType:mime,fileSize:blob.size,compressed:true};
+  }finally{if(typeof image.close==='function')image.close();}
+}
+
 function formatFileSize(bytes){const n=Number(bytes||0);if(!n)return '-';if(n<1024)return n+' B';if(n<1024*1024)return (n/1024).toFixed(1)+' KB';if(n<1024*1024*1024)return (n/1024/1024).toFixed(2)+' MB';return (n/1024/1024/1024).toFixed(2)+' GB';}
 function getDocumentMaxSizeMb(type){
   const configured=Number(type?.maxSizeMb);
@@ -1373,12 +1407,29 @@ function closeDocumentUpload(){$('documentUploadModal')?.remove()}
 async function submitDocumentUpload(type){
   const input=$('documentFileInput'),msg=$('documentUploadMsg'),file=input?.files?.[0],btn=$('documentUploadSubmitBtn');
   if(!file){msg.innerHTML=showMessage('Pilih file terlebih dahulu.','warning');return}
-  const max=getDocumentMaxSizeMb(type);if(file.size>max*1024*1024){msg.innerHTML=showMessage('Ukuran file melebihi batas '+max+' MB untuk dokumen '+(type.name||'ini')+'.','warning');return}
-  const allowed=String(type.allowedMimeTypes||'').split(',').map(x=>x.trim().toLowerCase()).filter(Boolean);const mime=String(file.type||'').toLowerCase();if(allowed.length&&!allowed.some(rule=>rule===mime||(rule.endsWith('/*')&&mime.startsWith(rule.slice(0,-1))))){msg.innerHTML=showMessage('Tipe file tidak diizinkan untuk dokumen ini.','warning');return}
   if(btn?.disabled)return;
-  if(btn){btn.disabled=true;btn.textContent=type.document?.fileId?'Mengganti...':'Mengunggah...'}
-  if(input)input.disabled=true;
-  loading(true,'Membaca file dokumen...');const reader=new FileReader();reader.onprogress=event=>{if(event.lengthComputable)processPopupUpdate(10+Math.round(event.loaded/event.total*35),'Membaca file dokumen...','Menyiapkan '+file.name,false);};reader.onload=async()=>{const dataUrl=String(reader.result||'');const base64=dataUrl.indexOf(',')>=0?dataUrl.split(',')[1]:dataUrl;processPopupUpdate(50,'Mengirim dokumen...','File siap dikirim ke Google Drive.',false);try{const r=await server('uploadDocument',state.token,{registrationId:state.documentRegistrationId,documentTypeId:type.documentTypeId,fileName:file.name,mimeType:file.type,fileSize:file.size,base64:base64});if(!r.success){if(btn){btn.disabled=false;btn.textContent=type.document?.fileId?'Ganti File':'Unggah Sekarang'}if(input)input.disabled=false;msg.innerHTML=showMessage(r.message);return}closeDocumentUpload();showToast(r.message,'success');delete state.cache.documents[state.documentRegistrationId];await loadDocumentsForRegistration(state.documentRegistrationId);}catch(e){if(btn){btn.disabled=false;btn.textContent=type.document?.fileId?'Ganti File':'Unggah Sekarang'}if(input)input.disabled=false;if($('documentUploadMsg'))$('documentUploadMsg').innerHTML=showMessage('Gagal mengunggah dokumen. Silakan coba lagi.')}finally{loading(false)}};reader.onerror=()=>{if(btn){btn.disabled=false;btn.textContent=type.document?.fileId?'Ganti File':'Unggah Sekarang'}if(input)input.disabled=false;if(msg)msg.innerHTML=showMessage('File tidak dapat dibaca. Silakan pilih file lain.','error');processEnd(null,new Error('File tidak dapat dibaca. Silakan pilih file lain.'))};reader.readAsDataURL(file);
+  if(btn){btn.disabled=true;btn.textContent='Menyiapkan...'}if(input)input.disabled=true;
+  loading(true,'Mengoptimalkan foto dokumen...');
+  try{
+    const prepared=await prepareUploadFile(file,type.allowedMimeTypes),max=getDocumentMaxSizeMb(type);
+    if(prepared.fileSize>max*1024*1024){msg.innerHTML=showMessage('Ukuran file setelah diproses masih melebihi batas '+max+' MB untuk dokumen '+(type.name||'ini')+'. Silakan pilih foto beresolusi lebih rendah atau file yang lebih kecil.','warning');loading(false);if(btn){btn.disabled=false;btn.textContent=type.document?.fileId?'Ganti File':'Unggah Sekarang'}if(input)input.disabled=false;return}
+    if(!uploadMimeAllowed(prepared.mimeType,type.allowedMimeTypes)){msg.innerHTML=showMessage('Tipe file tidak diizinkan untuk dokumen ini. Gunakan format yang tercantum pada petunjuk upload.','warning');loading(false);if(btn){btn.disabled=false;btn.textContent=type.document?.fileId?'Ganti File':'Unggah Sekarang'}if(input)input.disabled=false;return}
+    if(prepared.compressed)processPopupUpdate(22,'Foto berhasil dioptimalkan',formatFileSize(file.size)+' menjadi '+formatFileSize(prepared.fileSize),false);
+    const reader=new FileReader();
+    reader.onprogress=e=>{if(e.lengthComputable)processPopupUpdate(25+Math.round(e.loaded/e.total*25),'Membaca file dokumen...','Menyiapkan '+prepared.fileName,false)};
+    reader.onload=async()=>{
+      const dataUrl=String(reader.result||''),base64=dataUrl.indexOf(',')>=0?dataUrl.split(',')[1]:dataUrl;
+      processPopupUpdate(55,'Mengirim dokumen...','File siap dikirim ke Google Drive.',false);
+      try{
+        const r=await server('uploadDocument',state.token,{registrationId:state.documentRegistrationId,documentTypeId:type.documentTypeId,fileName:prepared.fileName,mimeType:prepared.mimeType,fileSize:prepared.fileSize,base64});
+        if(!r.success){msg.innerHTML=showMessage(r.message);return}
+        closeDocumentUpload();showToast(r.message,'success');delete state.cache.documents[state.documentRegistrationId];await loadDocumentsForRegistration(state.documentRegistrationId);
+      }catch(e){if($('documentUploadMsg'))$('documentUploadMsg').innerHTML=showMessage('Gagal mengunggah dokumen. Silakan coba lagi.')}
+      finally{loading(false);if(btn?.isConnected){btn.disabled=false;btn.textContent=type.document?.fileId?'Ganti File':'Unggah Sekarang'}if(input?.isConnected)input.disabled=false}
+    };
+    reader.onerror=()=>{if(msg)msg.innerHTML=showMessage('File tidak dapat dibaca. Silakan pilih file lain.','error');loading(false);if(btn?.isConnected){btn.disabled=false;btn.textContent=type.document?.fileId?'Ganti File':'Unggah Sekarang'}if(input?.isConnected)input.disabled=false};
+    reader.readAsDataURL(prepared.blob);
+  }catch(e){msg.innerHTML=showMessage('Foto tidak dapat diproses. Silakan pilih file JPG, PNG, atau WEBP lain.','error');loading(false);if(btn){btn.disabled=false;btn.textContent=type.document?.fileId?'Ganti File':'Unggah Sekarang'}if(input)input.disabled=false}
 }
 function openDocumentsForRegistration(id){state.documentRegistrationId=id;goPage('documents');}
 
@@ -1536,7 +1587,32 @@ function renderPaymentContent(){
 function openPaymentUpload(billId){document.body.insertAdjacentHTML('beforeend',`<div class="modal-backdrop" id="paymentUploadModal"><div class="modal"><h3>Upload Bukti Pembayaran</h3><p>File JPG, PNG, WEBP, atau PDF maksimal 5 MB.</p><div id="paymentUploadMsg"></div><div class="upload-box"><input id="paymentFileInput" type="file" accept="image/jpeg,image/png,image/webp,application/pdf" onchange="previewPaymentFile()"><div class="file-picker"><button type="button" class="file-picker-btn" onclick="$('paymentFileInput').click()">Pilih File</button><span class="file-picker-name" id="paymentFileName">Belum ada file dipilih</span></div><div class="upload-note" id="paymentFileInfo">JPG, PNG, WEBP, atau PDF · Maks. 5 MB</div></div><div class="modal-actions"><button class="btn btn-primary" onclick="submitPaymentUpload('${esc(billId)}')">Kirim Bukti</button><button class="btn btn-secondary" onclick="closePaymentUpload()">Batal</button></div></div></div>`)}
 function previewPaymentFile(){const f=$('paymentFileInput')?.files?.[0],name=$('paymentFileName'),info=$('paymentFileInfo');if(!f)return;if(name){name.textContent=f.name;name.classList.add('selected')}if(info)info.textContent=`${formatFileSize(f.size)} · ${f.type||'Tipe file'}`}
 function closePaymentUpload(){$('paymentUploadModal')?.remove()}
-async function submitPaymentUpload(billId){const f=$('paymentFileInput')?.files?.[0],msg=$('paymentUploadMsg');if(!f){msg.innerHTML=showMessage('Pilih file bukti pembayaran terlebih dahulu.','warning');return}if(f.size>5*1024*1024){msg.innerHTML=showMessage('Ukuran file maksimal 5 MB.','warning');return}loading(true,'Membaca bukti pembayaran...');const reader=new FileReader();reader.onprogress=event=>{if(event.lengthComputable)processPopupUpdate(10+Math.round(event.loaded/event.total*35),'Membaca bukti pembayaran...','Menyiapkan '+f.name,false);};reader.onload=async()=>{const dataUrl=String(reader.result||''),base64=dataUrl.split(',')[1]||'';processPopupUpdate(50,'Mengirim bukti pembayaran...','File siap dikirim untuk diproses server.',false);try{const r=await server('submitPayment',state.token,{billId,fileName:f.name,mimeType:f.type,fileSize:f.size,base64});if(!r.success){msg.innerHTML=showMessage(r.message||'Bukti pembayaran belum dapat disimpan.');return}closePaymentUpload();showToast(r.message||'Bukti pembayaran berhasil dikirim.','success');delete state.cache.payments[state.paymentRegistrationId];try{await renderPayments(state.paymentRegistrationId,true);}catch(refreshError){/* Data sudah berhasil disimpan; refresh hanya pelengkap. */}}catch(e){if($('paymentUploadMsg'))$('paymentUploadMsg').innerHTML=showMessage('Koneksi terputus setelah pengiriman. Silakan cek status pembayaran.','warning')}finally{loading(false)}};reader.onerror=()=>{if(msg)msg.innerHTML=showMessage('File tidak dapat dibaca. Silakan pilih file lain.','error');loading(false)};reader.readAsDataURL(f)}
+async function submitPaymentUpload(billId){
+  const file=$('paymentFileInput')?.files?.[0],msg=$('paymentUploadMsg');
+  if(!file){msg.innerHTML=showMessage('Pilih file bukti pembayaran terlebih dahulu.','warning');return}
+  loading(true,'Mengoptimalkan bukti pembayaran...');
+  try{
+    const allowed='image/jpeg,image/png,image/webp,application/pdf',prepared=await prepareUploadFile(file,allowed);
+    if(prepared.fileSize>5*1024*1024){msg.innerHTML=showMessage('Ukuran file setelah diproses masih melebihi batas 5 MB. Silakan pilih foto beresolusi lebih rendah atau file yang lebih kecil.','warning');loading(false);return}
+    if(!uploadMimeAllowed(prepared.mimeType,allowed)){msg.innerHTML=showMessage('Format bukti pembayaran tidak didukung. Gunakan JPG, PNG, WEBP, atau PDF.','warning');loading(false);return}
+    if(prepared.compressed)processPopupUpdate(22,'Foto berhasil dioptimalkan',formatFileSize(file.size)+' menjadi '+formatFileSize(prepared.fileSize),false);
+    const reader=new FileReader();
+    reader.onprogress=e=>{if(e.lengthComputable)processPopupUpdate(25+Math.round(e.loaded/e.total*25),'Membaca bukti pembayaran...','Menyiapkan '+prepared.fileName,false)};
+    reader.onload=async()=>{
+      const dataUrl=String(reader.result||''),base64=dataUrl.split(',')[1]||'';
+      processPopupUpdate(55,'Mengirim bukti pembayaran...','File siap dikirim untuk diproses server.',false);
+      try{
+        const r=await server('submitPayment',state.token,{billId,fileName:prepared.fileName,mimeType:prepared.mimeType,fileSize:prepared.fileSize,base64});
+        if(!r.success){msg.innerHTML=showMessage(r.message||'Bukti pembayaran belum dapat disimpan.');return}
+        closePaymentUpload();showToast(r.message||'Bukti pembayaran berhasil dikirim.','success');delete state.cache.payments[state.paymentRegistrationId];
+        try{await renderPayments(state.paymentRegistrationId,true)}catch(refreshError){/* Data sudah berhasil disimpan; refresh hanya pelengkap. */}
+      }catch(e){if($('paymentUploadMsg'))$('paymentUploadMsg').innerHTML=showMessage('Koneksi terputus setelah pengiriman. Silakan cek status pembayaran.','warning')}
+      finally{loading(false)}
+    };
+    reader.onerror=()=>{if(msg)msg.innerHTML=showMessage('File tidak dapat dibaca. Silakan pilih file lain.','error');loading(false)};
+    reader.readAsDataURL(prepared.blob);
+  }catch(e){msg.innerHTML=showMessage('Foto tidak dapat diproses. Silakan pilih file JPG, PNG, atau WEBP lain.','error');loading(false)}
+}
 async function verifyPaymentUI(paymentId,status){const note=status==='REJECTED'?(prompt('Tuliskan alasan penolakan pembayaran:')||'').trim():'';if(status==='REJECTED'&&!note){showAlert('Alasan diperlukan','Tuliskan alasan agar Wali mengetahui perbaikan yang harus dilakukan.','warning');return}showConfirm(status==='VERIFIED'?'Verifikasi pembayaran?':'Tolak pembayaran?',status==='VERIFIED'?'Pembayaran akan dikonfirmasi dan pendaftaran masuk antrean verifikasi PSB.':'Pembayaran akan ditolak. Alasan penolakan akan dikirimkan kepada Wali.',async()=>{loading(true,status==='VERIFIED'?'Memverifikasi pembayaran...':'Menolak pembayaran...');try{const r=await server('verifyPayment',state.token,{paymentId,status,note});if(r.success){showToast(r.message,'success');await renderPayments(state.paymentRegistrationId,true)}else showAlert('Belum dapat diproses',r.message||'Operasi gagal.','warning')}catch(e){showAlert('Gagal menyimpan','Terjadi gangguan saat menyimpan.','error')}finally{loading(false)}} ,status==='VERIFIED'?'Verifikasi':'Tolak')}
 function openCreateBill(){const types=state.paymentTypes||[];document.body.insertAdjacentHTML('beforeend',`<div class="modal-backdrop" id="createBillModal"><div class="modal"><h3>Buat Tagihan</h3><div id="createBillMsg"></div><div class="field"><label>Jenis Pembayaran</label><select id="billType">${types.map(x=>`<option value="${esc(x.paymentTypeId)}">${esc(x.name)} · Rp ${Number(x.amount||0).toLocaleString('id-ID')}</option>`).join('')}</select></div><div class="field"><label>Nominal</label><input id="billAmount" type="number" min="1" value="${Number(types[0]?.amount||0)}"></div><div class="field"><label>Jatuh Tempo</label><input id="billDueDate" type="date"></div><div class="modal-actions"><button class="btn btn-primary" onclick="createBillUI()">Simpan</button><button class="btn btn-secondary" onclick="$('createBillModal')?.remove()">Batal</button></div></div></div>`)}
 async function createBillUI(){const msg=$('createBillMsg');loading(true,'Membuat tagihan...');try{const r=await server('createBill',state.token,{registrationId:state.paymentRegistrationId,paymentTypeId:$('billType').value,amount:Number($('billAmount').value||0),dueDate:$('billDueDate').value});if(r.success){$('createBillModal')?.remove();showToast(r.message,'success');await renderPayments(state.paymentRegistrationId)}else msg.innerHTML=showMessage(r.message)}catch(e){msg.innerHTML=showMessage('Gagal membuat tagihan.')}finally{loading(false)}}
