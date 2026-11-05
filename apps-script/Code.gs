@@ -2477,49 +2477,139 @@ function getReregistrationPageData(sessionToken) {
   const rrSheet = ss.getSheetByName(PSB_SHEETS.REREGISTRATIONS);
   if (!regSheet || !rrSheet) return {success:true,items:[],summary:{eligible:0,completed:0,pending:0}};
 
-  const isWali = hasRoleDirect_(actor, ['WALI']);
-  const regs = sheetRows_(regSheet).filter(r => !isWali || String(r.userId) === String(actor.userId));
-  const rrRows = sheetRows_(rrSheet);
-  const items = [];
+  // Read each operational table once, retaining the same first-row lookup
+  // behavior as findRowById_ / findRegistration_.
+  const readTable = sheet => {
+    if (!sheet || sheet.getLastRow() < 2 || sheet.getLastColumn() < 1) return {headers:[],rows:[]};
+    const values = sheet.getRange(1,1,sheet.getLastRow(),sheet.getLastColumn()).getValues();
+    return {headers:values[0].map(String),rows:values.slice(1)};
+  };
+  const toObjects = table => table.rows.map((row,i)=>rowObject_(table.headers,row,i+2));
+  const regTable = readTable(regSheet);
+  const rrTable = readTable(rrSheet);
+  const resultTable = readTable(ss.getSheetByName(PSB_SHEETS.SELECTION_RESULTS));
+  const candidateTable = readTable(ss.getSheetByName(PSB_SHEETS.CANDIDATES));
+  const regs = toObjects(regTable).filter(r => !hasRoleDirect_(actor, ['WALI']) || String(r.userId) === String(actor.userId));
+  const rrRows = toObjects(rrTable);
+  const resultRows = toObjects(resultTable);
+  const candidateRows = toObjects(candidateTable);
 
+  const firstBy = (rows, key) => {
+    const map = {};
+    rows.forEach(row => {
+      const id = String(row[key] || '');
+      if (id && !Object.prototype.hasOwnProperty.call(map,id)) map[id] = row;
+    });
+    return map;
+  };
+  const resultsByRegistration = firstBy(resultRows,'registrationId');
+  const reregistrationByRegistration = firstBy(rrRows,'registrationId');
+  const firstRegistrationById = firstBy(toObjects(regTable),'registrationId');
+  const candidatesById = firstBy(candidateRows,'candidateId');
+
+  const eligible = [];
   regs.forEach(reg => {
-    const result = findRowById_(ss.getSheetByName(PSB_SHEETS.SELECTION_RESULTS), 'registrationId', String(reg.registrationId));
-    if (!result || String(result.object.status || '').toUpperCase() !== 'PASSED' || !String(result.object.announcementDate || '').trim()) return;
-    const found = findRegistration_(String(reg.registrationId));
-    if (!found) return;
-    // Stage 30.9: page-data GET is read-only. Opening a reregistration is an
-    // explicit mutation performed by publishAnnouncement() or openReregistration().
-    let rr = rrRows.find(x => String(x.registrationId) === String(reg.registrationId));
-    if (!rr) {
-      items.push({reregistration:null,registration:Object.assign({},reg),candidate:found.candidate||{},documents:{requiredCount:0,verifiedCount:0,missing:[]},payment:null,readyToComplete:false,needsOpen:true});
-      return;
+    const id = String(reg.registrationId);
+    const result = resultsByRegistration[id];
+    if (!result || String(result.status || '').toUpperCase() !== 'PASSED' || !String(result.announcementDate || '').trim()) return;
+    const firstRegistration = firstRegistrationById[id];
+    if (!firstRegistration) return;
+    const candidate = candidatesById[String(firstRegistration.candidateId)] || {};
+    const rr = reregistrationByRegistration[id] || null;
+    eligible.push({id,reg,candidate,rr});
+  });
+
+  // Opening daftar ulang remains an explicit action; this GET only reports
+  // missing-open items and never creates or changes a reregistration.
+  const opened = eligible.filter(x => !!x.rr);
+  const docsByRegistration = {};
+  const billsByRegistration = {};
+  const paymentsByRegistrationAndBill = {};
+  let requiredDocs = [];
+  let paymentTypes = {};
+
+  if (opened.length) {
+    const openedIds = {};
+    opened.forEach(x => { openedIds[x.id] = true; });
+
+    const documentTable = readTable(ss.getSheetByName(PSB_SHEETS.DOCUMENTS));
+    const documentRegIdx = documentTable.headers.indexOf('registrationId');
+    const documentStatusIdx = documentTable.headers.indexOf('status');
+    if (documentRegIdx >= 0) {
+      for (let i = 0; i < documentTable.rows.length; i++) {
+        const row = documentTable.rows[i];
+        const id = String(row[documentRegIdx] || '');
+        if (!openedIds[id]) continue;
+        if (documentStatusIdx >= 0 && String(row[documentStatusIdx] || '').toUpperCase() === 'REPLACED') continue;
+        if (!docsByRegistration[id]) docsByRegistration[id] = [];
+        docsByRegistration[id].push(rowObject_(documentTable.headers,row,i+2));
+      }
     }
-    const docs = getCurrentDocuments_(String(reg.registrationId));
-    const requiredDocs = getActiveMasterItems_('MASTER_DOKUMEN').filter(x => x.required);
-    const missingDocs = requiredDocs.filter(t => {
-      const d = docs.find(x => String(x.documentTypeId) === String(t.documentTypeId));
-      return !d || String(d.status || '').toUpperCase() !== 'VERIFIED';
-    }).map(t => String(t.name || t.documentTypeId));
-    const paymentData = buildPaymentData_(String(reg.registrationId));
-    const bills = paymentData.bills || [];
+    Object.keys(docsByRegistration).forEach(id => {
+      docsByRegistration[id].sort((a,b)=>String(b.uploadedAt||'').localeCompare(String(a.uploadedAt||'')));
+    });
+
+    requiredDocs = getActiveMasterItems_('MASTER_DOKUMEN').filter(x => x.required);
+    const paymentTypeRows = getActiveMasterItems_('MASTER_JENIS_PEMBAYARAN');
+    paymentTypeRows.forEach(type => { paymentTypes[String(type.paymentTypeId)] = type; });
+
+    const billTable = readTable(ss.getSheetByName(PSB_SHEETS.BILLS));
+    const billObjects = toObjects(billTable);
+    billObjects.forEach(bill => {
+      const id = String(bill.registrationId || '');
+      if (!openedIds[id]) return;
+      if (!billsByRegistration[id]) billsByRegistration[id] = [];
+      const type = paymentTypes[String(bill.paymentTypeId)];
+      billsByRegistration[id].push(Object.assign({},bill,{
+        paymentTypeName:type?.name || bill.paymentTypeId,
+        payment:null
+      }));
+    });
+
+    const paymentTable = readTable(ss.getSheetByName(PSB_SHEETS.PAYMENTS));
+    toObjects(paymentTable).forEach(payment => {
+      const id = String(payment.registrationId || '');
+      if (!openedIds[id]) return;
+      if (!paymentsByRegistrationAndBill[id]) paymentsByRegistrationAndBill[id] = {};
+      // buildPaymentData_ historically keeps the last row for a billId.
+      paymentsByRegistrationAndBill[id][String(payment.billId)] = payment;
+    });
+    Object.keys(billsByRegistration).forEach(id => {
+      const paymentMap = paymentsByRegistrationAndBill[id] || {};
+      billsByRegistration[id].forEach(bill => {
+        bill.payment = paymentMap[String(bill.billId)] || null;
+      });
+    });
+  }
+
+  const items = eligible.map(entry => {
+    const {id,reg,candidate,rr} = entry;
+    if (!rr) {
+      return {reregistration:null,registration:Object.assign({},reg),candidate:candidate||{},documents:{requiredCount:0,verifiedCount:0,missing:[]},payment:null,readyToComplete:false,needsOpen:true};
+    }
+    const docs = docsByRegistration[id] || [];
+    const missingDocs = requiredDocs.filter(type => {
+      const document = docs.find(x => String(x.documentTypeId) === String(type.documentTypeId));
+      return !document || String(document.status || '').toUpperCase() !== 'VERIFIED';
+    }).map(type => String(type.name || type.documentTypeId));
+    const bills = billsByRegistration[id] || [];
     const reregBill = bills.find(b => /daftar\s*ulang/i.test(String(b.paymentTypeName || '')));
     const paymentStatus = reregBill ? String(reregBill.status || '').toUpperCase() : 'NOT_CREATED';
     const payment = reregBill ? reregBill.payment : null;
     const ready = missingDocs.length === 0 && paymentStatus === 'PAID';
-    items.push({
-      reregistration: rr,
-      registration: Object.assign({}, reg),
-      candidate: found.candidate || {},
-      documents: {requiredCount: requiredDocs.length, verifiedCount: requiredDocs.length - missingDocs.length, missing: missingDocs},
-      payment: reregBill ? {billId:reregBill.billId, amount:reregBill.amount, dueDate:reregBill.dueDate, status:paymentStatus, paymentStatus:payment?.status || ''} : null,
-      readyToComplete: ready
-    });
+    return {
+      reregistration:rr,
+      registration:Object.assign({},reg),
+      candidate:candidate||{},
+      documents:{requiredCount:requiredDocs.length,verifiedCount:requiredDocs.length-missingDocs.length,missing:missingDocs},
+      payment:reregBill ? {billId:reregBill.billId,amount:reregBill.amount,dueDate:reregBill.dueDate,status:paymentStatus,paymentStatus:payment?.status||''} : null,
+      readyToComplete:ready
+    };
   });
 
   const completed = items.filter(x => String(x.reregistration?.status||'').toUpperCase() === 'COMPLETED').length;
   return {success:true,items,summary:{eligible:items.length,completed,pending:items.length-completed},canManage:hasRoleDirect_(actor,PSB_REREGISTRATION_ADMIN_ROLES)};
 }
-
 function openReregistration(sessionToken, registrationId) {
   const actor = requireRole_(sessionToken, PSB_REREGISTRATION_VIEW_ROLES);
   assertOperationalMutation_(actor);
