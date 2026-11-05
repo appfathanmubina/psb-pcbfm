@@ -3047,13 +3047,28 @@ function getVerificationQueue(sessionToken, filters) {
   const headers = sheet.getRange(1,1,1,sheet.getLastColumn()).getValues()[0].map(String);
   const rows = sheet.getRange(2,1,sheet.getLastRow()-1,sheet.getLastColumn()).getValues();
   filters = filters || {};
-  let items = rows.map((r,i)=>rowObject_(headers,r,i+2));
   const allowed = filters.status ? [String(filters.status)] : ['SUBMITTED','UNDER_REVIEW','REVISION','VERIFIED','REREGISTRATION'];
-  items = items.filter(x=>allowed.indexOf(String(x.status))>=0);
-  if (filters.search) {
-    const q=String(filters.search).trim().toLowerCase();
-    items=items.filter(x=>[x.registrationNumber,x.registrationId].some(v=>String(v||'').toLowerCase().includes(q)));
-  }
+  const statusIdx = headers.indexOf('status');
+  const numberIdx = headers.indexOf('registrationNumber');
+  const idIdx = headers.indexOf('registrationId');
+  const searchEnabled = !!filters.search;
+  const query = searchEnabled ? String(filters.search).trim().toLowerCase() : '';
+  // Filter raw rows before allocating row objects. The previous implementation
+  // converted every registration to an object even though only a small queue
+  // subset was returned.
+  const items = [];
+  rows.forEach((row, i) => {
+    const status = statusIdx >= 0 ? row[statusIdx] : undefined;
+    if (allowed.indexOf(String(status)) < 0) return;
+    if (searchEnabled) {
+      const registrationNumber = numberIdx >= 0 ? row[numberIdx] : '';
+      const registrationId = idIdx >= 0 ? row[idIdx] : '';
+      const matches = [registrationNumber, registrationId].some(value =>
+        String(value || '').toLowerCase().includes(query));
+      if (!matches) return;
+    }
+    items.push(rowObject_(headers, row, i + 2));
+  });
   return {success:true, registrations:enrichRegistrationList_(items).slice(0,200)};
 }
 
@@ -3202,33 +3217,94 @@ function getRegistrationDocuments(sessionToken, registrationId) {  return getDoc
 function getDocumentPageData(sessionToken, registrationId) {
   const actor = requireRole_(sessionToken, PSB_DOCUMENT_ACCESS_ROLES);
   const isWali = hasRoleDirect_(actor, ['WALI']);
-  const sheet = getDatabaseSpreadsheet_().getSheetByName(PSB_SHEETS.REGISTRATIONS);
-  let registrations = [];
-  if (sheet && sheet.getLastRow() >= 2) {
-    const headers = sheet.getRange(1,1,1,sheet.getLastColumn()).getValues()[0].map(String);
-    const rows = sheet.getRange(2,1,sheet.getLastRow()-1,sheet.getLastColumn()).getValues();
-    let items = rows.map((r,i) => rowObject_(headers,r,i+2));
-    if (isWali) items = items.filter(x => String(x.userId) === String(actor.userId));
-    registrations = enrichRegistrationList_(items).slice(0,200);
-  }
+  const ss = getDatabaseSpreadsheet_();
+  const registrationRows = sheetRows_(ss.getSheetByName(PSB_SHEETS.REGISTRATIONS));
+  let items = isWali
+    ? registrationRows.filter(x => String(x.userId) === String(actor.userId))
+    : registrationRows;
+  if (!items.length) return { success:true, registrations:[], documentData:null };
+
+  // Read related rows once and reuse the indexes for both the registration
+  // list and selected registration. This avoids re-reading REGISTRATIONS and
+  // CANDIDATES through findRegistration_ after the list has been prepared.
+  const candidateRows = sheetRows_(ss.getSheetByName(PSB_SHEETS.CANDIDATES));
+  const candidatesForDisplay = Object.create(null);
+  const candidatesForDetail = Object.create(null);
+  candidateRows.forEach(candidate => {
+    const id = String(candidate.candidateId || '');
+    if (!id) return;
+    if (!Object.prototype.hasOwnProperty.call(candidatesForDetail, id)) {
+      candidatesForDetail[id] = candidate;
+    }
+    candidatesForDisplay[id] = candidate;
+  });
+  const years = sheetMapById_(ss.getSheetByName(PSB_SHEETS.MASTER_TAHUN_AJARAN), 'tahunAjaranId');
+  const waves = sheetMapById_(ss.getSheetByName(PSB_SHEETS.MASTER_GELOMBANG), 'gelombangId');
+  const levels = sheetMapById_(ss.getSheetByName(PSB_SHEETS.MASTER_JENJANG), 'jenjangId');
+  const registrationsById = Object.create(null);
+  items.forEach(registration => {
+    const id = String(registration.registrationId || '');
+    if (id && !Object.prototype.hasOwnProperty.call(registrationsById, id)) {
+      registrationsById[id] = registration;
+    }
+  });
+  const registrations = enrichRegistrationList_(items, {
+    candidates:candidatesForDisplay, years:years, waves:waves, levels:levels
+  }).slice(0,200);
   if (!registrations.length) return { success:true, registrations:[], documentData:null };
+
   const selectedId = String(registrationId || '');
-  const selected = registrations.some(x => String(x.registrationId) === selectedId) ? selectedId : String(registrations[0].registrationId);
-  const found = findRegistration_(selected);
-  if (!found) return { success:true, registrations:registrations, documentData:null };
-  if (!canAccessRegistration_(actor, found.registration)) return fail_('Anda tidak memiliki akses ke dokumen pendaftaran ini.');
+  const selected = registrations.some(x => String(x.registrationId) === selectedId)
+    ? selectedId
+    : String(registrations[0].registrationId);
+  const registration = registrationsById[selected];
+  if (!registration) return { success:true, registrations:registrations, documentData:null };
+  if (!canAccessRegistration_(actor, registration)) {
+    return fail_('Anda tidak memiliki akses ke dokumen pendaftaran ini.');
+  }
+
+  const relatedRowsByCandidate = field => {
+    const rows = sheetRows_(ss.getSheetByName(field.sheet));
+    const firstByCandidate = Object.create(null);
+    const primaryByCandidate = Object.create(null);
+    rows.forEach(row => {
+      const id = String(row.candidateId || '');
+      if (!id) return;
+      if (!Object.prototype.hasOwnProperty.call(firstByCandidate, id)) firstByCandidate[id] = row;
+      if ((row.isPrimary === true || String(row.isPrimary).toUpperCase() === 'TRUE') &&
+          !Object.prototype.hasOwnProperty.call(primaryByCandidate, id)) {
+        primaryByCandidate[id] = row;
+      }
+    });
+    Object.keys(primaryByCandidate).forEach(id => { firstByCandidate[id] = primaryByCandidate[id]; });
+    return firstByCandidate;
+  };
+  const guardians = relatedRowsByCandidate({sheet:PSB_SHEETS.GUARDIANS});
+  const addresses = relatedRowsByCandidate({sheet:PSB_SHEETS.ADDRESSES});
+  const schools = relatedRowsByCandidate({sheet:PSB_SHEETS.SCHOOLS});
+  const candidateId = String(registration.candidateId || '');
+  const candidate = candidatesForDetail[candidateId] || null;
+  const guardian = guardians[candidateId] || null;
+  const address = addresses[candidateId] || null;
+  const school = schools[candidateId] || null;
+
   const types = getActiveMasterItems_('MASTER_DOKUMEN');
   const documents = getCurrentDocuments_(selected);
   const byType = {};
   documents.forEach(d => { byType[String(d.documentTypeId)] = d; });
-  const checklist = types.map(t => Object.assign({}, t, { document: byType[String(t.documentTypeId)] || null, uploaded: !!byType[String(t.documentTypeId)] }));
+  const checklist = types.map(t => Object.assign({}, t, {
+    document: byType[String(t.documentTypeId)] || null,
+    uploaded: !!byType[String(t.documentTypeId)]
+  }));
   const documentData = {
-    success:true, registration:found.registration, candidate:found.candidate, documentTypes:types, documents:documents, checklist:checklist,
-    canUpload: PSB_DOCUMENT_EDITABLE_REGISTRATION_STATUSES.indexOf(String(found.registration.status)) >= 0 || hasRoleDirect_(actor, ['SUPERADMIN','ADMIN_PSB','VERIFIKATOR'])
+    success:true, registration:registration, candidate:candidate, guardian:guardian,
+    address:address, school:school, documentTypes:types, documents:documents,
+    checklist:checklist,
+    canUpload: PSB_DOCUMENT_EDITABLE_REGISTRATION_STATUSES.indexOf(String(registration.status)) >= 0 ||
+      hasRoleDirect_(actor, ['SUPERADMIN','ADMIN_PSB','VERIFIKATOR'])
   };
   return { success:true, registrations:registrations, documentData:documentData };
 }
-
 
 function uploadDocument(sessionToken, payload) {
   const actor = requireRole_(sessionToken, PSB_DOCUMENT_ACCESS_ROLES);
@@ -3586,12 +3662,13 @@ function findRegistration_(registrationId) {
   return {registration:reg.object,candidate:candidate?.object||null,guardian:guardian?.object||null,address:address?.object||null,school:school?.object||null};
 }
 
-function enrichRegistrationList_(items) {
+function enrichRegistrationList_(items, preloadedMaps) {
   const ss = getDatabaseSpreadsheet_();
-  const candidates = sheetMapById_(ss.getSheetByName(PSB_SHEETS.CANDIDATES), 'candidateId');
-  const years = sheetMapById_(ss.getSheetByName(PSB_SHEETS.MASTER_TAHUN_AJARAN), 'tahunAjaranId');
-  const waves = sheetMapById_(ss.getSheetByName(PSB_SHEETS.MASTER_GELOMBANG), 'gelombangId');
-  const levels = sheetMapById_(ss.getSheetByName(PSB_SHEETS.MASTER_JENJANG), 'jenjangId');
+  const maps = preloadedMaps || {};
+  const candidates = maps.candidates || sheetMapById_(ss.getSheetByName(PSB_SHEETS.CANDIDATES), 'candidateId');
+  const years = maps.years || sheetMapById_(ss.getSheetByName(PSB_SHEETS.MASTER_TAHUN_AJARAN), 'tahunAjaranId');
+  const waves = maps.waves || sheetMapById_(ss.getSheetByName(PSB_SHEETS.MASTER_GELOMBANG), 'gelombangId');
+  const levels = maps.levels || sheetMapById_(ss.getSheetByName(PSB_SHEETS.MASTER_JENJANG), 'jenjangId');
   return items.sort((a,b)=>String(b.updatedAt||'').localeCompare(String(a.updatedAt||''))).map(r => Object.assign({}, r, {
     candidateName: candidates[r.candidateId]?.name || candidates[r.candidateId]?.fullName || '-',
     tahunAjaranName: years[r.tahunAjaranId]?.name || r.tahunAjaranId,
