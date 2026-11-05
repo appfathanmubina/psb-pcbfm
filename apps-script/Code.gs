@@ -3219,9 +3219,8 @@ function getDocumentPageData(sessionToken, registrationId) {
   const isWali = hasRoleDirect_(actor, ['WALI']);
   const ss = getDatabaseSpreadsheet_();
   const registrationRows = sheetRows_(ss.getSheetByName(PSB_SHEETS.REGISTRATIONS));
-  let items = isWali
-    ? registrationRows.filter(x => String(x.userId) === String(actor.userId))
-    : registrationRows;
+  let items = registrationRows;
+  if (isWali) items = items.filter(x => String(x.userId) === String(actor.userId));
   if (!items.length) return { success:true, registrations:[], documentData:null };
 
   // Read related rows once and reuse the indexes for both the registration
