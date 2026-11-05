@@ -20,11 +20,19 @@ function extractFunctionBodies(source) {
     const name = match[1], start = match.index;
     const open = source.indexOf('{', declaration.lastIndex);
     if (open < 0) continue;
-    let depth = 0, quote = '', escaped = false, lineComment = false, blockComment = false, end = -1;
+    let depth = 0, quote = '', escaped = false, lineComment = false, blockComment = false, regex = false, regexClass = false, regexEscaped = false, end = -1;
     for (let i = open; i < source.length; i++) {
       const char = source[i], next = source[i + 1];
       if (lineComment) { if (char === String.fromCharCode(10)) lineComment = false; continue; }
       if (blockComment) { if (char === '*' && next === '/') { blockComment = false; i++; } continue; }
+      if (regex) {
+        if (regexEscaped) { regexEscaped = false; continue; }
+        if (char === String.fromCharCode(92)) { regexEscaped = true; continue; }
+        if (char === '[') regexClass = true;
+        else if (char === ']') regexClass = false;
+        else if (char === '/' && !regexClass) regex = false;
+        continue;
+      }
       if (quote) {
         if (escaped) { escaped = false; continue; }
         if (char === String.fromCharCode(92)) { escaped = true; continue; }
@@ -33,6 +41,10 @@ function extractFunctionBodies(source) {
       }
       if (char === '/' && next === '/') { lineComment = true; i++; continue; }
       if (char === '/' && next === '*') { blockComment = true; i++; continue; }
+      if (char === '/') {
+        const previous = source.slice(0, i).trimEnd().slice(-1);
+        if (!previous || '=(:,[!&|?{};'.includes(previous)) { regex = true; regexClass = false; regexEscaped = false; continue; }
+      }
       if (char === "'" || char === '"' || char.charCodeAt(0) === 96) { quote = char; continue; }
       if (char === '{') depth++;
       if (char === '}' && --depth === 0) { end = i + 1; break; }
