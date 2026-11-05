@@ -1763,12 +1763,15 @@ function getWaliHomeData(sessionToken) {
 
   const bills = sheetRows_(ss.getSheetByName(PSB_SHEETS.BILLS));
   const payments = sheetRows_(ss.getSheetByName(PSB_SHEETS.PAYMENTS));
+  const paymentVerifications = sheetRows_(ss.getSheetByName(PSB_SHEETS.PAYMENT_VERIFICATIONS));
   const documents = sheetRows_(ss.getSheetByName(PSB_SHEETS.DOCUMENTS));
   const requiredDocumentTypes = getActiveMasterItems_('MASTER_DOKUMEN').filter(x => x.required === true || String(x.required).toUpperCase() === 'TRUE');
   const paymentTypes = {};
   getActiveMasterItems_('MASTER_JENIS_PEMBAYARAN').forEach(x => paymentTypes[String(x.paymentTypeId)] = x);
   const paymentByBill = {};
   payments.forEach(x => paymentByBill[String(x.billId)] = x);
+  const verificationByPayment = {};
+  paymentVerifications.forEach(x => verificationByPayment[String(x.paymentId)] = x);
   const participants = sheetRows_(ss.getSheetByName(PSB_SHEETS.SELECTION_PARTICIPANTS));
   const results = sheetRows_(ss.getSheetByName(PSB_SHEETS.SELECTION_RESULTS));
   const schedules = sheetRows_(ss.getSheetByName(PSB_SHEETS.SELECTION_SCHEDULE));
@@ -1788,6 +1791,8 @@ function getWaliHomeData(sessionToken) {
     const missingRequiredCount = Math.max(0, requiredDocumentTypes.length - uploadedRequiredCount);
     const documentsComplete = missingRequiredCount === 0;
     const paymentStatus = String(formPayment?.status || '').toUpperCase();
+    const paymentVerification = formPayment ? verificationByPayment[String(formPayment.paymentId)] : null;
+    const paymentNote = String(paymentVerification?.note || '');
     const participant = participants.find(x => String(x.registrationId) === String(reg.registrationId));
     const result = results.find(x => String(x.registrationId) === String(reg.registrationId));
     const published = !!String(result?.announcementDate || '').trim();
@@ -1821,7 +1826,7 @@ function getWaliHomeData(sessionToken) {
       candidateName:String(candidate.fullName || candidate.name || 'Calon Santri'), status:registrationStatus,
       statusLabel:registrationStatus==='SUBMITTED' && formPaid ? 'Menunggu verifikasi PSB' : statusLabel_(registrationStatus), completed, next, formPaid,
       documents:{requiredCount:requiredDocumentTypes.length,uploadedRequiredCount,verifiedRequiredCount,missingRequiredCount,complete:documentsComplete},
-      formPayment:{billExists:!!formBill,billId:String(formBill?.billId||''),amount:Number(formBill?.amount||0),billStatus:String(formBill?.status||''),paymentStatus,paymentRejected:paymentStatus==='REJECTED',paymentSubmitted:paymentStatus==='SUBMITTED',paid:formPaid},
+      formPayment:{billExists:!!formBill,billId:String(formBill?.billId||''),amount:Number(formBill?.amount||0),billStatus:String(formBill?.status||''),paymentStatus,paymentRejected:paymentStatus==='REJECTED',paymentSubmitted:paymentStatus==='SUBMITTED',paymentNote,paid:formPaid},
       participant:participant ? {status:String(participant.status||''), scheduleId:String(participant.scheduleId||''), scheduleName:String(schedules.find(x=>String(x.scheduleId)===String(participant.scheduleId))?.name || '')} : null,
       result:result ? {status:resultStatus, published, announcementDate:result.announcementDate||'', note:result.note||''} : null
     };
@@ -1950,7 +1955,10 @@ function buildPaymentData_(registrationId, paymentTypes) {
   const payments=paymentsSheet&&paymentsSheet.getLastRow()>=2 ? sheetRows_(paymentsSheet).filter(x=>String(x.registrationId)===String(registrationId)) : [];
   const types={}; (paymentTypes || getActiveMasterItems_('MASTER_JENIS_PEMBAYARAN')).forEach(x=>types[String(x.paymentTypeId)]=x);
   const paymentByBill={}; payments.forEach(x=>{paymentByBill[String(x.billId)]=x;});
-  const items=bills.map(b=>Object.assign({},b,{paymentTypeName:types[String(b.paymentTypeId)]?.name||b.paymentTypeId,payment:paymentByBill[String(b.billId)]||null}));
+  const verificationSheet=ss.getSheetByName(PSB_SHEETS.PAYMENT_VERIFICATIONS);
+  const verifications=verificationSheet&&verificationSheet.getLastRow()>=2?sheetRows_(verificationSheet):[];
+  const verificationByPayment={}; verifications.forEach(x=>{verificationByPayment[String(x.paymentId)]=x;});
+  const items=bills.map(b=>{const payment=paymentByBill[String(b.billId)]||null;const verification=payment?verificationByPayment[String(payment.paymentId)]:null;return Object.assign({},b,{paymentTypeName:types[String(b.paymentTypeId)]?.name||b.paymentTypeId,payment:payment?Object.assign({},payment,{verificationNote:String(verification?.note||'')}):null});});
   return {registrationId:String(registrationId),bills:items,payments};
 }
 
@@ -3475,7 +3483,7 @@ function finalizeVerification(sessionToken, payload) {
     result=setRegistrationStatus_(found.registration,decision,actor.userId,note||(decision==='VERIFIED'?'Pendaftaran terverifikasi':'Pendaftaran dikembalikan untuk perbaikan'));
   } finally { lock.releaseLock(); }
   if(result?.success){
-    notifyRegistrationOwner_(registrationId,decision==='VERIFIED'?'Pendaftaran Terverifikasi':'Pendaftaran Perlu Perbaikan',decision==='VERIFIED'?'Pendaftaran dan dokumen wajib telah terverifikasi. Silakan lanjut ke tahap pembayaran formulir.':'Pendaftaran dikembalikan untuk perbaikan.'+(note?' Catatan: '+note:''),decision==='VERIFIED'?'SUCCESS':'WARNING');
+    notifyRegistrationOwner_(registrationId,decision==='VERIFIED'?'Pendaftaran Terverifikasi':'Pendaftaran Perlu Perbaikan',decision==='VERIFIED'?'Pendaftaran dan dokumen wajib telah terverifikasi. Silakan menunggu informasi jadwal tes dan seleksi.':'Pendaftaran dikembalikan untuk perbaikan.'+(note?' Catatan: '+note:''),decision==='VERIFIED'?'SUCCESS':'WARNING');
   }
   return result;
 }
