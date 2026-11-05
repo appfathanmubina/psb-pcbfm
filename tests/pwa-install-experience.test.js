@@ -8,6 +8,9 @@ const sw = fs.readFileSync('frontend/sw.js', 'utf8');
 
 assert.match(html, /id="pwaInstallOpen"/, 'a persistent install action must be available without a query parameter');
 assert.match(html, /Pasang Aplikasi/, 'install action must have a clear Indonesian label');
+assert.match(html, /pwa-install-icon/, 'install action must use a dedicated scalable icon');
+assert.match(html, /<svg class="pwa-install-icon"[\s\S]*?viewBox="0 0 24 24"/, 'install icon must be an inline responsive SVG');
+assert.doesNotMatch(html, /aria-hidden="true">⇩</, 'old plain-text download glyph must not return');
 assert.match(html, /beforeinstallprompt/, 'Android browsers must use the native install prompt when available');
 assert.match(html, /prompt\.userChoice/, 'the install prompt result must be handled');
 assert.match(html, /appinstalled/, 'successful installation must update the page state');
