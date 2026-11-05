@@ -18,7 +18,12 @@ assert.ok(helper.indexOf('encoded.length >') < helper.indexOf('Utilities.base64D
 
 assert.match(source, /decodeAndValidateUpload_\(base64,mimeType,5\*1024\*1024\)/);
 // Chat attachment upload handling was retired with the PSB Chat module.
-assert.match(source, /Math\.min\(configuredMaxSizeMb > 0 \? configuredMaxSizeMb : 10, 20\)/);
+assert.match(source, /const maxSizeMb = 10/);
+assert.doesNotMatch(source, /Math\.min\(configuredMaxSizeMb/);
+const frontend = fs.readFileSync('frontend/app.js', 'utf8');
+assert.match(frontend, /const max=10;if\(file\.size>max\*1024\*1024\)/);
+assert.match(frontend, /Maks\. 10 MB/);
+assert.match(frontend, /Maksimum 10 MB/);
 assert.equal((source.match(/Utilities\.base64Decode\(/g) || []).length, 1,
   'raw Base64 decoding should be centralized in the bounded validation helper');
 
