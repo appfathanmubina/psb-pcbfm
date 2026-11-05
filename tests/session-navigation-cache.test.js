@@ -20,24 +20,24 @@ assert.match(app, /function restorePageSnapshot\(page\)\{if\(!SNAPSHOT_PAGES\.ha
 console.log('Session restore and menu navigation cache safeguards passed.');
 
 const reload = app.slice(app.indexOf('async function reloadCurrentData()'), app.indexOf('function toggleSidebar()'));
-assert.doesNotMatch(reload, /renderApp\\(\\)/,
+assert.doesNotMatch(reload, /renderApp\(\)/,
   'Reload must not rebuild the whole shell or route through Home');
-assert.match(reload, /invalidateCurrentPageData\\(\\)/,
+assert.match(reload, /invalidateCurrentPageData\(\)/,
   'Reload must invalidate page snapshots and per-menu data caches');
-assert.match(reload, /await goPage\\(currentPage,\\{forceReload:true\\}\\)/,
+assert.match(reload, /await goPage\(currentPage,\{forceReload:true\}\)/,
   'Reload must force-fetch only the currently active menu');
-assert.match(reload, /const activeBtn=\\$\\('reloadDataBtn'\\)/,
+assert.match(reload, /const activeBtn=\$\('reloadDataBtn'\)/,
   'Reload completion must reacquire the current header button before resetting its loading state');
-assert.match(app, /async function goPage\\(page,options=\\{\\}\\)/,
+assert.match(app, /async function goPage\(page,options=\{\}\)/,
   'Navigation must support an explicit force-reload path');
-assert.match(app, /if\\(!forceReload&&restorePageSnapshot\\(page\\)\\)/,
+assert.match(app, /if\(!forceReload&&restorePageSnapshot\(page\)\)/,
   'A forced reload must bypass the current page snapshot');
-assert.match(app, /async function renderDocuments\\(registrationId,force=false\\)/,
+assert.match(app, /async function renderDocuments\(registrationId,force=false\)/,
   'Document reload must bypass its registration-specific cache');
-assert.match(app, /async function renderPayments\\(registrationId,force=false\\)/,
+assert.match(app, /async function renderPayments\(registrationId,force=false\)/,
   'Payment reload must bypass its registration-specific cache');
-assert.match(app, /async function renderRegistrationHub\\(force=false\\)/,
+assert.match(app, /async function renderRegistrationHub\(force=false\)/,
   'Registration reload must bypass the registration list cache');
-assert.match(app, /async function renderSelection\\(force=false\\)/,
+assert.match(app, /async function renderSelection\(force=false\)/,
   'Selection reload must bypass selection data and warm-page caches');
 console.log('Header reload current-page freshness safeguards passed.');
