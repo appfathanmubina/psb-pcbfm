@@ -4,7 +4,7 @@ const fs = require('node:fs');
 const appsSource = fs.readFileSync('apps-script/Index.html', 'utf8') + '\n' + fs.readFileSync('frontend/psb-fm-apps-script.js', 'utf8');
 const pwaSource = fs.readFileSync('frontend/app.js', 'utf8');
 
-const onlyInAppsScript = ['buildDocumentUploadFileName_', 'installStaticBrandIcons', 'renderPublicVideo'];
+const onlyInAppsScript = ['installStaticBrandIcons', 'renderPublicVideo'];
 const onlyInPwa = ['goPublicVideo', 'refreshPublicConfig', 'renderPublicVideoSection', 'updatePublicVideo'];
 const intentionallyDifferentBodies = [
   'appLogoMarkup', 'applyAppIcon', 'boot', 'configAssetSources', 'initializeAfterLogin', 'renderLogin',
