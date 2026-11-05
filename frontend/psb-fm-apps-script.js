@@ -625,7 +625,7 @@ function renderWaliHomeFlow(data){
     ['Pendaftaran','Isi dan kirim data calon santri.'],
     ['Pembayaran Formulir','Bayar biaya formulir dan tunggu konfirmasi Keuangan.'],
     ['Upload Dokumen','Unggah seluruh dokumen persyaratan setelah pembayaran dikonfirmasi.'],
-    ['Verifikasi PSB','Petugas memeriksa data dan dokumen setelah pembayaran dikonfirmasi.'],
+    ['Verifikasi PSB','Petugas memeriksa data dan dokumen setelah pembayaran dikonfirmasi dan berkas diunggah.'],
     ['Tes & Seleksi','Ikuti tes sesuai jadwal dan tunggu hasil seleksi.'],
     ['Pengumuman','Lihat hasil seleksi setelah diumumkan.'],
     ['Daftar Ulang','Jika lulus, lanjutkan proses daftar ulang.']
@@ -1233,7 +1233,7 @@ async function renderDocuments(registrationId,force=false){
   state.documentRegistrationId=registrationId||state.documentRegistrationId||'';
   $('content').innerHTML=`<section class="hero"><h2>Dokumen Pendaftaran</h2><p>Kelola berkas persyaratan dan simpan file secara terstruktur di Google Drive.</p></section><div id="documentPanel"><div class="empty-state">Memuat daftar pendaftaran...</div></div>`;
   try{
-    let r=!force?state.cache.documents[state.documentRegistrationId]||null:null;
+    let r=!force&&!hasAnyRole(['WALI'])?state.cache.documents[state.documentRegistrationId]||null:null;
     if(!r){r=await server('getDocumentPageData',state.token,state.documentRegistrationId);if(r?.success)state.cache.documents[state.documentRegistrationId]=r;}
     if(!r?.success){$('documentPanel').innerHTML=showMessage(r?.message||'Gagal memuat dokumen.');return;}
     const list=r.registrations||state.registrationList||[];state.registrationList=list;state.cache.registration=list;
@@ -1247,7 +1247,7 @@ async function renderDocuments(registrationId,force=false){
 async function loadDocumentsForRegistration(id){
   state.documentRegistrationId=String(id||'');const target=$('documentContent');if(!target)return;
   const cached=state.cache.documents[state.documentRegistrationId];
-  if(cached?.documentData){state.documentData=cached.documentData;renderDocumentContent();return;}
+  if(cached?.documentData&&!hasAnyRole(['WALI'])){state.documentData=cached.documentData;renderDocumentContent();return;}
   target.innerHTML='<div class="empty-state">Memuat dokumen...</div>';
   try{const r=await server('getDocumentOptions',state.token,id);if(!r.success){target.innerHTML=showMessage(r.message);return}state.documentData=r;state.cache.documents[state.documentRegistrationId]={success:true,registrations:state.registrationList||[],documentData:r};renderDocumentContent();}catch(e){target.innerHTML=showMessage('Gagal memuat dokumen.');}
 }
