@@ -13,6 +13,7 @@ assert.match(html, /prompt\.userChoice/, 'the install prompt result must be hand
 assert.match(html, /appinstalled/, 'successful installation must update the page state');
 assert.match(html, /display-mode:\s*standalone/, 'standalone launches must be detected');
 assert.match(html, /navigator\.standalone===true/, 'iOS standalone launches must be detected');
+assert.match(html, /getInstalledRelatedApps/, 'supported browsers must detect an installed PWA from a browser tab');
 assert.match(html, /isIOS\(\)/, 'iOS must have a dedicated installation guide');
 assert.match(html, /Tambahkan ke Layar Utama/, 'iOS guide must explain Add to Home Screen');
 assert.match(html, /menu tiga titik/, 'Android fallback guide must explain browser menu installation');
