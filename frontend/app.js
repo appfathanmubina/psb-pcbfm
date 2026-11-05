@@ -265,10 +265,11 @@ async function boot(){
       if(session?.success){
         state.user=session.user;
         const savedPage=sessionStorage.getItem('psb_current_page')||'home';
-        renderApp();
-        if(savedPage!=='home')goPage(savedPage);
-        loading(false);
         initializeAfterLogin();
+        $('loading')?.classList.add('hidden');
+        // Hindari renderHome ganda saat sesi dipulihkan pada halaman selain Beranda.
+        renderApp({deferInitialPage:true});
+        await goPage(savedPage);
       }else{
         state.token='';
         localStorage.removeItem('psb_session');
@@ -282,7 +283,7 @@ async function boot(){
     console.error('PSB boot error:',e);
     if(state.token)renderSessionRecovery('Sesi tersimpan, tetapi server belum dapat dihubungi. Muat ulang atau coba periksa koneksi internet.');
     else renderPublicHome('Sebagian informasi belum dapat dimuat. Periksa koneksi internet Anda.');
-  }finally{loading(false);}
+  }finally{if(!state.appInitialized)loading(false);}
   configTask.catch(()=>{});
 }
 function renderSessionRecovery(message){
@@ -539,11 +540,16 @@ async function submitLogin(e){
       state.documentData=null;
       state.paymentData=null;
       localStorage.setItem('psb_session',state.token);
-      renderApp();
-      loading(false);
+      // Aktifkan pelacakan sebelum Beranda dirender agar RPC data awal
+      // ikut menahan popup sampai renderer selesai memperbarui tampilan.
       initializeAfterLogin();
-      // Audit/last-login bookkeeping remains best-effort and never delays entry.
-      server('finalizeLogin',state.token).catch(()=>{});
+      $('loading')?.classList.add('hidden');
+      renderApp();
+      // Audit/last-login bookkeeping tetap best-effort dan tidak menahan popup Beranda.
+      state.processSilentDepth=Number(state.processSilentDepth||0)+1;
+      const finalizeLoginTask=server('finalizeLogin',state.token);
+      state.processSilentDepth=Math.max(0,Number(state.processSilentDepth||1)-1);
+      finalizeLoginTask.catch(()=>{});
       if(r.mustChangePassword)setTimeout(openChangePassword,200);
     }else{
       renderLogin(r?.message||'Login gagal. Periksa kembali identitas dan password.',identifier);
@@ -589,7 +595,7 @@ function buildMobileNav(){
   return [...direct,['more','Lainnya','settings']];
 }
 function navButtonsHtml(items,side){return items.map((x,i)=>`<button class="${side?'side-btn':'nav-btn'} ${i===0?'active':''}" id="${side?'side':'nav'}-${x[0]}" onclick="goPage('${x[0]}')"><span class="${side?'side-icon':'nav-icon'}">${ico(x[2])}</span><span>${x[1]}</span></button>`).join('');}
-function renderApp(){
+function renderApp(options={}){
   document.body.classList.remove('sidebar-collapsed');
   const sideItems=buildRoleNav();
   const items=buildMobileNav();
@@ -598,7 +604,7 @@ function renderApp(){
   const nav=navButtonsHtml(items,false);
   const side=navButtonsHtml(sideItems,true);
   $('app').innerHTML=`<aside class="sidebar"><div class="sidebar-nav">${side}</div><div class="sidebar-footer"><button class="side-user side-user-button" onclick="goPage('profile')" title="Buka profil"><div>${ico('user')}</div><div style="min-width:0"><div class="side-user-name">${esc(state.user.name)}</div><div class="side-user-role">${roleLabel}</div></div></button></div></aside><div class="topbar"><div class="brand"><button class="sidebar-toggle" type="button" title="Tampilkan/sembunyikan menu" aria-label="Tampilkan/sembunyikan menu" onclick="toggleSidebar()">${ico('menu')}</button><div class="logo">${appLogoMarkup()}</div><div class="brand-copy"><h1>PSB Fathan Mubina</h1><p>${esc(state.config.ACTIVE_YEAR||'2027/2028')}</p></div><div class="top-actions"><button class="header-action" id="reloadDataBtn" type="button" title="Reload data" aria-label="Reload data" onclick="reloadCurrentData()">${ico('refresh')}</button><button class="header-action notification-bell-wrap" title="Notifikasi" aria-label="Notifikasi" onclick="goPage('notifications')">${ico('bell')}<span id="notificationBadge" class="notification-badge" style="display:none">0</span></button><button class="user-chip" type="button" title="Profil" onclick="goPage('profile')"><span class="user-name">${esc(state.user.name)}</span><span class="user-icon">${ico('user')}</span></button></div></div></div><main class="shell" id="content"></main><nav class="bottom-nav"><div class="nav-inner" style="grid-template-columns:repeat(${items.length},minmax(0,1fr))">${nav}</div></nav>`;
-  goPage('home');
+  if(options.deferInitialPage!==true)goPage('home');
   updateNotificationBadge();
 }
 async function reloadCurrentData(){
