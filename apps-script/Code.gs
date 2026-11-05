@@ -2797,9 +2797,16 @@ const PSB_INCIDENT_PRIORITIES = ['LOW','MEDIUM','HIGH','CRITICAL'];
 
 function getDashboardPageData(sessionToken) {
   const actor = requireRole_(sessionToken, PSB_DASHBOARD_ROLES);
+  const role = String(actor.role||'').split(',').map(x=>x.trim().toUpperCase());
+  const canVerification = role.some(r=>PSB_VERIFICATION_ROLES.indexOf(r)>=0);
+  const canPayments = role.some(r=>PSB_PAYMENT_MANAGE_ROLES.indexOf(r)>=0);
+  const canSelection = role.some(r=>PSB_SELECTION_ADMIN_ROLES.indexOf(r)>=0);
+  const canAnnouncement = role.some(r=>PSB_ANNOUNCEMENT_ADMIN_ROLES.indexOf(r)>=0);
+  const canReregistration = role.some(r=>PSB_REREGISTRATION_ADMIN_ROLES.indexOf(r)>=0);
+  const canMonitoring = role.some(r=>PSB_MONITORING_ROLES.indexOf(r)>=0);
   const dashboardCache = CacheService.getScriptCache();
   const actorRoles = String(actor.role || '').split(',').map(r=>r.trim().toUpperCase()).filter(Boolean).sort().join(',');
-  const dashboardKey = 'PSB_DASHBOARD_V4_' + String(getConfig_('ACTIVE_YEAR') || '2027/2028').replace(/[^A-Za-z0-9_-]/g, '_') + '_' + sha256Hex_(actorRoles).substring(0, 16);
+  const dashboardKey = 'PSB_DASHBOARD_V5_' + String(getConfig_('ACTIVE_YEAR') || '2027/2028').replace(/[^A-Za-z0-9_-]/g, '_') + '_' + sha256Hex_(actorRoles).substring(0, 16);
   const dashboardCached = dashboardCache.get(dashboardKey);
   if (dashboardCached) {
     try { return JSON.parse(dashboardCached); } catch (e) {}
@@ -2820,8 +2827,6 @@ function getDashboardPageData(sessionToken) {
   const gelombangMasters = sheetRows_(ss.getSheetByName(PSB_SHEETS.MASTER_GELOMBANG));
   const candidateMap = {};
   candidates.forEach(x => candidateMap[String(x.candidateId)] = x);
-  const yearMap = {};
-  yearMasters.forEach(x => yearMap[String(x.tahunAjaranId)] = x);
   const jenjangMap = {};
   jenjangMasters.forEach(x => jenjangMap[String(x.jenjangId)] = x);
   const gelombangMap = {};
@@ -2874,28 +2879,33 @@ function getDashboardPageData(sessionToken) {
   periodRegs.forEach(x=>{const name=gelombangMap[String(x.gelombangId)]?.name||'Belum dipilih';gelombangCounts[name]=(gelombangCounts[name]||0)+1;});
   const revenue = periodBills.filter(x=>String(x.status||'').toUpperCase()==='PAID').reduce((sum,x)=>sum+(Number(x.amount)||0),0);
 
-  const role = String(actor.role||'').split(',').map(x=>x.trim().toUpperCase());
-  const isWali = role.indexOf('WALI') >= 0;
   const today = Utilities.formatDate(new Date(), Session.getScriptTimeZone() || 'Asia/Jakarta', 'yyyy-MM-dd');
   const tomorrowDate = new Date(); tomorrowDate.setDate(tomorrowDate.getDate()+1);
   const tomorrow = Utilities.formatDate(tomorrowDate, Session.getScriptTimeZone() || 'Asia/Jakarta', 'yyyy-MM-dd');
   const candidateNameByReg = {};
   periodRegs.forEach(r => { candidateNameByReg[String(r.registrationId)] = String(candidateMap[String(r.candidateId)]?.fullName || '-'); });
   const makeTask = (r, type, label, action, extra) => ({registrationId:r.registrationId,registrationNumber:r.registrationNumber||'',candidateName:candidateNameByReg[String(r.registrationId)]||'-',status:String(r.status||''),statusLabel:statusLabel_(String(r.status||'')),type,label,action,updatedAt:r.updatedAt||r.createdAt||'',...extra});
-  const verificationItems = periodRegs.filter(r=>['SUBMITTED','UNDER_REVIEW','REVISION'].indexOf(String(r.status||'').toUpperCase())>=0).sort((a,b)=>new Date(a.updatedAt||a.createdAt||0)-new Date(b.updatedAt||b.createdAt||0));
-  const paymentItems = periodBills.filter(b=>String(b.status||'').toUpperCase()==='PAYMENT_REVIEW').map(b=>{const r=periodRegMap[String(b.registrationId||'')];return r?makeTask(r,'PAYMENT','Bukti pembayaran menunggu verifikasi','payments',{billId:b.billId,amount:Number(b.amount)||0}):null;}).filter(Boolean).sort((a,b)=>new Date(a.updatedAt||0)-new Date(b.updatedAt||0));
-  const selectionItems = periodParticipants.filter(x=>['SCHEDULED','PRESENT','PENDING'].indexOf(String(x.status||'').toUpperCase())>=0).map(x=>{const r=periodRegMap[String(x.registrationId||'')];return r?makeTask(r,'SELECTION','Peserta tes perlu ditindaklanjuti','selection',{participantId:x.participantId,scheduleId:x.scheduleId,participantStatus:String(x.status||'')}):null;}).filter(Boolean);
-  const scheduleItems = schedules.filter(x=>String(x.isActive).toUpperCase()==='TRUE' && [today,tomorrow].indexOf(String(x.selectionDate||'').slice(0,10))>=0).sort((a,b)=>String(a.selectionDate||'').localeCompare(String(b.selectionDate||'')));
-  const publishItems = periodResults.filter(x=>['PASSED','NOT_PASSED','WAITLIST'].indexOf(String(x.status||'').toUpperCase())>=0 && !String(x.announcementDate||'').trim()).map(x=>{const r=periodRegMap[String(x.registrationId||'')];return r?makeTask(r,'ANNOUNCEMENT','Hasil seleksi siap dipublikasikan','announcement',{resultId:x.resultId,resultStatus:String(x.status||'')}):null;}).filter(Boolean);
-  const reregItems = periodRereg.filter(x=>['PENDING','PAYMENT_PENDING','PAYMENT_VERIFIED'].indexOf(String(x.status||'').toUpperCase())>=0).map(x=>{const r=periodRegMap[String(x.registrationId||'')];return r?makeTask(r,'REREGISTRATION','Daftar ulang masih perlu diselesaikan','reregistration',{reregistrationId:x.reregistrationId,reregistrationStatus:String(x.status||'')}):null;}).filter(Boolean);
+  const verificationItems = canVerification ? periodRegs.filter(r=>['SUBMITTED','UNDER_REVIEW','REVISION'].indexOf(String(r.status||'').toUpperCase())>=0).sort((a,b)=>new Date(a.updatedAt||a.createdAt||0)-new Date(b.updatedAt||b.createdAt||0)) : [];
+  const paymentItems = canPayments ? periodBills.filter(b=>String(b.status||'').toUpperCase()==='PAYMENT_REVIEW').map(b=>{const r=periodRegMap[String(b.registrationId||'')];return r?makeTask(r,'PAYMENT','Bukti pembayaran menunggu verifikasi','payments',{billId:b.billId,amount:Number(b.amount)||0}):null;}).filter(Boolean).sort((a,b)=>new Date(a.updatedAt||0)-new Date(b.updatedAt||0)) : [];
+  const selectionItems = canSelection ? periodParticipants.filter(x=>['SCHEDULED','PRESENT','PENDING'].indexOf(String(x.status||'').toUpperCase())>=0).map(x=>{const r=periodRegMap[String(x.registrationId||'')];return r?makeTask(r,'SELECTION','Peserta tes perlu ditindaklanjuti','selection',{participantId:x.participantId,scheduleId:x.scheduleId,participantStatus:String(x.status||'')}):null;}).filter(Boolean) : [];
+  const activeScheduleItems = [];
+  let activeSchedulesCount = 0;
+  if (canSelection) schedules.forEach(x => {
+    if (String(x.isActive).toUpperCase() !== 'TRUE') return;
+    activeSchedulesCount++;
+    if ([today,tomorrow].indexOf(String(x.selectionDate||'').slice(0,10)) >= 0) activeScheduleItems.push(x);
+  });
+  activeScheduleItems.sort((a,b)=>String(a.selectionDate||'').localeCompare(String(b.selectionDate||'')));
+  const publishItems = canAnnouncement ? periodResults.filter(x=>['PASSED','NOT_PASSED','WAITLIST'].indexOf(String(x.status||'').toUpperCase())>=0 && !String(x.announcementDate||'').trim()).map(x=>{const r=periodRegMap[String(x.registrationId||'')];return r?makeTask(r,'ANNOUNCEMENT','Hasil seleksi siap dipublikasikan','announcement',{resultId:x.resultId,resultStatus:String(x.status||'')}):null;}).filter(Boolean) : [];
+  const reregItems = canReregistration ? periodRereg.filter(x=>['PENDING','PAYMENT_PENDING','PAYMENT_VERIFIED'].indexOf(String(x.status||'').toUpperCase())>=0).map(x=>{const r=periodRegMap[String(x.registrationId||'')];return r?makeTask(r,'REREGISTRATION','Daftar ulang masih perlu diselesaikan','reregistration',{reregistrationId:x.reregistrationId,reregistrationStatus:String(x.status||'')}):null;}).filter(Boolean) : [];
   const operational = {
-    activeSchedules:schedules.filter(x=>String(x.isActive).toUpperCase()==='TRUE').length,
-    activeUsers:users.filter(x=>String(x.status).toUpperCase()==='ACTIVE').length,
+    activeSchedules:canSelection ? activeSchedulesCount : 0,
+    activeUsers:canMonitoring ? users.filter(x=>String(x.status).toUpperCase()==='ACTIVE').length : 0,
     today,
     verification:{count:verificationItems.length,items:verificationItems.slice(0,6).map(r=>makeTask(r,'VERIFICATION',String(r.status||'')==='REVISION'?'Pendaftaran perlu diperbaiki':'Pendaftaran menunggu pemeriksaan','verification'))},
     payments:{count:paymentItems.length,items:paymentItems.slice(0,6)},
     selection:{count:selectionItems.length,items:selectionItems.slice(0,6)},
-    schedules:{today:scheduleItems.filter(x=>String(x.selectionDate||'').slice(0,10)===today),tomorrow:scheduleItems.filter(x=>String(x.selectionDate||'').slice(0,10)===tomorrow)},
+    schedules:{today:canSelection ? activeScheduleItems.filter(x=>String(x.selectionDate||'').slice(0,10)===today) : [],tomorrow:canSelection ? activeScheduleItems.filter(x=>String(x.selectionDate||'').slice(0,10)===tomorrow) : []},
     announcements:{count:publishItems.length,items:publishItems.slice(0,6)},
     reregistration:{count:reregItems.length,items:reregItems.slice(0,6)}
   };
@@ -2905,7 +2915,7 @@ function getDashboardPageData(sessionToken) {
     payments:paymentByStatus, selection:{participants:periodParticipants.length,results:periodResults.length,...resultCounts}, reregistration:reregCounts,
     finance:{paidAmount:revenue}, distributions:{jenjang:sortCountMap_(jenjangCounts),gelombang:sortCountMap_(gelombangCounts)},
     operational,
-    permissions:{canReport:role.some(r=>PSB_REPORT_ROLES.indexOf(r)>=0),canVerification:role.some(r=>PSB_VERIFICATION_ROLES.indexOf(r)>=0),canPayments:role.some(r=>PSB_PAYMENT_MANAGE_ROLES.indexOf(r)>=0),canSelection:role.some(r=>PSB_SELECTION_ADMIN_ROLES.indexOf(r)>=0),canAnnouncement:role.some(r=>PSB_ANNOUNCEMENT_ADMIN_ROLES.indexOf(r)>=0),canReregistration:role.some(r=>PSB_REREGISTRATION_ADMIN_ROLES.indexOf(r)>=0),canMonitoring:role.some(r=>PSB_MONITORING_ROLES.indexOf(r)>=0),canIncident:role.some(r=>PSB_INCIDENT_ROLES.indexOf(r)>=0)},
+    permissions:{canReport:role.some(r=>PSB_REPORT_ROLES.indexOf(r)>=0),canVerification,canPayments,canSelection,canAnnouncement,canReregistration,canMonitoring,canIncident:role.some(r=>PSB_INCIDENT_ROLES.indexOf(r)>=0)},
     generatedAt:new Date().toISOString()
   };
   try { dashboardCache.put(dashboardKey, JSON.stringify(response), 30); } catch (e) {}
