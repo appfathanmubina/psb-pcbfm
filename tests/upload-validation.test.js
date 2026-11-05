@@ -30,7 +30,7 @@ const frontend = fs.readFileSync('frontend/app.js', 'utf8');
 assert.match(frontend, /const UPLOAD_IMAGE_MAX_SIDE=2000/);
 assert.match(frontend, /const UPLOAD_IMAGE_COMPRESSION_THRESHOLD=1\.5\*1024\*1024/);
 assert.match(frontend, /async function prepareUploadFile\(file,allowed\)/);
-assert.ok(frontend.includes("if(!/^image\\\\/(jpeg|png|webp)$/i.test(String(file.type||'')))return original"));
+assert.ok(frontend.includes(String.raw`if(!/^image\/(jpeg|png|webp)$/i.test(String(file.type||'')))return original`));
 assert.match(frontend, /canvas\.toBlob\(resolve,outType,0\.82\)/);
 assert.match(frontend, /const prepared=await prepareUploadFile\(file,type\.allowedMimeTypes\),max=getDocumentMaxSizeMb\(type\)/);
 assert.match(frontend, /if\(prepared\.fileSize>max\*1024\*1024\)/);
