@@ -4,6 +4,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 
 const backend = fs.readFileSync('apps-script/Code.gs', 'utf8');
+const bridge = fs.readFileSync('frontend/api-bridge.js', 'utf8');
 const start = backend.indexOf('function submitPayment(sessionToken,payload){');
 const end = backend.indexOf('\nfunction verifyPayment(sessionToken,payload){', start);
 assert.notEqual(start, -1, 'payment proof upload backend must exist');
@@ -34,5 +35,10 @@ assert.ok(upload.includes(String.raw`mimeType!=='application/pdf'`),
   'PDF proof uploads must remain supported');
 assert.ok(upload.includes(String.raw`/^image\/(jpeg|png|webp)$/i`),
   'JPG, PNG, and WEBP proof uploads must remain supported');
+
+assert.match(bridge, /const UPLOAD_TIMEOUT_MS = 120000/,
+  'payment proof upload must have enough time for Drive processing');
+assert.match(bridge, /\(item\.functionName === 'uploadDocument' \|\| item\.functionName === 'submitPayment'\) \? UPLOAD_TIMEOUT_MS : TIMEOUT_MS/,
+  'document and payment uploads must both use the extended upload timeout');
 
 console.log('Payment proof upload resilience safeguards passed.');
