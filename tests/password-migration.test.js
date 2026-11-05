@@ -27,7 +27,8 @@ for(const [p,s] of [['password','salt'],['PSB-2027','0123456789abcdef0123456789a
 assert.match(source,/const PSB_PASSWORD_HASH_SCHEME_ = 'pbkdf2_sha256'/);
 assert.match(source,/const PSB_PASSWORD_HASH_ITERATIONS_ = 60000/);
 assert.match(body('hashPassword_'),/pbkdf2Sha256Hex_/);
-assert.ok(body('hashPassword_').includes("return PSB_PASSWORD_HASH_SCHEME_ + '
+assert.ok(body('hashPassword_').includes('PSB_PASSWORD_HASH_SCHEME_ +'));
+assert.ok(body('hashPassword_').includes('derivedKey;'));
 assert.match(body('pbkdf2Sha256Hex_'),/Utilities\.computeHmacSha256Signature/);
 assert.match(body('pbkdf2Sha256Hex_'),/saltBytes\.concat\(\[0, 0, 0, 1\]\)/);
 assert.match(body('verifyPasswordForUser_'),/needsUpgrade: valid && iterations !== PSB_PASSWORD_HASH_ITERATIONS_/);
