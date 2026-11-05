@@ -80,6 +80,8 @@ jobs:
         run: node tests/backend-read-optimization.test.js
       - name: Test document page and verification queue performance safeguards
         run: node tests/backend-document-page-performance.test.js
+      - name: Test current document and verification detail performance safeguards
+        run: node tests/backend-verification-detail-performance.test.js
       - name: Test payment page performance and ownership safeguards
         run: node tests/backend-payment-page-performance.test.js
       - name: Test desktop public landing responsive safeguards
