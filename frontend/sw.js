@@ -1,12 +1,12 @@
-// PSB PWA 32.14.0 — refresh same-origin assets from the network before using offline cache.
+// PSB PWA 32.15.0 — refresh same-origin assets from the network before using offline cache.
 const CACHE='psb-pwa-shell-v32-14-0';
 const ASSETS=[
   './',
   './index.html',
-  './manifest.webmanifest?v=32.14.0',
-  './styles.css?v=32.14.0',
+  './manifest.webmanifest?v=32.15.0',
+  './styles.css?v=32.15.0',
   './api-bridge.js?v=32.13.0',
-  './app.js?v=32.14.0',
+  './app.js?v=32.15.0',
   './assets/logo-fathanmubina.svg?v=32.7.0',
   './assets/logo-fathan-mubina.png?v=32.7.0',
   './icons/favicon-32.svg?v=32.7.0',
@@ -31,17 +31,16 @@ self.addEventListener('fetch',event=>{
   const url=new URL(request.url);
   if(url.origin!==self.location.origin)return;
 
-  // Render aset shell dari cache terlebih dahulu agar buka ulang terasa instan.
-  // Pembaruan jaringan berjalan di belakang layar; HTML navigasi tetap network-first.
+  // Aset aplikasi memakai network-first agar reload tidak terus menampilkan
+  // JavaScript/CSS lama. Cache hanya menjadi fallback ketika perangkat offline.
   if(CACHE_FIRST_ASSETS.has(request.url)){
-    const update=fetch(request,{cache:'no-cache'}).then(response=>{
+    event.respondWith(fetch(request,{cache:'no-cache'}).then(response=>{
       if(response&&response.ok&&response.type==='basic'){
-        return caches.open(CACHE).then(cache=>cache.put(request,response.clone())).then(()=>response);
+        const copy=response.clone();
+        event.waitUntil(caches.open(CACHE).then(cache=>cache.put(request,copy)));
       }
       return response;
-    });
-    event.waitUntil(update.catch(()=>{}));
-    event.respondWith(caches.match(request).then(cached=>cached||update).catch(()=>caches.match(request)));
+    }).catch(()=>caches.match(request)));
     return;
   }
 
