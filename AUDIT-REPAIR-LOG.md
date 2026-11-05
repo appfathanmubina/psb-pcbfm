@@ -409,3 +409,24 @@ Branch: `perf/reporting-payment-aggregation`
 - Summary counts, grouping, option lists, response fields, and generated timestamp remain unchanged.
 - No spreadsheet schema, stored data, role definitions, business rules, or production deployment changed.
 - Apps Script runtime/staging data tests remain pending; CI regression tests validate the endpoint behavior with controlled fixtures.
+
+
+## Repair batch 12 — dashboard role-scoped operational queues
+
+Branch: `perf/dashboard-role-scoped-queues`
+
+| ID | Finding | Change | Status |
+|---|---|---|---|
+| PERF-DASH-001 | `getDashboardPageData()` returned every operational queue to all dashboard roles; the frontend hid some panels but the API response still exposed their records. | Apply the matching backend permission before building each queue and return empty arrays/counts for unauthorized queue categories. Selection schedules and active schedule count are limited to selection roles; active-user count is limited to monitoring roles. | Implemented; CI pending |
+| PERF-DASH-002 | Dashboard cache key did not encode the new role-scoped response contract. | Bump cache namespace from `PSB_DASHBOARD_V4_` to `PSB_DASHBOARD_V5_` to prevent reuse of old unfiltered payloads. | Implemented; CI pending |
+| PERF-DASH-003 | Active schedules were filtered separately for the active count and today/tomorrow schedule cards. | Count active schedules and collect today/tomorrow entries in one pass, retaining the existing date ordering. | Implemented; CI pending |
+| PERF-DASH-004 | The dashboard renderer displayed the schedule panel for roles without selection access. | Render the schedule panel only when `permissions.canSelection` is true in both PWA and Apps Script bridge frontend sources. | Implemented; CI pending |
+
+### Scope and safety
+
+- Dashboard role gate remains the first operation before cache/database access.
+- Queue access uses the existing role constants; role definitions are unchanged.
+- Existing response keys, queue limits/order, task fields, summary metrics, and workflow status rules remain unchanged; unauthorized queue keys remain present with zero counts and empty item arrays for frontend compatibility.
+- Dashboard summary and KPI fields are unchanged; this batch scopes operational task queues and selection schedule details only.
+- No Spreadsheet schema, stored data, or production deployment changed.
+- Apps Script staging-runtime validation remains pending; CI adds a role-by-role backend fixture regression test.
