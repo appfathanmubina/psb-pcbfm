@@ -42,6 +42,15 @@ assert.match(submitRegistration, /Verifikasi PSB dimulai setelah pembayaran diko
 const verifyPayment = section(backend, 'function verifyPayment(sessionToken,payload)', 'function getSelectionPageData(sessionToken, registrationId)');
 assert.match(verifyPayment, /notifyUsersByRoles_\(\['SUPERADMIN','ADMIN_PSB','VERIFIKATOR'\]/);
 assert.match(verifyPayment, /notifyRegistrationOwner_\(String\(regFound\.registration\.registrationId\)/);
+assert.match(verifyPayment, /Tuliskan alasan penolakan/i);
+
+const paymentData = section(backend, 'function buildPaymentData_(registrationId, paymentTypes)', 'function createBill(sessionToken,payload)');
+assert.match(paymentData, /PAYMENT_VERIFICATIONS/);
+assert.match(paymentData, /verificationNote/);
+
+const waliHome = section(backend, 'function getWaliHomeData(sessionToken)', 'function statusLabel_(s)');
+assert.match(waliHome, /paymentNote/);
+assert.match(waliHome, /uploadedRequiredCount/);
 
 const waliDashboard = section(frontend, 'function renderWaliHomeFlow(data)', 'function dashboardTaskItems(items, emptyText)');
 assert.match(waliDashboard, /Pembayaran Formulir/);
@@ -54,5 +63,7 @@ assert.match(waliDashboard, /repeat\(auto-fit/);
 const paymentPage = section(frontend, 'function renderPaymentContent()', 'function openPaymentUpload(billId)');
 assert.match(paymentPage, /Tagihan formulir belum diterbitkan/);
 assert.match(paymentPage, /melengkapi dokumen persyaratan sambil menunggu/);
+assert.match(paymentPage, /Alasan penolakan/);
+assert.match(paymentPage, /verificationNote/);
 
 console.log('Wali parallel document/payment workflow safeguards passed.');
