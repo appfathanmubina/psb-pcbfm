@@ -20,8 +20,10 @@ assert.match(initialize, /state\.appInitialized\s*=\s*true/,
 const warmScheduler = functionSource('scheduleWarmNavigationData');
 assert.match(warmScheduler, /requestIdleCallback/,
   'Navigation prefetch should use browser idle time when available');
-assert.match(warmScheduler, /setTimeout\(run,\s*1200\)/,
-  'Navigation prefetch must have a delayed fallback');
+assert.match(warmScheduler, /setTimeout\(run,\s*8000\)/,
+  'Navigation prefetch must wait before background work on browsers without idle callbacks');
+assert.match(warmScheduler, /timeout:10000/,
+  'Navigation prefetch must wait for a browser idle window');
 
 const boot = functionSource('boot');
 assert.match(boot, /const configTask\s*=\s*refreshPublicConfig\(\)/,
@@ -43,13 +45,20 @@ assert.match(app, /value="\$\{esc\(identifier\)\}"/,
 
 assert.match(app, /function warmNavigationData\(\)/,
   'Lazy navigation prefetch remains available after the active page loads');
+const warmData = functionSource('warmNavigationData');
+assert.match(warmData, /getAnnouncementPageData/,
+  'Only lightweight announcements may be warmed in the background');
+assert.match(warmData, /getNotifications/,
+  'Only lightweight notifications may be warmed in the background');
+assert.doesNotMatch(warmData, /getRegistrationList|getVerificationQueue|getReportingPageData|getAuditLogPageData|getMasterData/,
+  'Heavy menus must load on demand instead of competing with the active page');
 assert.match(app, /scheduleWarmNavigationData\(\);/,
   'Navigation prefetch must be scheduled outside the initial render path');
 
 assert.match(app, /state\.page==='home'\)warmNavigationData\(\)/,
   'Background navigation prefetch must only start while Home remains active');
-assert.match(app, /state\.page!=='home' \|\| !state\.token\)return/,
-  'Background navigation prefetch must stop when the user navigates away');
+assert.match(app, /!state\.token\|\|state\.page!=='home'\|\|document\.visibilityState==='hidden'\)return/,
+  'Background navigation prefetch must stop when the user navigates away or the tab is hidden');
 assert.match(app, /state\.publicGalleryLoadScheduled=false;[\s\S]{0,120}if\(document\.getElementById\('galleryTrack'\)\)loadPublicGallery\(\)/,
   'Static GitHub gallery rendering must be deferred and skipped after leaving the public home');
 assert.match(app, /requestIdleCallback\(loadGalleryWhenIdle,\{timeout:3000\}\)/,
