@@ -88,7 +88,7 @@ const context = {
 };
 vm.createContext(context);
 vm.runInContext(page, context);
-const result = context.getReportingPageData('session-token', {});
+const result = JSON.parse(JSON.stringify(context.getReportingPageData('session-token', {})));
 
 assert.deepEqual(calls.slice(0, 2), ['role', 'database'],
   'Authorization must happen before database access');
@@ -108,7 +108,7 @@ assert.deepEqual(Object.keys(result.filters), ['tahunAjaranId', 'gelombangId', '
 assert.ok(Array.isArray(result.options.tahunAjaran));
 assert.ok(Array.isArray(result.options.statuses));
 
-const filtered = context.getReportingPageData('session-token', { gender: 'L' });
+const filtered = JSON.parse(JSON.stringify(context.getReportingPageData('session-token', { gender: 'L' })));
 assert.deepEqual(filtered.rows.map(x => x.registrationId), ['r1', 'r3'],
   'Existing gender filter semantics must remain unchanged');
 
