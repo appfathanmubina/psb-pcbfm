@@ -8,7 +8,7 @@ const onlyInAppsScript = ['installStaticBrandIcons', 'renderPublicVideo'];
 const onlyInPwa = ['decodeUploadImage', 'getSupportedDocumentMimeTypes', 'goPublicVideo', 'prepareUploadFile', 'refreshPublicConfig', 'renderPublicVideoSection', 'updatePublicVideo', 'uploadMimeAllowed'];
 const intentionallyDifferentBodies = [
   'appLogoMarkup', 'applyAppIcon', 'boot', 'configAssetSources', 'initializeAfterLogin', 'renderLogin',
-  'hydrateSplashLogo', 'movePublicVideo',
+  'getDocumentMaxSizeMb', 'hydrateSplashLogo', 'movePublicVideo', 'openDocumentUpload',
   'playPublicVideo', 'renderApp', 'renderPublicHome', 'renderApplicants', 'renderRegistrationList', 'renderVerificationList', 'renderWaliVerificationStatus', 'statusLabel', 'submitDocumentUpload', 'submitLogin', 'submitPaymentUpload'
 ];
 
