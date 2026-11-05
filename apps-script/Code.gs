@@ -1809,7 +1809,8 @@ function getWaliHomeData(sessionToken) {
     if (registrationStatus === 'COMPLETED') completed = 7;
 
     let next = {key:'registration', title:'Lengkapi Pendaftaran', description:'Lengkapi data calon santri lalu kirim formulir pendaftaran.', button:'Lanjutkan Pendaftaran'};
-    if (registrationStatus === 'REVISION') next = {key:'registration', title:'Perbaiki Pendaftaran', description:'Petugas meminta perbaikan data atau dokumen. Baca catatan revisi lalu perbarui bagian yang diminta.', button:'Perbaiki Pendaftaran'};
+    if (registrationStatus === 'COMPLETED') next = {key:'', title:'Pendaftaran Selesai', description:'Seluruh tahapan pendaftaran dan daftar ulang telah selesai. Tidak ada tindakan lanjutan yang perlu dilakukan.', button:''};
+    else if (registrationStatus === 'REVISION') next = {key:'registration', title:'Perbaiki Pendaftaran', description:'Petugas meminta perbaikan data atau dokumen. Baca catatan revisi lalu perbarui bagian yang diminta.', button:'Perbaiki Pendaftaran'};
     else if (registrationStatus === 'DRAFT') next = {key:'registration', title:'Lanjutkan Pendaftaran', description:'Pendaftaran masih berupa draft dan belum dikirim.', button:'Lanjutkan Pendaftaran'};
     else if (['SUBMITTED','UNDER_REVIEW'].includes(registrationStatus) && !formPaid) next = {key:'documents', title:'Lengkapi Dokumen dan Pembayaran', description:'Anda dapat mengunggah dokumen dan melakukan pembayaran secara bersamaan. Verifikasi PSB dimulai setelah pembayaran formulir dikonfirmasi oleh Keuangan.', button:'Lihat Langkah Berikutnya'};
     else if (['SUBMITTED','UNDER_REVIEW'].includes(registrationStatus) && formPaid) next = {key:'documents', title:'Menunggu Verifikasi PSB', description:'Pembayaran formulir sudah dikonfirmasi. Petugas PSB akan memeriksa data dan dokumen. Jika ada kekurangan, Anda akan menerima instruksi perbaikan.', button:'Lihat Dokumen'};
@@ -2035,6 +2036,8 @@ function verifyPayment(sessionToken,payload){
   assertOperationalMutation_(actor); payload=payload||{};
   const paymentId=String(payload.paymentId||'').trim(), status=String(payload.status||'').toUpperCase(), note=String(payload.note||'').trim();
   if(!paymentId||['VERIFIED','REJECTED'].indexOf(status)<0) return fail_('Data verifikasi pembayaran tidak valid.');
+  if(status==='REJECTED' && !note) return fail_('Alasan penolakan pembayaran wajib diisi agar Wali mengetahui perbaikan yang harus dilakukan.');
+  if(note.length>500) return fail_('Alasan verifikasi maksimal 500 karakter.');
   const lock=LockService.getScriptLock(); lock.waitLock(10000);
   try {
   const sheet=getDatabaseSpreadsheet_().getSheetByName(PSB_SHEETS.PAYMENTS), found=findRowById_(sheet,'paymentId',paymentId); if(!found) return fail_('Pembayaran tidak ditemukan.');
