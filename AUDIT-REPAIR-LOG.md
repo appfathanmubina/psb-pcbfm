@@ -278,7 +278,7 @@ Branch: `perf/document-verification-batch-reads`
 
 | ID | Finding | Change | Status |
 |---|---|---|---|
-| PERF-DOC-001 | `getDocumentPageData()` built the registration list, then called `findRegistration_()` for the selected item, rereading REGISTRATIONS, CANDIDATES, GUARDIANS, ADDRESSES, and SCHOOLS. | Reuse request-local registration and candidate indexes; load related guardian/address/school rows once and preserve first-row / first-primary selection behavior. Registration enrichment accepts optional preloaded maps; existing callers retain their original behavior. | Patch prepared; CI pending |
+| PERF-DOC-001 | `getDocumentPageData()` built the registration list, then called `findRegistration_()` for the selected item, rereading REGISTRATIONS, CANDIDATES, GUARDIANS, ADDRESSES, and SCHOOLS. | Reuse request-local registration and candidate indexes; load related guardian/address/school rows once and preserve first-row / first-primary selection behavior. Registration enrichment accepts optional preloaded maps; existing callers retain their original behavior. | Regression checks passed; runtime/staging test pending |
 | PERF-VER-001 | `getVerificationQueue()` converted every registration row into an object before applying status and search filters. | Apply the same status and search conditions to raw row arrays first; create row objects only for matching queue entries. Keep enrichment, sorting, and the 200-row cap unchanged. | Patch prepared; CI pending |
 
 ### Scope and safety
