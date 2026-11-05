@@ -26,7 +26,7 @@ assert.match(upload, /if\(uploadedFile\)\s*\{\s*try\{uploadedFile\.setTrashed\(t
   'uncommitted Drive files must be cleaned up after failed commits');
 assert.match(upload, /PSB_PAYMENT_UPLOAD_FAILED stage=/,
   'payment upload failures must log a safe processing stage');
-assert.match(upload, /LOCK_PAYMENT_PREPARE\|\|stage==='LOCK_PAYMENT_COMMIT'/,
+assert.ok(upload.includes(String.raw`stage==='LOCK_PAYMENT_PREPARE'||stage==='LOCK_PAYMENT_COMMIT'`),
   'lock contention must return a retryable message');
 assert.match(upload, /5\*1024\*1024/,
   'the existing 5 MB payment proof limit must remain unchanged');
