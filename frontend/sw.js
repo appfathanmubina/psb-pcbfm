@@ -1,5 +1,5 @@
-// PSB PWA 32.14.0 — refresh same-origin assets from the network before using offline cache.
-const CACHE='psb-pwa-shell-v32-14-0';
+// PSB PWA 32.16.0 — refresh same-origin assets from the network before using offline cache.
+const CACHE='psb-pwa-shell-v32-16-0';
 const ASSETS=[
   './',
   './index.html',
