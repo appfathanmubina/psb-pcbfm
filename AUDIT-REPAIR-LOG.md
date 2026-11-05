@@ -295,7 +295,7 @@ Branch: `perf/payment-page-batch-reads`
 
 | ID | Finding | Change | Status |
 |---|---|---|---|
-| PERF-PAY-001 | `getPaymentPageData()` loaded and enriched the registration list, then called `findRegistration()` for the selected registration, rereading REGISTRATIONS, CANDIDATES, GUARDIANS, ADDRESSES, and SCHOOLS. | Reuse the registration row already read for the page and preload candidate, academic-year, admission-wave, and education-level maps once for enrichment. Preserve the first raw registration row for duplicate-ID compatibility. | Regression test added; CI passed on implementation commit `f7eb47d` (35 workflow steps); runtime/staging test pending |
+| PERF-PAY-001 | `getPaymentPageData()` loaded and enriched the registration list, then called `findRegistration()` for the selected registration, rereading REGISTRATIONS, CANDIDATES, GUARDIANS, ADDRESSES, and SCHOOLS. | Reuse the registration row already read for the page and preload candidate, academic-year, admission-wave, and education-level maps once for enrichment. Preserve the first raw registration row for duplicate-ID compatibility. | Regression test added; CI pending |
 | PERF-PAY-002 | Payment types were read separately by the page response and `buildPaymentData()`. | Load active payment types once and pass them into `buildPaymentData()`; other callers retain the original default lookup. | Regression test added; CI pending |
 
 ### Scope and safety
@@ -332,7 +332,7 @@ Branch: `perf/reregistration-page-batch-reads`
 
 | ID | Finding | Change | Status |
 |---|---|---|---|
-| PERF-REREG-001 | `getReregistrationPageData()` reread selection results, five registration-related tables, current documents, required-document masters, bills, payments, and payment-type masters inside the registration loop. | Read each required table once per request, build first-match indexes by registration/candidate ID, group current documents and payment data by registration, and reuse active masters. Preserve newest-first document selection and last-payment-row lookup semantics. | Regression test added; CI pending |
+| PERF-REREG-001 | `getReregistrationPageData()` reread selection results, five registration-related tables, current documents, required-document masters, bills, payments, and payment-type masters inside the registration loop. | Read each required table once per request, build first-match indexes by registration/candidate ID, group current documents and payment data by registration, and reuse active masters. Preserve newest-first document selection and last-payment-row lookup semantics. | Regression test added; CI passed on implementation commit `f7eb47d` (35 workflow steps); runtime/staging test pending |
 
 ### Scope and safety
 
