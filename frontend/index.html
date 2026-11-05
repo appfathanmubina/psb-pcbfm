@@ -146,7 +146,7 @@
   });
   installButton.addEventListener('click',async function(){
     if(isIOS()){
-      renderGuide();
+      hide();
       return;
     }
     if(!deferredInstallPrompt){
