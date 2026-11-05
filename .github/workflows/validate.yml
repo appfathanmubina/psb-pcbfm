@@ -56,6 +56,8 @@ jobs:
         run: node tests/session-navigation-cache.test.js
       - name: Test Wali workflow navigation and notification badge safeguards
         run: node tests/wali-workflow-navigation.test.js
+      - name: Test registration payment and document status consistency
+        run: node tests/registration-status-consistency.test.js
       - name: Test Drive private document safeguards
         run: node tests/drive-gallery-security.test.js
       - name: Test GitHub-only public gallery assets and source
