@@ -3735,13 +3735,21 @@ function uploadDocument(sessionToken, payload) {
       return fail_('Tipe file tidak diizinkan untuk dokumen "' + String(type.name || '') + '".');
     }
 
-    // Batas upload dokumen PSB ditetapkan konsisten: maksimal 10 MB per file.
-    const maxSizeMb = 10;
+    // Batas maksimum mengikuti konfigurasi tiap jenis dokumen pada Master Data.
+    // Jika kolom belum diisi pada data lama, gunakan default kompatibilitas 10 MB.
+    const configuredMaxSizeMb = Number(type.maxSizeMb);
+    const maxSizeMb = Number.isFinite(configuredMaxSizeMb) && configuredMaxSizeMb > 0
+      ? configuredMaxSizeMb
+      : 10;
+    const maxBytes = Math.floor(maxSizeMb * 1024 * 1024);
+    if (clientSize > maxBytes) {
+      return fail_('Ukuran file melebihi batas ' + maxSizeMb + ' MB untuk dokumen ' + String(type.name || '') + '.');
+    }
     stage = 'DECODE_FILE';
-    const upload = decodeAndValidateUpload_(base64, mimeType, maxSizeMb * 1024 * 1024);
+    const upload = decodeAndValidateUpload_(base64, mimeType, maxBytes);
     if (!upload.success) {
       return fail_(upload.message === 'Ukuran file melebihi batas yang diizinkan.'
-        ? 'Ukuran file melebihi batas ' + maxSizeMb + ' MB.'
+        ? 'Ukuran file melebihi batas ' + maxSizeMb + ' MB untuk dokumen ' + String(type.name || '') + '.'
         : upload.message);
     }
     const bytes = upload.bytes;

@@ -20,12 +20,15 @@ assert.ok(helper.indexOf('encoded.length >') < helper.indexOf('Utilities.base64D
 
 assert.match(source, /decodeAndValidateUpload_\(base64,mimeType,5\*1024\*1024\)/);
 // Chat attachment upload handling was retired with the PSB Chat module.
-assert.match(source, /const maxSizeMb = 10/);
+assert.match(source, /const configuredMaxSizeMb = Number\(type\.maxSizeMb\)/);
+assert.match(source, /const maxSizeMb = Number\.isFinite\(configuredMaxSizeMb\)/);
+assert.match(source, /decodeAndValidateUpload_\(base64, mimeType, maxBytes\)/);
 assert.doesNotMatch(source, /Math\.min\(configuredMaxSizeMb/);
 const frontend = fs.readFileSync('frontend/app.js', 'utf8');
-assert.match(frontend, /const max=10;if\(file\.size>max\*1024\*1024\)/);
-assert.match(frontend, /Maks\. 10 MB/);
-assert.match(frontend, /Maksimum 10 MB/);
+assert.match(frontend, /const max=getDocumentMaxSizeMb\(type\);if\(file\.size>max\*1024\*1024\)/);
+assert.match(frontend, /function getDocumentMaxSizeMb\(type\)/);
+assert.ok(frontend.includes('Maks. ${esc(getDocumentMaxSizeMb(x))} MB'));
+assert.ok(frontend.includes('Maksimum ${esc(maxSizeMb)} MB'));
 assert.equal((source.match(/Utilities\.base64Decode\(/g) || []).length, 1,
   'raw Base64 decoding should be centralized in the bounded validation helper');
 
