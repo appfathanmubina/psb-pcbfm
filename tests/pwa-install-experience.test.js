@@ -23,6 +23,7 @@ assert.equal(manifest.id, './', 'manifest app identity must remain stable');
 assert.equal(manifest.start_url, './', 'manifest start URL must remain stable');
 assert.equal(manifest.scope, './', 'manifest scope must remain stable');
 assert.equal(manifest.display, 'standalone', 'installed app must retain standalone display mode');
+assert.ok(manifest.related_applications?.some(app => app.platform === 'webapp'), 'manifest must declare its identity for installed-app detection');
 assert.ok(manifest.icons.some(icon => icon.type === 'image/png' && icon.purpose === 'any'), 'manifest must retain the official PNG app icon');
 assert.ok(manifest.icons.some(icon => icon.type === 'image/svg+xml' && icon.purpose === 'any'), 'manifest must retain a scalable standard icon');
 assert.ok(manifest.icons.some(icon => icon.type === 'image/svg+xml' && icon.purpose === 'maskable'), 'manifest must retain a maskable icon');
