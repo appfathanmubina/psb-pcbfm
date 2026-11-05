@@ -73,6 +73,10 @@ const documentPage = section(frontend, 'function renderDocumentContent()', 'func
 assert.match(documentPage, /d\.paymentRequired/);
 assert.match(documentPage, /Buka Pembayaran Formulir/);
 assert.match(documentPage, /const canUpload=!!d\.canUpload/);
+const documentLoader = section(frontend, 'async function renderDocuments(', 'async function loadDocumentsForRegistration(');
+assert.match(documentLoader, /!force&&!hasAnyRole\(\['WALI'\]\)/, 'Wali document page must refresh payment verification state instead of trusting stale cache');
+const registrationDocumentLoader = section(frontend, 'async function loadDocumentsForRegistration(', 'function renderDocumentContent()');
+assert.match(registrationDocumentLoader, /cached\?\.documentData&&!hasAnyRole\(\['WALI'\]\)/, 'Wali registration switching must refresh document access after payment verification');
 
 const documentPageData = section(backend, 'function getDocumentPageData(sessionToken, registrationId)', 'function uploadDocument(sessionToken, payload)');
 assert.match(documentPageData, /paymentRequired = isWali/);
