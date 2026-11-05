@@ -57,7 +57,7 @@ assert.doesNotMatch(page, /scores\.filter\(x => String\(x\.participantId\) === S
   'Detail score filtering must use the participant index');
 assert.match(page, /selectionDate\|\|''\)\.localeCompare/,
   'Schedule ordering by selection date must remain');
-assert.match(page, /updatedAt/,
+assert.ok(code.includes("String(b.updatedAt||'').localeCompare(String(a.updatedAt||''))"),
   'Registration enrichment must retain updatedAt ordering');
 
 console.log('PSB selection page batch-read, indexing, and authorization safeguards: OK');
