@@ -1722,6 +1722,33 @@ function getRegistrationFormOptions(sessionToken) {
   return { success:true, user:publicUser_(user), years:year, waves:filteredWaves, jenjang:levels, activeYearId:selectedYear ? selectedYear.tahunAjaranId : '', activeYearName:selectedYear ? selectedYear.name : activeYearName };
 }
 
+function getFormPaymentVerifiedRegistrationIds_() {
+  const ss = getDatabaseSpreadsheet_();
+  const formTypes = getActiveMasterItems_('MASTER_JENIS_PEMBAYARAN').filter(x => /formulir/i.test(String(x.name || '')));
+  const formTypeIds = Object.create(null);
+  formTypes.forEach(x => { formTypeIds[String(x.paymentTypeId)] = true; });
+  const billsSheet = ss.getSheetByName(PSB_SHEETS.BILLS);
+  const paymentsSheet = ss.getSheetByName(PSB_SHEETS.PAYMENTS);
+  const bills = billsSheet && billsSheet.getLastRow() >= 2 ? sheetRows_(billsSheet) : [];
+  const payments = paymentsSheet && paymentsSheet.getLastRow() >= 2 ? sheetRows_(paymentsSheet) : [];
+  const verifiedPayments = Object.create(null);
+  payments.forEach(x => {
+    if (String(x.status || '').toUpperCase() === 'VERIFIED') verifiedPayments[String(x.billId || '')] = true;
+  });
+  const registrationIds = Object.create(null);
+  bills.forEach(x => {
+    if (!formTypeIds[String(x.paymentTypeId || '')]) return;
+    if (String(x.status || '').toUpperCase() === 'PAID' || verifiedPayments[String(x.billId || '')]) {
+      registrationIds[String(x.registrationId || '')] = true;
+    }
+  });
+  return new Set(Object.keys(registrationIds).filter(Boolean));
+}
+
+function isFormPaymentVerified_(registrationId) {
+  return getFormPaymentVerifiedRegistrationIds_().has(String(registrationId || ''));
+}
+
 function getWaliHomeData(sessionToken) {
   const actor = requireRole_(sessionToken, ['WALI']);
   const ss = getDatabaseSpreadsheet_();
@@ -1736,6 +1763,8 @@ function getWaliHomeData(sessionToken) {
 
   const bills = sheetRows_(ss.getSheetByName(PSB_SHEETS.BILLS));
   const payments = sheetRows_(ss.getSheetByName(PSB_SHEETS.PAYMENTS));
+  const documents = sheetRows_(ss.getSheetByName(PSB_SHEETS.DOCUMENTS));
+  const requiredDocumentTypes = getActiveMasterItems_('MASTER_DOKUMEN').filter(x => x.required === true || String(x.required).toUpperCase() === 'TRUE');
   const paymentTypes = {};
   getActiveMasterItems_('MASTER_JENIS_PEMBAYARAN').forEach(x => paymentTypes[String(x.paymentTypeId)] = x);
   const paymentByBill = {};
@@ -1751,6 +1780,14 @@ function getWaliHomeData(sessionToken) {
     const formBill = regBills.find(b => /formulir/i.test(String(paymentTypes[String(b.paymentTypeId)]?.name || '')));
     const formPayment = formBill ? paymentByBill[String(formBill.billId)] : null;
     const formPaid = String(reg.status).toUpperCase() === 'PAYMENT_VERIFIED' || String(formBill?.status).toUpperCase() === 'PAID' || String(formPayment?.status).toUpperCase() === 'VERIFIED';
+    const regDocuments = documents.filter(d => String(d.registrationId) === String(reg.registrationId));
+    const uploadedByType = Object.create(null);
+    regDocuments.forEach(d => { uploadedByType[String(d.documentTypeId)] = d; });
+    const uploadedRequiredCount = requiredDocumentTypes.filter(t => !!uploadedByType[String(t.documentTypeId)]).length;
+    const verifiedRequiredCount = requiredDocumentTypes.filter(t => String(uploadedByType[String(t.documentTypeId)]?.status || '').toUpperCase() === 'VERIFIED').length;
+    const missingRequiredCount = Math.max(0, requiredDocumentTypes.length - uploadedRequiredCount);
+    const documentsComplete = missingRequiredCount === 0;
+    const paymentStatus = String(formPayment?.status || '').toUpperCase();
     const participant = participants.find(x => String(x.registrationId) === String(reg.registrationId));
     const result = results.find(x => String(x.registrationId) === String(reg.registrationId));
     const published = !!String(result?.announcementDate || '').trim();
@@ -1758,17 +1795,20 @@ function getWaliHomeData(sessionToken) {
     const registrationStatus = String(reg.status || '').toUpperCase();
 
     let completed = 0;
-    if (!['DRAFT','REVISION'].includes(registrationStatus)) completed = 1;
-    if (['VERIFIED','PAYMENT_VERIFIED','SELECTION','PASSED','NOT_PASSED','REREGISTRATION','COMPLETED'].includes(registrationStatus) || formPaid) completed = Math.max(completed, 2);
+    if (!['DRAFT'].includes(registrationStatus)) completed = 1;
+    if (documentsComplete && registrationStatus !== 'DRAFT') completed = Math.max(completed, 2);
     if (formPaid) completed = Math.max(completed, 3);
-    if (participant && (result || ['COMPLETED','PRESENT','ABSENT'].includes(String(participant.status).toUpperCase()))) completed = Math.max(completed, 4);
-    if (published) completed = Math.max(completed, 5);
+    if (formPaid && ['UNDER_REVIEW','VERIFIED','PAYMENT_VERIFIED','SELECTION','PASSED','NOT_PASSED','REREGISTRATION','COMPLETED'].includes(registrationStatus)) completed = Math.max(completed, 4);
+    if (participant && (result || ['COMPLETED','PRESENT','ABSENT'].includes(String(participant.status).toUpperCase()))) completed = Math.max(completed, 5);
+    if (published) completed = Math.max(completed, 6);
+    if (registrationStatus === 'COMPLETED') completed = 7;
 
-    let next = {key:'registration', title:'Lengkapi Pendaftaran', description:'Lengkapi data calon santri lalu kirim pendaftaran untuk diverifikasi.', button:'Lanjutkan Pendaftaran'};
-    if (registrationStatus === 'REVISION') next = {key:'registration', title:'Perbaiki Pendaftaran', description:'Ada data pendaftaran yang perlu diperbaiki sebelum dapat diproses kembali.', button:'Perbaiki Pendaftaran'};
+    let next = {key:'registration', title:'Lengkapi Pendaftaran', description:'Lengkapi data calon santri lalu kirim formulir pendaftaran.', button:'Lanjutkan Pendaftaran'};
+    if (registrationStatus === 'REVISION') next = {key:'registration', title:'Perbaiki Pendaftaran', description:'Petugas meminta perbaikan data atau dokumen. Baca catatan revisi lalu perbarui bagian yang diminta.', button:'Perbaiki Pendaftaran'};
     else if (registrationStatus === 'DRAFT') next = {key:'registration', title:'Lanjutkan Pendaftaran', description:'Pendaftaran masih berupa draft dan belum dikirim.', button:'Lanjutkan Pendaftaran'};
-    else if (registrationStatus === 'SUBMITTED' || registrationStatus === 'UNDER_REVIEW') next = {key:'registration', title:'Menunggu Verifikasi', description:'Pendaftaran sudah dikirim. Tunggu pemeriksaan petugas.', button:'Lihat Pendaftaran'};
-    else if (registrationStatus === 'VERIFIED' && !formPaid) next = {key:'payments', title:'Pembayaran Formulir', description:'Pendaftaran sudah terverifikasi. Lanjutkan pembayaran formulir.', button:'Buka Pembayaran'};
+    else if (['SUBMITTED','UNDER_REVIEW'].includes(registrationStatus) && !formPaid) next = {key:'documents', title:'Lengkapi Dokumen dan Pembayaran', description:'Anda dapat mengunggah dokumen dan melakukan pembayaran secara bersamaan. Verifikasi PSB dimulai setelah pembayaran formulir dikonfirmasi oleh Keuangan.', button:'Lihat Langkah Berikutnya'};
+    else if (['SUBMITTED','UNDER_REVIEW'].includes(registrationStatus) && formPaid) next = {key:'documents', title:'Menunggu Verifikasi PSB', description:'Pembayaran formulir sudah dikonfirmasi. Petugas PSB akan memeriksa data dan dokumen. Jika ada kekurangan, Anda akan menerima instruksi perbaikan.', button:'Lihat Dokumen'};
+    else if (registrationStatus === 'VERIFIED' && !formPaid) next = {key:'payments', title:'Pembayaran Formulir', description:'Pendaftaran sudah terverifikasi. Silakan lanjutkan pembayaran formulir.', button:'Buka Pembayaran'};
     else if (formPaid && !participant) next = {key:'selection', title:'Menunggu / Persiapan Tes', description:'Pembayaran formulir sudah terverifikasi. Pastikan mengikuti jadwal tes.', button:'Buka Tes'};
     else if (participant && !result) next = {key:'selection', title:'Ikuti Tes Seleksi', description:'Anda sudah terdaftar sebagai peserta. Periksa jadwal dan status tes.', button:'Buka Tes'};
     else if (result && !published) next = {key:'announcement', title:'Menunggu Pengumuman', description:'Hasil seleksi sudah ditetapkan dan menunggu dipublikasikan.', button:'Buka Pengumuman'};
@@ -1780,15 +1820,16 @@ function getWaliHomeData(sessionToken) {
       registrationId:String(reg.registrationId), registrationNumber:String(reg.registrationNumber || reg.registrationId || '-'),
       candidateName:String(candidate.fullName || candidate.name || 'Calon Santri'), status:registrationStatus,
       statusLabel:statusLabel_(registrationStatus), completed, next, formPaid,
+      documents:{requiredCount:requiredDocumentTypes.length,uploadedRequiredCount,verifiedRequiredCount,missingRequiredCount,complete:documentsComplete},
+      formPayment:{billExists:!!formBill,billId:String(formBill?.billId||''),amount:Number(formBill?.amount||0),billStatus:String(formBill?.status||''),paymentStatus,paymentRejected:paymentStatus==='REJECTED',paymentSubmitted:paymentStatus==='SUBMITTED',paid:formPaid},
       participant:participant ? {status:String(participant.status||''), scheduleId:String(participant.scheduleId||''), scheduleName:String(schedules.find(x=>String(x.scheduleId)===String(participant.scheduleId))?.name || '')} : null,
       result:result ? {status:resultStatus, published, announcementDate:result.announcementDate||'', note:result.note||''} : null
     };
   });
   return {success:true,registrations:items,activeYear};
 }
-
 function statusLabel_(s) {
-  return ({DRAFT:'Draft',SUBMITTED:'Menunggu verifikasi',UNDER_REVIEW:'Sedang diverifikasi',REVISION:'Perlu perbaikan',VERIFIED:'Terverifikasi',PAYMENT_PENDING:'Menunggu pembayaran',PAYMENT_VERIFIED:'Pembayaran terverifikasi',SELECTION:'Seleksi',PASSED:'Lulus',NOT_PASSED:'Tidak lulus',REREGISTRATION:'Daftar ulang',COMPLETED:'Selesai',CANCELLED:'Dibatalkan'})[String(s||'').toUpperCase()] || String(s||'-');
+  return ({DRAFT:'Draft',SUBMITTED:'Menunggu pembayaran & dokumen',UNDER_REVIEW:'Sedang diverifikasi',REVISION:'Perlu perbaikan',VERIFIED:'Terverifikasi',PAYMENT_PENDING:'Menunggu pembayaran',PAYMENT_VERIFIED:'Pembayaran terverifikasi',SELECTION:'Seleksi',PASSED:'Lulus',NOT_PASSED:'Tidak lulus',REREGISTRATION:'Daftar ulang',COMPLETED:'Selesai',CANCELLED:'Dibatalkan'})[String(s||'').toUpperCase()] || String(s||'-');
 }
 
 function getMyRegistrations(sessionToken) {
@@ -1932,6 +1973,9 @@ function createBill(sessionToken,payload){
   Object.assign(record,{billId,registrationId,paymentTypeId,amount,dueDate,status:'UNPAID',createdAt:now,updatedAt:now});
   sheet.appendRow(headers.map(h=>record[h]));
   writeAudit_(actor.userId,'CREATE','PAYMENT',billId,'',JSON.stringify(record),'Tagihan pembayaran dibuat');
+  if(/formulir/i.test(String(type.name||''))) {
+    try { notifyRegistrationOwner_(registrationId,'Tagihan Formulir Telah Diterbitkan','Tagihan biaya formulir sebesar Rp '+amount.toLocaleString('id-ID')+' telah tersedia. Silakan buka menu Pembayaran untuk mengunggah bukti transfer. Dokumen persyaratan tetap dapat dilengkapi secara bersamaan.','INFO'); } catch(notificationError) { console.error('Bill notification failed: '+notificationError); }
+  }
   return {success:true,message:'Tagihan berhasil dibuat.',bill:JSON.parse(JSON.stringify(record))};
   });
 }
@@ -3308,9 +3352,12 @@ function getVerificationQueue(sessionToken, filters) {
   // converted every registration to an object even though only a small queue
   // subset was returned.
   const items = [];
+  const formPaidIds = getFormPaymentVerifiedRegistrationIds_();
   rows.forEach((row, i) => {
     const status = statusIdx >= 0 ? row[statusIdx] : undefined;
     if (allowed.indexOf(String(status)) < 0) return;
+    const registrationId = idIdx >= 0 ? String(row[idIdx] || '') : '';
+    if (['SUBMITTED','UNDER_REVIEW','REVISION'].indexOf(String(status).toUpperCase()) >= 0 && !formPaidIds.has(registrationId)) return;
     if (searchEnabled) {
       const registrationNumber = numberIdx >= 0 ? row[numberIdx] : '';
       const registrationId = idIdx >= 0 ? row[idIdx] : '';
@@ -3350,6 +3397,7 @@ function startVerification(sessionToken, registrationId) {
   if(!found) return fail_('Pendaftaran tidak ditemukan.');
   const status=String(found.registration.status||'');
   if(['SUBMITTED','REVISION'].indexOf(status)<0) return fail_('Pendaftaran tidak berada pada status yang dapat diverifikasi.');
+  if(!isFormPaymentVerified_(registrationId)) return fail_('Verifikasi PSB baru dapat dimulai setelah pembayaran formulir dikonfirmasi oleh bagian Keuangan.');
   const result=setRegistrationStatus_(found.registration, 'UNDER_REVIEW', actor.userId, 'Pendaftaran masuk proses verifikasi');
   return result;
 }
@@ -3375,6 +3423,7 @@ function verifyDocument(sessionToken, payload) {
     const reg=findRegistration_(String(found.object.registrationId||''));
     if(!reg) return fail_('Pendaftaran dokumen tidak ditemukan.');
     if(PSB_VERIFICATION_REGISTRATION_STATUSES.indexOf(String(reg.registration.status))<0) return fail_('Pendaftaran tidak sedang dalam proses verifikasi.');
+    if(String(reg.registration.status).toUpperCase()!=='REREGISTRATION' && !isFormPaymentVerified_(String(reg.registration.registrationId||''))) return fail_('Dokumen baru dapat diverifikasi setelah pembayaran formulir dikonfirmasi oleh bagian Keuangan.');
     registrationId=String(found.object.registrationId||'');
     documentTypeId=String(found.object.documentTypeId||'');
     const statusIdx=headers.indexOf('status'), verifiedIdx=headers.indexOf('verifiedAt'), byIdx=headers.indexOf('verifiedBy'), noteIdx=headers.indexOf('revisionNote');
@@ -3408,6 +3457,7 @@ function finalizeVerification(sessionToken, payload) {
     const found=findRegistration_(registrationId);
     if(!found) return fail_('Pendaftaran tidak ditemukan.');
     if(['SUBMITTED','UNDER_REVIEW','REVISION'].indexOf(String(found.registration.status))<0) return fail_('Pendaftaran tidak berada pada status verifikasi.');
+    if(!isFormPaymentVerified_(registrationId)) return fail_('Verifikasi administrasi baru dapat diselesaikan setelah pembayaran formulir dikonfirmasi oleh bagian Keuangan.');
     if(decision==='VERIFIED') {
       const docs=getCurrentDocuments_(registrationId);
       const required=getActiveMasterItems_('MASTER_DOKUMEN').filter(x=>x.required);
@@ -3887,9 +3937,9 @@ function submitRegistration(sessionToken, registrationId) {
   if (updatedIdx >= 0) sheet.getRange(row,updatedIdx+1).setValue(now);
   writeAudit_(actor.userId, 'SUBMIT', 'REGISTRATION', found.registration.registrationId, JSON.stringify({status:found.registration.status}), JSON.stringify({status:'SUBMITTED'}), 'Pendaftaran dikirim untuk verifikasi');
   const candidateName=String(found.candidate?.fullName||'calon santri');
-  notifyUsersByRoles_(['SUPERADMIN','ADMIN_PSB','VERIFIKATOR'],'Pendaftaran Baru Menunggu Verifikasi',candidateName+' telah mengirim pendaftaran '+String(found.registration.registrationNumber||found.registration.registrationId)+' dan menunggu verifikasi.','INFO');
-  notifyRegistrationOwner_(found.registration.registrationId,'Pendaftaran Berhasil Dikirim','Pendaftaran '+String(found.registration.registrationNumber||'')+' berhasil dikirim dan sedang menunggu verifikasi.','SUCCESS');
-  return { success:true, message:'Pendaftaran berhasil dikirim untuk verifikasi.', status:'SUBMITTED' };
+  notifyUsersByRoles_(['SUPERADMIN','ADMIN_PSB','KEUANGAN'],'Pendaftaran Baru — Siapkan Tagihan Formulir',candidateName+' telah mengirim pendaftaran '+String(found.registration.registrationNumber||found.registration.registrationId)+'. Silakan terbitkan tagihan formulir agar Wali dapat melakukan pembayaran.','INFO');
+  notifyRegistrationOwner_(found.registration.registrationId,'Pendaftaran Berhasil Dikirim','Formulir berhasil dikirim. Silakan lengkapi dokumen persyaratan dan lakukan pembayaran formulir; kedua langkah ini dapat dikerjakan secara bersamaan. Verifikasi PSB dimulai setelah pembayaran dikonfirmasi oleh bagian Keuangan. Jika tagihan belum muncul, bagian Keuangan sedang menyiapkannya.','SUCCESS');
+  return { success:true, message:'Pendaftaran berhasil dikirim. Silakan lanjutkan unggah dokumen dan pembayaran formulir secara bersamaan.', status:'SUBMITTED' };
   } finally { lock.releaseLock(); }
 }
 
