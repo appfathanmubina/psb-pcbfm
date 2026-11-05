@@ -244,8 +244,8 @@ async function boot(){
       const session=await server('validateSession',state.token);
       if(session?.success){
         state.user=session.user;
-        renderApp();
         const savedPage=sessionStorage.getItem('psb_current_page')||'home';
+        renderApp();
         if(savedPage!=='home')goPage(savedPage);
         loading(false);
         initializeAfterLogin();
