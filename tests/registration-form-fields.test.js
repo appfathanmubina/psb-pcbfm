@@ -7,6 +7,7 @@ const app = fs.readFileSync('frontend/app.js', 'utf8');
 const bundle = fs.readFileSync('frontend/psb-fm-apps-script.js', 'utf8');
 const backend = fs.readFileSync('apps-script/Code.gs', 'utf8');
 const css = fs.readFileSync('frontend/styles.css', 'utf8');
+const appsScriptHtml = fs.readFileSync('apps-script/Index.html', 'utf8');
 
 for (const [name, source] of [['frontend', app], ['Apps Script bundle', bundle]]) {
   const nik = source.indexOf('<label>NIK</label>');
@@ -40,6 +41,10 @@ assert.match(backend, /schoolType: clean_\(existing\?\.school\?\.schoolType \|\|
 assert.ok(css.includes('#registrationForm .registration-required-mark{color:#dc2626!important;'),
   'required asterisks must be red and scoped to the registration form');
 assert.ok(css.includes('#registrationForm .registration-required-note{'),
-  'required-field legend must have dedicated styling');
+  'required-field legend must have dedicated PWA styling');
+assert.ok(appsScriptHtml.includes('#registrationForm .registration-required-mark{color:#dc2626!important;'),
+  'required asterisks must also be red in the Apps Script interface');
+assert.ok(appsScriptHtml.includes('#registrationForm .registration-required-note{'),
+  'required-field legend must also be styled in the Apps Script interface');
 
 console.log('Registration form field and required-indicator safeguards: OK');
