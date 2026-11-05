@@ -254,3 +254,19 @@ Both obsolete workflows have now been removed. This also removes their stale ref
 - Sebelum menyatakan integrasi PWA–Apps Script lulus runtime, pemilik project perlu memastikan source `Code.gs` dan `Bridge.html` versi repository sudah disalin ke editor Apps Script, lalu memperbarui deployment Web App yang sama secara manual. Pertahankan deployment ID dan URL produksi.
 - Setelah deployment manual, uji URL PWA pada browser: sinyal bridge siap, `getPublicConfig`, login, `validateSession`, navigasi dashboard, logout, serta akses role yang tidak berwenang. Uji juga bahwa sesi Wali hanya dapat membaca/mengubah pendaftaran miliknya sendiri.
 - Sampai uji tersebut selesai, status integrasi end-to-end tetap **menunggu uji runtime manual**; jangan menandai BRIDGE-004 s.d. BRIDGE-009 sebagai runtime verified.
+
+
+## Repair batch 04 — announcement page batch reads
+
+Branch: `perf/backend-batch-read-optimization`
+
+| ID | Finding | Change | Status |
+|---|---|---|---|
+| PERF-ANN-001 | `getAnnouncementPageData()` called `findRegistration_()` inside both filtering and mapping loops. Each call reread registrations, candidates, guardians, addresses, and schools. | Batch-read registrations and candidates once, build ID maps, and reuse them for filtering and display. First matching IDs are retained to preserve the existing `findRowById_()` behavior if duplicate IDs exist. | Patch prepared; CI and staging behavior test pending |
+
+### Scope and safety
+
+- No spreadsheet schema, stored data, role rules, publication rules, or response fields were changed.
+- Wali still sees only their own published announcements; active academic-year filtering and item sorting are preserved.
+- No Apps Script deployment or production data mutation was performed.
+- This optimization is limited to the announcement page. Other repeated-read paths remain for separate audited batches.
