@@ -31,6 +31,6 @@ assert.match(appsScriptHtml, /\.modal-backdrop\{[^}]*align-items:flex-end/, 'App
 
 const index = fs.readFileSync('frontend/index.html', 'utf8');
 const sw = fs.readFileSync('frontend/sw.js', 'utf8');
-assert.ok(index.includes('styles.css?v=32.21.0'), 'PWA stylesheet URL must use the new cache version');
-assert.ok(sw.includes('styles.css?v=32.21.0'), 'service worker must precache the updated stylesheet URL');
+assert.ok(index.includes('styles.css?v=32.22.0'), 'PWA stylesheet URL must use the new cache version');
+assert.ok(sw.includes('styles.css?v=32.22.0'), 'service worker must precache the updated stylesheet URL');
 console.log('Loading popup copy and desktop modal layout safeguards passed.');
