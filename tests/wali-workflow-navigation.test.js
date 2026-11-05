@@ -31,6 +31,6 @@ for (const [name, source] of [['PWA', app], ['Apps Script shell', shell]]) {
 }
 assert.match(css, /\.header-action\{[^}]*overflow:visible/,
   'Header action must not clip the notification badge');
-assert.match(css, /\.notification-badge\{[^}]*min-width:22px[^}]*height:22px[^}]*z-index:3/,
+assert.match(css, /\.notification-badge\{[^}]*z-index:3[^}]*min-width:22px[^}]*height:22px/,
   'Notification badge must have enough room for multi-digit counts');
 console.log('Wali workflow navigation and notification badge safeguards: OK');
