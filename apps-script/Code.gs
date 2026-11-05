@@ -1819,7 +1819,7 @@ function getWaliHomeData(sessionToken) {
     return {
       registrationId:String(reg.registrationId), registrationNumber:String(reg.registrationNumber || reg.registrationId || '-'),
       candidateName:String(candidate.fullName || candidate.name || 'Calon Santri'), status:registrationStatus,
-      statusLabel:statusLabel_(registrationStatus), completed, next, formPaid,
+      statusLabel:registrationStatus==='SUBMITTED' && formPaid ? 'Menunggu verifikasi PSB' : statusLabel_(registrationStatus), completed, next, formPaid,
       documents:{requiredCount:requiredDocumentTypes.length,uploadedRequiredCount,verifiedRequiredCount,missingRequiredCount,complete:documentsComplete},
       formPayment:{billExists:!!formBill,billId:String(formBill?.billId||''),amount:Number(formBill?.amount||0),billStatus:String(formBill?.status||''),paymentStatus,paymentRejected:paymentStatus==='REJECTED',paymentSubmitted:paymentStatus==='SUBMITTED',paid:formPaid},
       participant:participant ? {status:String(participant.status||''), scheduleId:String(participant.scheduleId||''), scheduleName:String(schedules.find(x=>String(x.scheduleId)===String(participant.scheduleId))?.name || '')} : null,
@@ -2041,7 +2041,7 @@ function verifyPayment(sessionToken,payload){
   if(status==='VERIFIED' && /formulir/i.test(paymentLabel)) {
     try { notifyUsersByRoles_(['SUPERADMIN','ADMIN_PSB','VERIFIKATOR'],'Pembayaran Formulir Terkonfirmasi',String(regFound.candidate?.fullName||'Calon santri')+' telah melunasi biaya formulir. Pendaftaran siap masuk antrean verifikasi PSB.','INFO'); } catch(notificationError) { console.error('Verification queue notification failed: '+notificationError); }
   }
-  notifyRegistrationOwner_(String(found.registration.registrationId),'Pembayaran '+(status==='VERIFIED'?'Terverifikasi':'Ditolak'),status==='VERIFIED'?('Pembayaran '+paymentLabel+' telah terverifikasi.'):('Pembayaran '+paymentLabel+' ditolak.'+(note?' Catatan: '+note:'')),status==='VERIFIED'?'SUCCESS':'WARNING');
+  notifyRegistrationOwner_(String(regFound.registration.registrationId),'Pembayaran '+(status==='VERIFIED'?'Terverifikasi':'Ditolak'),status==='VERIFIED'?('Pembayaran '+paymentLabel+' telah terverifikasi.'):('Pembayaran '+paymentLabel+' ditolak.'+(note?' Catatan: '+note:'')),status==='VERIFIED'?'SUCCESS':'WARNING');
   return {success:true,message:status==='VERIFIED'?'Pembayaran berhasil diverifikasi.':'Pembayaran ditolak dan dapat diunggah ulang.'};
   } finally { lock.releaseLock(); }
 }
