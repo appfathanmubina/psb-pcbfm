@@ -4,7 +4,7 @@ const fs = require('node:fs');
 const html = fs.readFileSync('frontend/index.html', 'utf8');
 const sw = fs.readFileSync('frontend/sw.js', 'utf8');
 const bridge = fs.readFileSync('frontend/api-bridge.js', 'utf8');
-assert.match(html, /sw\.js\?v=32.22.0/, 'HTML must request the current service worker');
+assert.match(html, /sw\.js\?v=32.23.0/, 'HTML must request the current service worker');
 assert.match(html, /controllerchange/, 'HTML must reload when a new worker takes control');
 assert.match(html, /window\.location\.reload\(\)/, 'A newly activated worker must refresh the open PWA');
 assert.match(html, /app\.js\?v=32.20.0/, 'Application script must have a fresh URL');
