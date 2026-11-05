@@ -1750,6 +1750,7 @@ function getFormPaymentVerifiedRegistrationIds_() {
   const registrationIds = Object.create(null);
   bills.forEach(x => {
     if (!formTypeIds[String(x.paymentTypeId || '')]) return;
+    if (String(x.status || '').toUpperCase() === 'CANCELLED') return;
     if (String(x.status || '').toUpperCase() === 'PAID' || verifiedPayments[String(x.billId || '')]) {
       registrationIds[String(x.registrationId || '')] = true;
     }
@@ -1773,15 +1774,24 @@ function getWaliHomeData(sessionToken) {
   const activeYearId = yearItems.find(x => String(x.name) === activeYear)?.tahunAjaranId || '';
   const activeRegs = activeYearId ? regs.filter(x => String(x.tahunAjaranId) === String(activeYearId)) : regs;
 
-  const bills = sheetRows_(ss.getSheetByName(PSB_SHEETS.BILLS));
-  const payments = sheetRows_(ss.getSheetByName(PSB_SHEETS.PAYMENTS));
+  // Urutkan record terbaru dan abaikan record yang sudah dibatalkan/digantikan.
+  const bills = sheetRows_(ss.getSheetByName(PSB_SHEETS.BILLS))
+    .filter(x=>String(x.status||'').toUpperCase()!=='CANCELLED')
+    .sort((a,b)=>String(b.createdAt||'').localeCompare(String(a.createdAt||'')));
+  const payments = sheetRows_(ss.getSheetByName(PSB_SHEETS.PAYMENTS))
+    .sort((a,b)=>String(b.createdAt||'').localeCompare(String(a.createdAt||'')));
   const paymentVerifications = sheetRows_(ss.getSheetByName(PSB_SHEETS.PAYMENT_VERIFICATIONS));
-  const documents = sheetRows_(ss.getSheetByName(PSB_SHEETS.DOCUMENTS));
+  const documents = sheetRows_(ss.getSheetByName(PSB_SHEETS.DOCUMENTS))
+    .filter(x=>String(x.status||'').toUpperCase()!=='REPLACED')
+    .sort((a,b)=>String(b.uploadedAt||'').localeCompare(String(a.uploadedAt||'')));
   const requiredDocumentTypes = getActiveMasterItems_('MASTER_DOKUMEN').filter(x => x.required === true || String(x.required).toUpperCase() === 'TRUE');
   const paymentTypes = {};
   getActiveMasterItems_('MASTER_JENIS_PEMBAYARAN').forEach(x => paymentTypes[String(x.paymentTypeId)] = x);
-  const paymentByBill = {};
-  payments.forEach(x => paymentByBill[String(x.billId)] = x);
+  const paymentByBill = Object.create(null);
+  payments.forEach(x => {
+    const billId=String(x.billId||'');
+    if(billId&&!Object.prototype.hasOwnProperty.call(paymentByBill,billId)) paymentByBill[billId]=x;
+  });
   const verificationByPayment = {};
   paymentVerifications.forEach(x => verificationByPayment[String(x.paymentId)] = x);
   const participants = sheetRows_(ss.getSheetByName(PSB_SHEETS.SELECTION_PARTICIPANTS));
@@ -1797,15 +1807,25 @@ function getWaliHomeData(sessionToken) {
     const formPaid = String(reg.status).toUpperCase() === 'PAYMENT_VERIFIED' || String(formBill?.status).toUpperCase() === 'PAID' || String(formPayment?.status).toUpperCase() === 'VERIFIED';
     const regDocuments = documents.filter(d => String(d.registrationId) === String(reg.registrationId));
     const uploadedByType = Object.create(null);
-    regDocuments.forEach(d => { uploadedByType[String(d.documentTypeId)] = d; });
+    regDocuments.filter(d=>String(d.status||'').toUpperCase()!=='REPLACED')
+      .sort((a,b)=>String(b.uploadedAt||'').localeCompare(String(a.uploadedAt||'')))
+      .forEach(d => {
+        const typeId=String(d.documentTypeId||'');
+        if(typeId&&!Object.prototype.hasOwnProperty.call(uploadedByType,typeId)) uploadedByType[typeId]=d;
+      });
     const uploadedRequiredCount = requiredDocumentTypes.filter(t => !!uploadedByType[String(t.documentTypeId)]).length;
     const verifiedRequiredCount = requiredDocumentTypes.filter(t => String(uploadedByType[String(t.documentTypeId)]?.status || '').toUpperCase() === 'VERIFIED').length;
     const revisionRequiredCount = requiredDocumentTypes.filter(t => String(uploadedByType[String(t.documentTypeId)]?.status || '').toUpperCase() === 'REVISION').length;
     const missingRequiredCount = Math.max(0, requiredDocumentTypes.length - uploadedRequiredCount);
     const documentsComplete = missingRequiredCount === 0;
     const paymentStatus = String(formPayment?.status || '').toUpperCase();
+    const billStatus = String(formBill?.status || '').toUpperCase();
     const paymentVerification = formPayment ? verificationByPayment[String(formPayment.paymentId)] : null;
     const paymentNote = String(paymentVerification?.note || '');
+    const paymentStatusLabel = billStatus==='PAID'||paymentStatus==='VERIFIED'?'Terverifikasi'
+      :paymentStatus==='REJECTED'?'Ditolak'
+      :paymentStatus==='SUBMITTED'||billStatus==='PAYMENT_REVIEW'?'Menunggu verifikasi'
+      :formBill?'Belum dibayar':'Tagihan belum dibuat';
     const participant = participants.find(x => String(x.registrationId) === String(reg.registrationId));
     const result = results.find(x => String(x.registrationId) === String(reg.registrationId));
     const published = !!String(result?.announcementDate || '').trim();
@@ -1840,8 +1860,8 @@ function getWaliHomeData(sessionToken) {
       registrationId:String(reg.registrationId), registrationNumber:String(reg.registrationNumber || reg.registrationId || '-'),
       candidateName:String(candidate.fullName || candidate.name || 'Calon Santri'), status:registrationStatus,
       statusLabel:registrationStatus==='SUBMITTED' && formPaid ? 'Menunggu verifikasi PSB' : statusLabel_(registrationStatus), completed, next, formPaid,
-      documents:{requiredCount:requiredDocumentTypes.length,uploadedRequiredCount,verifiedRequiredCount,revisionRequiredCount,missingRequiredCount,complete:documentsComplete},
-      formPayment:{billExists:!!formBill,billId:String(formBill?.billId||''),amount:Number(formBill?.amount||0),billStatus:String(formBill?.status||''),paymentStatus,paymentRejected:paymentStatus==='REJECTED',paymentSubmitted:paymentStatus==='SUBMITTED',paymentNote,paid:formPaid},
+      documents:{requiredCount:requiredDocumentTypes.length,uploadedRequiredCount,verifiedRequiredCount,revisionRequiredCount,missingRequiredCount,complete:documentsComplete,status:requiredDocumentTypes.length===0?'NOT_REQUIRED':revisionRequiredCount?'REVISION':missingRequiredCount?(uploadedRequiredCount===0?'NOT_UPLOADED':'INCOMPLETE'):verifiedRequiredCount>=requiredDocumentTypes.length?'VERIFIED':'PENDING_VERIFICATION',statusLabel:requiredDocumentTypes.length===0?'Tidak ada dokumen wajib':revisionRequiredCount?'Perlu perbaikan':missingRequiredCount?(uploadedRequiredCount===0?'Belum upload':'Belum lengkap'):verifiedRequiredCount>=requiredDocumentTypes.length?'Terverifikasi':'Menunggu verifikasi'},
+      formPayment:{billExists:!!formBill,billId:String(formBill?.billId||''),amount:Number(formBill?.amount||0),billStatus:String(formBill?.status||''),paymentStatus,paymentStatusLabel,paymentRejected:paymentStatus==='REJECTED',paymentSubmitted:paymentStatus==='SUBMITTED',paymentNote,paid:formPaid},
       participant:participant ? {status:String(participant.status||''), scheduleId:String(participant.scheduleId||''), scheduleName:String(schedules.find(x=>String(x.scheduleId)===String(participant.scheduleId))?.name || '')} : null,
       result:result ? {status:resultStatus, published, announcementDate:result.announcementDate||'', note:result.note||''} : null
     };
@@ -3652,7 +3672,7 @@ function finalizeVerification(sessionToken, payload) {
     if(!isFormPaymentVerified_(registrationId)) return fail_('Verifikasi administrasi baru dapat diselesaikan setelah pembayaran formulir dikonfirmasi oleh bagian Keuangan.');
     if(decision==='VERIFIED') {
       const docs=getCurrentDocuments_(registrationId);
-      const required=getActiveMasterItems_('MASTER_DOKUMEN').filter(x=>x.required);
+      const required=getActiveMasterItems_('MASTER_DOKUMEN').filter(x=>x.required===true||String(x.required).toUpperCase()==='TRUE');
       for(const t of required){
         const d=docs.find(x=>String(x.documentTypeId)===String(t.documentTypeId));
         if(!d) return fail_('Dokumen wajib belum lengkap: '+String(t.name||t.documentTypeId));
@@ -4332,7 +4352,11 @@ function getRegistrationPaymentDocumentStatusMap_(items) {
   if(!Object.keys(ids).length)return Object.create(null);
   const formTypeIds=Object.create(null);
   getActiveMasterItems_('MASTER_JENIS_PEMBAYARAN').forEach(x=>{if(/formulir/i.test(String(x.name||'')))formTypeIds[String(x.paymentTypeId)]=true;});
-  const bills=sheetRows_(ss.getSheetByName(PSB_SHEETS.BILLS)).filter(x=>ids[String(x.registrationId||'')]&&formTypeIds[String(x.paymentTypeId||'')]);
+  // Pilih tagihan formulir aktif terbaru; tagihan yang dibatalkan tidak boleh
+  // memengaruhi status pembayaran atau membuka akses dokumen/verifikasi.
+  const bills=sheetRows_(ss.getSheetByName(PSB_SHEETS.BILLS))
+    .filter(x=>ids[String(x.registrationId||'')]&&formTypeIds[String(x.paymentTypeId||'')]&&String(x.status||'').toUpperCase()!=='CANCELLED')
+    .sort((a,b)=>String(b.createdAt||'').localeCompare(String(a.createdAt||'')));
   const billIds=Object.create(null),billByReg=Object.create(null);
   bills.forEach(x=>{billIds[String(x.billId||'')]=true;const id=String(x.registrationId||'');if(id&&!billByReg[id])billByReg[id]=x;});
   const payments=sheetRows_(ss.getSheetByName(PSB_SHEETS.PAYMENTS)).filter(x=>billIds[String(x.billId||'')]).sort((a,b)=>String(b.createdAt||'').localeCompare(String(a.createdAt||'')));
