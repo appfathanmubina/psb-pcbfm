@@ -234,11 +234,23 @@ function initializeAfterLogin(){
   bootProgress(false);
 }
 function scheduleWarmNavigationData(){
-  const run=()=>{if(document.visibilityState!=='hidden' && state.token && state.page==='home')warmNavigationData();};
+  if(state.warmNavigationScheduled)return;
+  state.warmNavigationScheduled=true;
+  const run=()=>{
+    state.warmNavigationScheduled=false;
+    if(document.visibilityState!=='hidden'&&state.token&&state.page==='home')warmNavigationData();
+  };
   if(typeof window.requestIdleCallback==='function'){
-    window.requestIdleCallback(run,{timeout:4000});
+    window.requestIdleCallback(deadline=>{
+      if(deadline&&!deadline.didTimeout&&deadline.timeRemaining()<80){
+        state.warmNavigationScheduled=false;
+        scheduleWarmNavigationData();
+        return;
+      }
+      run();
+    },{timeout:10000});
   }else{
-    setTimeout(run,1200);
+    setTimeout(run,8000);
   }
 }
 async function boot(){
