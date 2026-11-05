@@ -32,5 +32,12 @@
       "type": "image/svg+xml",
       "purpose": "maskable"
     }
+  ],
+  "related_applications": [
+    {
+      "platform": "webapp",
+      "url": "./manifest.webmanifest",
+      "id": "https://appfathanmubina.github.io/psb-pcbfm/"
+    }
   ]
 }
