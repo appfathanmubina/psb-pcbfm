@@ -1360,59 +1360,6 @@ function renderDocumentContent(){
 
 const UPLOAD_IMAGE_MAX_SIDE=2000;
 const UPLOAD_IMAGE_COMPRESSION_THRESHOLD=1.5*1024*1024;
-function uploadMimeAllowed(mime,allowedMimeTypes){
-  const rules=String(allowedMimeTypes||'').split(',').map(x=>x.trim().toLowerCase()).filter(Boolean);
-  if(!rules.length)return true;
-  const type=String(mime||'').toLowerCase();
-  return rules.some(rule=>rule===type||(rule.endsWith('/*')&&type.startsWith(rule.slice(0,-1))));
-}
-async function decodeUploadImage(file){
-  if(typeof createImageBitmap==='function')return await createImageBitmap(file);
-  const url=URL.createObjectURL(file);
-  try{
-    return await new Promise((resolve,reject)=>{
-      const img=new Image();
-      img.onload=()=>resolve(img);
-      img.onerror=()=>reject(new Error('Browser tidak dapat membaca format foto ini.'));
-      img.src=url;
-    });
-  }finally{URL.revokeObjectURL(url);}
-}
-function uploadImageExtension(mime){
-  return mime==='image/png'?'.png':mime==='image/webp'?'.webp':'.jpg';
-}
-async function prepareUploadFile(file,allowedMimeTypes){
-  const original={blob:file,fileName:file.name,mimeType:file.type||'application/octet-stream',fileSize:file.size,compressed:false};
-  if(!/^image\/(jpeg|png|webp)$/i.test(String(file.type||'')))return original;
-  let image;
-  try{image=await decodeUploadImage(file);}catch(error){return original;}
-  try{
-    const width=Number(image.width||image.naturalWidth||0),height=Number(image.height||image.naturalHeight||0);
-    if(!width||!height)return original;
-    const longest=Math.max(width,height);
-    if(longest<=UPLOAD_IMAGE_MAX_SIDE&&file.size<=UPLOAD_IMAGE_COMPRESSION_THRESHOLD)return original;
-    const scale=Math.min(1,UPLOAD_IMAGE_MAX_SIDE/longest);
-    const canvas=document.createElement('canvas');
-    canvas.width=Math.max(1,Math.round(width*scale));
-    canvas.height=Math.max(1,Math.round(height*scale));
-    const ctx=canvas.getContext('2d');
-    if(!ctx)return original;
-    ctx.drawImage(image,0,0,canvas.width,canvas.height);
-    const rules=String(allowedMimeTypes||'').split(',').map(x=>x.trim().toLowerCase()).filter(Boolean);
-    const jpegAllowed=!rules.length||rules.includes('image/jpeg')||rules.includes('image/*');
-    const originalAllowed=uploadMimeAllowed(file.type,allowedMimeTypes);
-    const outputType=jpegAllowed?'image/jpeg':(originalAllowed?file.type:'image/jpeg');
-    const blob=await new Promise(resolve=>canvas.toBlob(resolve,outputType,0.82));
-    if(!blob)return original;
-    const mimeType=blob.type||outputType;
-    if(blob.size>=file.size&&originalAllowed)return original;
-    const baseName=String(file.name||'dokumen').replace(/\.[^.]*$/,'')||'dokumen';
-    return {blob,fileName:baseName+uploadImageExtension(mimeType),mimeType,fileSize:blob.size,compressed:true,originalSize:file.size};
-  }finally{if(typeof image.close==='function')image.close();}
-}
-
-const UPLOAD_IMAGE_MAX_SIDE=2000;
-const UPLOAD_IMAGE_COMPRESSION_THRESHOLD=1.5*1024*1024;
 function uploadMimeAllowed(mime,rulesText){
   const rules=String(rulesText||'').split(',').map(x=>x.trim().toLowerCase()).filter(Boolean),type=String(mime||'').toLowerCase();
   return !rules.length||rules.some(rule=>rule===type||(rule.endsWith('/*')&&type.startsWith(rule.slice(0,-1))));
