@@ -1352,10 +1352,10 @@ async function renderWaliVerificationStatus(){
 function renderMore(){
   if(hasAnyRole(['WALI'])){
     const items=[
-      ['verificationStatus','Verifikasi','Pantau status pemeriksaan data dan dokumen setelah pembayaran formulir dikonfirmasi.','shield-check'],
-      ['selection','Tes','Lihat jadwal tes, status peserta, dan hasil seleksi.','graduation-cap'],
+      ['verificationStatus','Verifikasi','Pantau status pemeriksaan data dan dokumen setelah pembayaran formulir dikonfirmasi.','shield'],
+      ['selection','Tes','Lihat jadwal tes, status peserta, dan hasil seleksi.','grad'],
       ['announcement','Pengumuman','Lihat hasil seleksi yang sudah dipublikasikan.','megaphone'],
-      ['reregistration','Daftar Ulang','Lanjutkan proses akhir jika calon santri dinyatakan lulus.','refresh-cw']
+      ['reregistration','Daftar Ulang','Lanjutkan proses akhir jika calon santri dinyatakan lulus.','refresh']
     ];
     $('content').innerHTML=`<section class="hero"><h2>Lainnya</h2><p>Menu lanjutan sesuai tahapan penerimaan santri baru.</p></section><div class="wali-more-list">${items.map(([page,title,desc,icon])=>`<button type="button" class="status-card wali-more-item" onclick="goPage('${page}')"><span class="wali-more-icon">${ico(icon)}</span><span class="wali-more-copy"><b>${title}</b><span>${desc}</span></span><span class="wali-flow-open" aria-hidden="true">${ico('chevron-right')}</span></button>`).join('')}</div>`;
     return;
