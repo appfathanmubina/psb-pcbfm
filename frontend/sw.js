@@ -1,12 +1,12 @@
-// PSB PWA 32.23.0 — refresh same-origin assets from the network before using offline cache.
-const CACHE='psb-pwa-shell-v32-23-0';
+// PSB PWA 32.24.0 — refresh same-origin assets from the network before using offline cache.
+const CACHE='psb-pwa-shell-v32-24-0';
 const ASSETS=[
   './',
   './index.html',
   './manifest.webmanifest?v=32.16.0',
   './styles.css?v=32.21.0',
   './api-bridge.js?v=32.14.0',
-  './app.js?v=32.20.0',
+  './app.js?v=32.24.0',
   './assets/logo-fathanmubina.svg?v=32.7.0',
   './assets/logo-fathan-mubina.png?v=32.7.0',
   './icons/favicon-32.svg?v=32.7.0',
