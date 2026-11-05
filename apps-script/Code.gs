@@ -1882,7 +1882,7 @@ const PSB_PAYMENT_VIEW_ROLES = ['WALI','SUPERADMIN','ADMIN_PSB','KEUANGAN'];
 const PSB_PAYMENT_MANAGE_ROLES = ['SUPERADMIN','ADMIN_PSB','KEUANGAN'];
 const PSB_PAYMENT_EDITABLE_STATUSES = ['SUBMITTED','UNDER_REVIEW','REVISION','VERIFIED'];
 
-function ensureFormBillForRegistration_(registrationId, paymentTypes, actorUserId) {
+function ensureFormBillForRegistration_(registrationId, paymentTypes, actorUserId, suppressOwnerNotification) {
   const id=String(registrationId||'').trim();
   if(!id) return fail_('ID pendaftaran tidak valid.');
   const found=findRegistration_(id);
@@ -1908,7 +1908,9 @@ function ensureFormBillForRegistration_(registrationId, paymentTypes, actorUserI
   Object.assign(record,{billId,registrationId:id,paymentTypeId:String(formType.paymentTypeId),amount,dueDate:'',status:'UNPAID',createdAt:now,updatedAt:now});
   sheet.appendRow(headers.map(h=>record[h]));
   try{writeAudit_(actorUserId||'SYSTEM','CREATE','PAYMENT',billId,'',JSON.stringify(record),'Tagihan formulir dibuat otomatis saat pendaftaran dikirim');}catch(auditError){console.error('Auto form bill audit failed: '+auditError);}
-  try{notifyRegistrationOwner_(id,'Tagihan Formulir Telah Tersedia','Tagihan biaya formulir sebesar Rp '+amount.toLocaleString('id-ID')+' telah dibuat otomatis. Silakan buka menu Pembayaran untuk mengunggah bukti transfer. Dokumen persyaratan tetap dapat dilengkapi secara bersamaan.','INFO');}catch(notificationError){console.error('Auto form bill notification failed: '+notificationError);}
+  if(!suppressOwnerNotification){
+    try{notifyRegistrationOwner_(id,'Tagihan Formulir Telah Tersedia','Tagihan biaya formulir sebesar Rp '+amount.toLocaleString('id-ID')+' telah dibuat otomatis. Silakan buka menu Pembayaran untuk mengunggah bukti transfer. Dokumen persyaratan tetap dapat dilengkapi secara bersamaan.','INFO');}catch(notificationError){console.error('Auto form bill notification failed: '+notificationError);}
+  }
   return {success:true,created:true,bill:record};
 }
 
@@ -3989,7 +3991,7 @@ function submitRegistration(sessionToken, registrationId) {
   const submittedIdx = headers.indexOf('submittedAt');
   const updatedIdx = headers.indexOf('updatedAt');
   const now = new Date();
-  const autoBill=ensureFormBillForRegistration_(found.registration.registrationId,null,actor.userId);
+  const autoBill=ensureFormBillForRegistration_(found.registration.registrationId,null,actor.userId,true);
   if(!autoBill.success) return fail_('Tagihan formulir belum dapat dibuat otomatis: '+autoBill.message+' Hubungi Superadmin untuk memeriksa Master Data → Jenis Pembayaran.');
   if (statusIdx >= 0) sheet.getRange(row,statusIdx+1).setValue('SUBMITTED');
   if (submittedIdx >= 0) sheet.getRange(row,submittedIdx+1).setValue(now);
