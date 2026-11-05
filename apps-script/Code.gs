@@ -3720,28 +3720,56 @@ function uploadDocument(sessionToken, payload) {
   }
 
   const lock = LockService.getScriptLock();
-  lock.waitLock(10000);
+  let lockAcquired = false;
   let uploadedFile = null;
   let documentRowWritten = false;
+  let savedDocument = null;
+  let stage = 'CHECK_DATABASE';
+
   try {
     const ss = getDatabaseSpreadsheet_();
     const sheet = ss.getSheetByName(PSB_SHEETS.DOCUMENTS);
     if (!sheet) return fail_('Sheet DOCUMENTS belum tersedia. Jalankan setup database terlebih dahulu.');
 
+    // Folder lookup/creation is serialized, but the potentially slow Drive file
+    // upload runs without holding the global ScriptLock.
+    stage = 'LOCK_DRIVE_FOLDER';
+    lock.waitLock(20000);
+    lockAcquired = true;
     const folder = getRegistrationDocumentFolder_(found.registration);
+    lock.releaseLock();
+    lockAcquired = false;
+
+    stage = 'CREATE_DRIVE_FILE';
     const blob = Utilities.newBlob(bytes, mimeType, fileName);
     const file = folder.createFile(blob);
     uploadedFile = file;
+
+    stage = 'VERIFY_DRIVE_FILE';
     const detectedMime = String(file.getMimeType() || '').toLowerCase();
-    if (detectedMime && detectedMime !== mimeType && !(mimeType === 'application/pdf' && detectedMime === 'application/pdf')) {
-      try { file.setTrashed(true); } catch (trashError) {}
+    if (detectedMime && detectedMime !== mimeType) {
+      try {
+        file.setTrashed(true);
+        uploadedFile = null;
+      } catch (trashError) {
+        console.error('PSB_DOCUMENT_UPLOAD_CLEANUP_FAILED: ' + String(trashError && trashError.message || trashError));
+      }
       return fail_('Tipe file aktual tidak sesuai dengan tipe file yang diizinkan.');
     }
+    const fileId = file.getId();
+    const storedFileName = file.getName();
+    const fileUrl = file.getUrl();
+
+    // Keep the database commit atomic while avoiding a long-held lock during
+    // Drive upload. A second lock protects the one-active-document-per-type rule.
+    stage = 'LOCK_DOCUMENT_RECORD';
+    lock.waitLock(20000);
+    lockAcquired = true;
+
+    stage = 'WRITE_DOCUMENT_RECORD';
     const now = new Date();
     const documentId = generateId_('DOC');
     const headers = sheet.getRange(1,1,1,sheet.getLastColumn()).getValues()[0].map(String);
-
-    // Satu dokumen aktif per jenis dokumen. Riwayat lama tetap disimpan untuk audit.
     const rows = sheet.getLastRow() < 2 ? [] : sheet.getRange(2,1,sheet.getLastRow()-1,sheet.getLastColumn()).getValues();
     const regIdx = headers.indexOf('registrationId');
     const typeIdx = headers.indexOf('documentTypeId');
@@ -3757,9 +3785,9 @@ function uploadDocument(sessionToken, payload) {
     record.documentId = documentId;
     record.registrationId = registrationId;
     record.documentTypeId = documentTypeId;
-    record.fileId = file.getId();
-    record.fileName = file.getName();
-    record.fileUrl = file.getUrl();
+    record.fileId = fileId;
+    record.fileName = storedFileName;
+    record.fileUrl = fileUrl;
     record.mimeType = mimeType;
     record.fileSize = actualSize;
     record.status = 'PENDING';
@@ -3768,26 +3796,56 @@ function uploadDocument(sessionToken, payload) {
     record.verifiedBy = '';
     record.revisionNote = '';
 
-    // Simpan dokumen baru terlebih dahulu agar dokumen lama tetap aktif
-    // apabila penulisan dokumen pengganti gagal.
+    // Calculate the row before append so a later display-mapping failure cannot
+    // make a committed upload look like a failed upload to the caller.
+    const savedRowNumber = sheet.getLastRow() + 1;
     const recordRow = safeSheetRow_(headers.map(h => record[h] !== undefined ? record[h] : ''));
     sheet.appendRow(recordRow);
     documentRowWritten = true;
-    const savedRowNumber = sheet.getLastRow();
+    savedDocument = rowObject_(headers, recordRow, savedRowNumber);
+
+    stage = 'REPLACE_OLD_DOCUMENTS';
     oldDocuments.forEach(old => {
       if (statusIdx >= 0) sheet.getRange(old.rowNumber, statusIdx + 1).setValue('REPLACED');
     });
-    writeAudit_(actor.userId, 'UPLOAD', 'DOCUMENT', documentId, oldDocuments.length ? JSON.stringify(oldDocuments.map(x => x.object)) : '', JSON.stringify({documentId:documentId,registrationId:registrationId,documentTypeId:documentTypeId,fileId:file.getId(),fileName:file.getName(),mimeType:mimeType,fileSize:actualSize,status:'PENDING'}), 'Dokumen diunggah ke Google Drive');
 
-    return { success:true, message:'Dokumen berhasil diunggah.', document:rowObject_(headers, recordRow, savedRowNumber) };
+    stage = 'WRITE_AUDIT';
+    writeAudit_(actor.userId, 'UPLOAD', 'DOCUMENT', documentId, oldDocuments.length ? JSON.stringify(oldDocuments.map(x => x.object)) : '', JSON.stringify({documentId:documentId,registrationId:registrationId,documentTypeId:documentTypeId,fileId:fileId,fileName:storedFileName,mimeType:mimeType,fileSize:actualSize,status:'PENDING'}), 'Dokumen diunggah ke Google Drive');
+
+    return { success:true, message:'Dokumen berhasil diunggah.', document:savedDocument };
   } catch (e) {
-    if (uploadedFile && !documentRowWritten) {
-      try { uploadedFile.setTrashed(true); } catch (cleanupError) {}
+    console.error('PSB_DOCUMENT_UPLOAD_FAILED stage=' + stage + ': ' + String(e && e.stack || e));
+
+    // Once the document row exists, do not tell the user to retry the upload:
+    // that could create a duplicate file. Report the committed upload as success.
+    if (documentRowWritten) {
+      return {
+        success:true,
+        message:stage === 'REPLACE_OLD_DOCUMENTS'
+          ? 'Dokumen berhasil diunggah. Status dokumen sebelumnya perlu diperiksa petugas.'
+          : 'Dokumen berhasil diunggah.',
+        document:savedDocument
+      };
     }
-    console.error(e);
-    return fail_('Gagal mengunggah dokumen ke Google Drive.');
+
+    if (uploadedFile) {
+      try { uploadedFile.setTrashed(true); }
+      catch (cleanupError) {
+        console.error('PSB_DOCUMENT_UPLOAD_CLEANUP_FAILED: ' + String(cleanupError && cleanupError.message || cleanupError));
+      }
+    }
+
+    if (stage === 'LOCK_DRIVE_FOLDER' || stage === 'LOCK_DOCUMENT_RECORD') {
+      return fail_('Server sedang memproses permintaan lain. Dokumen belum disimpan. Silakan coba kembali beberapa saat lagi.');
+    }
+    if (stage === 'CREATE_DRIVE_FILE' || stage === 'VERIFY_DRIVE_FILE') {
+      return fail_('Google Drive belum dapat menyimpan file. Periksa koneksi dan coba kembali.');
+    }
+    return fail_('Dokumen belum berhasil disimpan. Silakan coba kembali.');
   } finally {
-    lock.releaseLock();
+    if (lockAcquired) {
+      try { lock.releaseLock(); } catch (releaseError) {}
+    }
   }
 }
 
