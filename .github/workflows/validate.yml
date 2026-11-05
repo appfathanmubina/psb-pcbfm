@@ -84,6 +84,8 @@ jobs:
         run: node tests/backend-verification-detail-performance.test.js
       - name: Test reregistration page performance and ownership safeguards
         run: node tests/backend-reregistration-page-performance.test.js
+      - name: Test monitoring page batch-read and authorization safeguards
+        run: node tests/backend-monitoring-page-performance.test.js
       - name: Test payment page performance and ownership safeguards
         run: node tests/backend-payment-page-performance.test.js
       - name: Test desktop public landing responsive safeguards
