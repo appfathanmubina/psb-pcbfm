@@ -10,6 +10,7 @@
   const TIMEOUT_MS = 30000;
   // Allow one-time PBKDF2 verification and conversion for the remaining legacy accounts.
   const LOGIN_TIMEOUT_MS = 60000;
+  const UPLOAD_TIMEOUT_MS = 120000;
   const TOKEN_TTL_MS = 150000;
   const TOKEN_MAX_USES = 20;
   const MAX_PAYLOAD_CHARS = 20 * 1024 * 1024;
@@ -153,7 +154,7 @@
 
       iframe.src = BRIDGE_URL + '?bridge=1&origin=' +
         encodeURIComponent(location.origin) + '&challenge=' +
-        encodeURIComponent(challenge) + '&v=32.13.0';
+        encodeURIComponent(challenge) + '&v=32.14.0';
       document.body.appendChild(iframe);
     });
   }
@@ -192,7 +193,8 @@
       iframe.style.cssText = 'position:fixed;left:-10000px;top:-10000px;width:1px;height:1px;border:0;opacity:0;pointer-events:none;';
       const item = { iframe: iframe, requestId: requestId, functionName: String(functionName || ''), startedAt: Date.now(), resolve: resolve, reject: reject, timer: null };
       pending.set(challenge, item);
-      const requestTimeoutMs = item.functionName === 'login' ? LOGIN_TIMEOUT_MS : TIMEOUT_MS;
+      const requestTimeoutMs = item.functionName === 'login' ? LOGIN_TIMEOUT_MS :
+        item.functionName === 'uploadDocument' ? UPLOAD_TIMEOUT_MS : TIMEOUT_MS;
       item.timer = setTimeout(() => {
         console.error('[PSB Bridge] Timeout menunggu respons Apps Script.', {
           functionName: item.functionName,
