@@ -20,8 +20,10 @@ assert.match(initialize, /state\.appInitialized\s*=\s*true/,
 const warmScheduler = functionSource('scheduleWarmNavigationData');
 assert.match(warmScheduler, /requestIdleCallback/,
   'Navigation prefetch should use browser idle time when available');
-assert.match(warmScheduler, /setTimeout\(run,\s*1200\)/,
-  'Navigation prefetch must have a delayed fallback');
+assert.match(warmScheduler, /setTimeout\(run,\s*8000\)/,
+  'Navigation prefetch must wait before background work on browsers without idle callbacks');
+assert.match(warmScheduler, /timeout:10000/,
+  'Navigation prefetch must wait for a browser idle window');
 
 const boot = functionSource('boot');
 assert.match(boot, /const configTask\s*=\s*refreshPublicConfig\(\)/,
