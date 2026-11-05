@@ -270,3 +270,20 @@ Branch: `perf/backend-batch-read-optimization`
 - Wali still sees only their own published announcements; active academic-year filtering and item sorting are preserved.
 - No Apps Script deployment or production data mutation was performed.
 - This optimization is limited to the announcement page. Other repeated-read paths remain for separate audited batches.
+
+
+## Repair batch 05 — document page and verification queue read optimization
+
+Branch: `perf/document-verification-batch-reads`
+
+| ID | Finding | Change | Status |
+|---|---|---|---|
+| PERF-DOC-001 | `getDocumentPageData()` built the registration list, then called `findRegistration_()` for the selected item, rereading REGISTRATIONS, CANDIDATES, GUARDIANS, ADDRESSES, and SCHOOLS. | Reuse request-local registration and candidate indexes; load related guardian/address/school rows once and preserve first-row / first-primary selection behavior. Registration enrichment accepts optional preloaded maps; existing callers retain their original behavior. | Regression checks passed; runtime/staging test pending |
+| PERF-VER-001 | `getVerificationQueue()` converted every registration row into an object before applying status and search filters. | Apply the same status and search conditions to raw row arrays first; create row objects only for matching queue entries. Keep enrichment, sorting, and the 200-row cap unchanged. | Patch prepared; CI pending |
+
+### Scope and safety
+- Wali registration ownership filtering and selected-registration authorization remain enforced before document details are returned.
+- Document checklist still uses active document types; current documents remain scoped to the selected registration.
+- Queue status matching, search fields, ordering, and response cap are unchanged.
+- No spreadsheet schema, stored data, authentication, role definitions, or business status transitions changed.
+- No Apps Script deployment or production data mutation was performed.

@@ -78,6 +78,8 @@ jobs:
         run: node tests/dashboard-performance.test.js
       - name: Test backend batch-read optimization safeguards
         run: node tests/backend-read-optimization.test.js
+      - name: Test document page and verification queue performance safeguards
+        run: node tests/backend-document-page-performance.test.js
       - name: Test desktop public landing responsive safeguards
         run: node tests/public-home-responsive.test.js
       - name: Test PWA desktop cache refresh safeguards
