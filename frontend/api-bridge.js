@@ -194,7 +194,7 @@
       const item = { iframe: iframe, requestId: requestId, functionName: String(functionName || ''), startedAt: Date.now(), resolve: resolve, reject: reject, timer: null };
       pending.set(challenge, item);
       const requestTimeoutMs = item.functionName === 'login' ? LOGIN_TIMEOUT_MS :
-        item.functionName === 'uploadDocument' ? UPLOAD_TIMEOUT_MS : TIMEOUT_MS;
+        (item.functionName === 'uploadDocument' || item.functionName === 'submitPayment') ? UPLOAD_TIMEOUT_MS : TIMEOUT_MS;
       item.timer = setTimeout(() => {
         console.error('[PSB Bridge] Timeout menunggu respons Apps Script.', {
           functionName: item.functionName,
