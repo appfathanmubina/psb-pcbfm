@@ -34,3 +34,11 @@ assert.match(css, /\.header-action\{[^}]*overflow:visible/,
 assert.match(css, /\.notification-badge\{[^}]*z-index:3[^}]*min-width:22px[^}]*height:22px/,
   'Notification badge must have enough room for multi-digit counts');
 console.log('Wali workflow navigation and notification badge safeguards: OK');
+
+for (const [name, source] of [['PWA', app], ['Apps Script shell', shell]]) {
+  const home = source.slice(source.indexOf('function renderWaliHomeFlow(data){'), source.indexOf('function dashboardTaskItems(items, emptyText)'));
+  assert.doesNotMatch(home, /wali-flow-parallel|wali-flow-current|wali-flow-next/, name + ': Wali home must not repeat workflow details below the clickable stages');
+  assert.match(home, /wali-flow-list/, name + ': clickable registration workflow remains visible');
+  assert.doesNotMatch(source, /File fisik disimpan di folder Google Drive pendaftaran\. Spreadsheet hanya menyimpan metadata file, status, dan jejak audit\./, name + ': internal Drive/audit note must not be shown on the document page');
+}
+console.log('Wali home information hierarchy safeguards: OK');
