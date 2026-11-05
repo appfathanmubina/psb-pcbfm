@@ -59,8 +59,7 @@ assert.match(waliHome, /registrationStatus === 'COMPLETED'/);
 
 const waliDashboard = section(frontend, 'function renderWaliHomeFlow(data)', 'function dashboardTaskItems(items, emptyText)');
 assert.match(waliDashboard, /Pembayaran Formulir/);
-assert.match(waliDashboard, /waliFlowAction\('documents'/);
-assert.match(waliDashboard, /waliFlowAction\('payments'/);
+assert.match(waliDashboard, /stageActions=\['registration','documents','payments','verification','selection','announcement','reregistration'\]/);
 assert.match(waliDashboard, /wali-flow-list/);
 assert.doesNotMatch(waliDashboard, /wali-flow-parallel|wali-flow-current|wali-flow-next/);
 
