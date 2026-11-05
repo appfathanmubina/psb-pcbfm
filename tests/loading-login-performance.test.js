@@ -26,6 +26,18 @@ assert.match(warmScheduler, /timeout:10000/,
   'Navigation prefetch must wait for a browser idle window');
 
 const boot = functionSource('boot');
+assert.match(boot, /renderApp\(\{deferInitialPage:true\}\)/,
+  'Session restore must avoid starting an unawaited duplicate Home render');
+assert.match(boot, /await goPage\(savedPage\)/,
+  'Session restore must await the selected page data renderer before boot completion');
+assert.match(boot, /finally\{if\(!state\.appInitialized\)loading\(false\);\}/,
+  'Boot must not decrement the active page loading counter when hiding the splash screen');
+const renderApp = functionSource('renderApp');
+assert.match(renderApp, /if\(options\.deferInitialPage!==true\)goPage\('home'\)/,
+  'App shell must support deferring its first route until the caller awaits the selected page');
+const processEnd = functionSource('processEnd');
+assert.match(processEnd, /setTimeout\([\s\S]*?850\)/,
+  'Successful process popup must remain visible briefly after the response so the DOM renderer can commit');
 assert.match(boot, /const configTask\s*=\s*refreshPublicConfig\(\)/,
   'Public configuration refresh should start asynchronously');
 assert.doesNotMatch(boot, /await\s+configTask/,
@@ -36,8 +48,12 @@ assert.match(login, /server\('login',\s*identifier,\s*password\)/,
   'Login must make one direct authentication request');
 assert.match(login, /server\('finalizeLogin',\s*state\.token\)\.catch\(\(\)=>\{\}\)/,
   'Last-login and audit bookkeeping must remain best-effort after UI entry');
-assert.match(login, /renderApp\(\);\s*loading\(false\);\s*initializeAfterLogin\(\)/,
-  'Successful login must render the app before noncritical background work');
+assert.match(login, /initializeAfterLogin\(\);[\s\S]*?\$\('loading'\)\?\.classList\.add\('hidden'\);[\s\S]*?renderApp\(\)/,
+  'Successful login must activate tracked loading before rendering the first page');
+assert.doesNotMatch(login, /loading\(false\)/,
+  'Successful login must not close the process popup before the initial page data RPC completes');
+assert.match(login, /state\.processSilentDepth[\s\S]*?server\('finalizeLogin',\s*state\.token\)/,
+  'Best-effort login audit must not extend the initial dashboard loading popup');
 assert.match(app, /function renderLogin\(error='',identifier=''\)/,
   'Failed login should retain the entered identifier');
 assert.match(app, /value="\$\{esc\(identifier\)\}"/,
