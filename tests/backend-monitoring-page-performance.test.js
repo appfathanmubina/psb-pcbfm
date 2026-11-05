@@ -38,7 +38,7 @@ assert.match(page, /allChildRows\.REREGISTRATIONS\.filter/,
 
 assert.match(page, /paymentsByBill\[k\]\.push\(x\)/,
   'Payment rows must be grouped by bill once');
-assert.match(page, /latestPaymentByBill\\[k\\]=paymentsByBill\\[k\\]\\.slice\\(\\)\\.sort\\(/,
+assert.ok(page.includes('latestPaymentByBill[k]=paymentsByBill[k].slice().sort('),
   'Latest payment per bill must preserve the original sort comparator');
 assert.match(page, /verificationsByPayment\[k\]\.push\(x\)/,
   'Verification rows must be grouped by payment once');
@@ -46,7 +46,7 @@ assert.match(page, /const ps=paymentsByBill\[String\(b\.billId\)\]\|\|\[\]/,
   'Bill reconciliation must use the payment index');
 assert.match(page, /const vs=verificationsByPayment\[String\(p\.paymentId\)\]\|\|\[\]/,
   'Duplicate verification detection must use the verification index');
-assert.match(page, /const p=latestPaymentByBill\[String\(b\.billId\|\|''\)\]\|\|null/,
+assert.ok(page.includes("const p=latestPaymentByBill[String(b.billId||'')]||null"),
   'Payment queue must use precomputed latest payment');
 assert.match(page, /const scheduleIds=\{\}/,
   'Schedule membership index must be built once');
