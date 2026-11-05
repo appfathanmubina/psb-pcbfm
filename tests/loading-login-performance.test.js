@@ -57,8 +57,8 @@ assert.match(app, /scheduleWarmNavigationData\(\);/,
 
 assert.match(app, /state\.page==='home'\)warmNavigationData\(\)/,
   'Background navigation prefetch must only start while Home remains active');
-assert.match(app, /state\.page!=='home' \|\| !state\.token\)return/,
-  'Background navigation prefetch must stop when the user navigates away');
+assert.match(app, /!state\.token\|\|state\.page!=='home'\|\|document\.visibilityState==='hidden'\)return/,
+  'Background navigation prefetch must stop when the user navigates away or the tab is hidden');
 assert.match(app, /state\.publicGalleryLoadScheduled=false;[\s\S]{0,120}if\(document\.getElementById\('galleryTrack'\)\)loadPublicGallery\(\)/,
   'Static GitHub gallery rendering must be deferred and skipped after leaving the public home');
 assert.match(app, /requestIdleCallback\(loadGalleryWhenIdle,\{timeout:3000\}\)/,
