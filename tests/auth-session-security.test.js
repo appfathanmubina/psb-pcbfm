@@ -72,7 +72,7 @@ assert.match(userByLogin, /getRange\(cachedRowNumber,\s*1,\s*1,\s*15\)/,
 const createSeed = fn('createSession_');
 assert.match(createSeed, /PSB_SESSION_ROW_V1_/,
   'New sessions must seed their row index immediately');
-const migration = fn('migrateLegacyPasswordAfterLogin_');
+const migration = fn('migratePbkdf2PasswordToLegacySha256AfterLogin_');
 assert.ok(migration.indexOf('hashPassword_(') < migration.indexOf('lock.waitLock(20000)'),
   'Legacy PBKDF2 migration must derive the hash before taking the global lock');
 assert.match(migration.slice(migration.indexOf('lock.waitLock(20000)')),
