@@ -1360,9 +1360,14 @@ function renderDocumentContent(){
 
 const UPLOAD_IMAGE_MAX_SIDE=2000;
 const UPLOAD_IMAGE_COMPRESSION_THRESHOLD=1.5*1024*1024;
+const SUPPORTED_UPLOAD_MIME_TYPES=['application/pdf','image/jpeg','image/png','image/webp'];
+function getSupportedDocumentMimeTypes(rulesText){
+  const rules=String(rulesText||'').split(',').map(x=>x.trim().toLowerCase()).filter(Boolean);
+  return SUPPORTED_UPLOAD_MIME_TYPES.filter(type=>!rules.length||rules.some(rule=>rule===type||(rule==='image/*'&&type.startsWith('image/'))));
+}
 function uploadMimeAllowed(mime,rulesText){
-  const rules=String(rulesText||'').split(',').map(x=>x.trim().toLowerCase()).filter(Boolean),type=String(mime||'').toLowerCase();
-  return !rules.length||rules.some(rule=>rule===type||(rule.endsWith('/*')&&type.startsWith(rule.slice(0,-1))));
+  const type=String(mime||'').toLowerCase();
+  return SUPPORTED_UPLOAD_MIME_TYPES.includes(type)&&getSupportedDocumentMimeTypes(rulesText).includes(type);
 }
 async function decodeUploadImage(file){
   if(typeof createImageBitmap==='function')return await createImageBitmap(file);
@@ -1392,15 +1397,17 @@ async function prepareUploadFile(file,allowed){
 }
 
 function formatFileSize(bytes){const n=Number(bytes||0);if(!n)return '-';if(n<1024)return n+' B';if(n<1024*1024)return (n/1024).toFixed(1)+' KB';if(n<1024*1024*1024)return (n/1024/1024).toFixed(2)+' MB';return (n/1024/1024/1024).toFixed(2)+' GB';}
+const DOCUMENT_UPLOAD_MAX_SIZE_MB=14;
 function getDocumentMaxSizeMb(type){
   const configured=Number(type?.maxSizeMb);
-  return Number.isFinite(configured)&&configured>0?configured:10;
+  return Number.isFinite(configured)&&configured>0?Math.min(configured,DOCUMENT_UPLOAD_MAX_SIZE_MB):10;
 }
 function openDocumentUpload(type){
   const maxSizeMb=getDocumentMaxSizeMb(type);
-  const allowed=String(type.allowedMimeTypes||'').split(',').map(x=>x.trim()).filter(Boolean);const accept=allowed.join(',');
+  const allowed=getSupportedDocumentMimeTypes(type.allowedMimeTypes),accept=allowed.join(','),disabledAttr=allowed.length?'':'disabled';
   const old=type.document||{};
-  document.body.insertAdjacentHTML('beforeend',`<div class="modal-backdrop" id="documentUploadModal"><div class="modal"><h3>${old.fileId?'Ganti':'Unggah'} ${esc(type.name||'Dokumen')}</h3><p>Pilih file yang sesuai dengan aturan dokumen. File akan disimpan pada folder Google Drive pendaftaran ini.</p><div id="documentUploadMsg"></div><div class="upload-box"><input id="documentFileInput" type="file" ${accept?`accept="${esc(accept)}"`:''} onchange="previewDocumentFile()"><div class="file-picker"><button type="button" class="file-picker-btn" onclick="$('documentFileInput').click()">Pilih File</button><span class="file-picker-name" id="documentFileName">Belum ada file dipilih</span></div><div id="documentFileInfo" class="upload-note">Tipe diizinkan: ${esc(type.allowedMimeTypes||'Semua tipe file')} · Maksimum ${esc(maxSizeMb)} MB</div></div><div class="modal-actions"><button id="documentUploadSubmitBtn" class="btn btn-primary" onclick='submitDocumentUpload(${JSON.stringify(type)})'>${old.fileId?'Ganti File':'Unggah Sekarang'}</button><button class="btn btn-secondary" onclick="closeDocumentUpload()">Batal</button></div></div></div>`);
+  const uploadInfo=allowed.length?'Tipe diizinkan: '+allowed.join(', ')+' · Maksimum '+maxSizeMb+' MB':'Konfigurasi tipe file belum didukung. Hubungi Admin PSB untuk memperbaiki Master Data.';
+  document.body.insertAdjacentHTML('beforeend',`<div class="modal-backdrop" id="documentUploadModal"><div class="modal"><h3>${old.fileId?'Ganti':'Unggah'} ${esc(type.name||'Dokumen')}</h3><p>Pilih file yang sesuai dengan aturan dokumen. File akan disimpan pada folder Google Drive pendaftaran ini.</p><div id="documentUploadMsg"></div><div class="upload-box"><input id="documentFileInput" type="file" ${accept?`accept="${esc(accept)}"`:''} ${disabledAttr} onchange="previewDocumentFile()"><div class="file-picker"><button type="button" class="file-picker-btn" ${disabledAttr} onclick="$('documentFileInput').click()">Pilih File</button><span class="file-picker-name" id="documentFileName">Belum ada file dipilih</span></div><div id="documentFileInfo" class="upload-note">${esc(uploadInfo)}</div></div><div class="modal-actions"><button id="documentUploadSubmitBtn" class="btn btn-primary" ${disabledAttr} onclick='submitDocumentUpload(${JSON.stringify(type)})'>${old.fileId?'Ganti File':'Unggah Sekarang'}</button><button class="btn btn-secondary" onclick="closeDocumentUpload()">Batal</button></div></div></div>`);
 }
 function previewDocumentFile(){const input=$('documentFileInput'),info=$('documentFileInfo'),name=$('documentFileName');const f=input?.files?.[0];if(!f||!info)return;if(name){name.textContent=f.name;name.classList.add('selected')}info.innerHTML=`<div class="file-name">${esc(f.name)}</div><div class="upload-note">${formatFileSize(f.size)} · ${esc(f.type||'Tipe tidak terdeteksi')}</div>`;}
 function closeDocumentUpload(){$('documentUploadModal')?.remove()}
