@@ -2038,6 +2038,9 @@ function verifyPayment(sessionToken,payload){
   writeAudit_(actor.userId,'PAYMENT_VERIFY','PAYMENT',paymentId,'',JSON.stringify({status,note}),'Pembayaran diverifikasi');
   const paymentType=findMasterItemById_('MASTER_JENIS_PEMBAYARAN','paymentTypeId',String(br?.object?.paymentTypeId||''));
   const paymentLabel=String(paymentType?.name||'pembayaran');
+  if(status==='VERIFIED' && /formulir/i.test(paymentLabel)) {
+    try { notifyUsersByRoles_(['SUPERADMIN','ADMIN_PSB','VERIFIKATOR'],'Pembayaran Formulir Terkonfirmasi',String(regFound.candidate?.fullName||'Calon santri')+' telah melunasi biaya formulir. Pendaftaran siap masuk antrean verifikasi PSB.','INFO'); } catch(notificationError) { console.error('Verification queue notification failed: '+notificationError); }
+  }
   notifyRegistrationOwner_(String(found.registration.registrationId),'Pembayaran '+(status==='VERIFIED'?'Terverifikasi':'Ditolak'),status==='VERIFIED'?('Pembayaran '+paymentLabel+' telah terverifikasi.'):('Pembayaran '+paymentLabel+' ditolak.'+(note?' Catatan: '+note:'')),status==='VERIFIED'?'SUCCESS':'WARNING');
   return {success:true,message:status==='VERIFIED'?'Pembayaran berhasil diverifikasi.':'Pembayaran ditolak dan dapat diunggah ulang.'};
   } finally { lock.releaseLock(); }
@@ -3376,6 +3379,8 @@ function getVerificationDetail(sessionToken, registrationId) {
   const found = findRegistrationBatch_(ss, String(registrationId || ''));
   if (!found) return fail_('Pendaftaran tidak ditemukan.');
   const documents = getCurrentDocuments_(String(registrationId || ''));
+  const registrationStatus = String(found.registration.status || '').toUpperCase();
+  if (['SUBMITTED','UNDER_REVIEW','REVISION'].indexOf(registrationStatus) >= 0 && !isFormPaymentVerified_(registrationId)) return fail_('Detail verifikasi tersedia setelah pembayaran formulir dikonfirmasi oleh bagian Keuangan.');
   const types = getActiveMasterItems_('MASTER_DOKUMEN');
   const byType = {};
   documents.forEach(d => { byType[String(d.documentTypeId)] = d; });
