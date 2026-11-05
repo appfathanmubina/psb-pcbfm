@@ -457,6 +457,14 @@ input:focus,select:focus,textarea:focus{background:#fff!important;box-shadow:0 0
 
 
 .dashboard-tools-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px;margin-top:2px}.dashboard-tool{min-height:58px;border:1px solid var(--line);border-radius:14px;background:#fff;color:var(--text);display:flex;align-items:center;gap:9px;padding:10px 12px;font-size:11px;font-weight:850;text-align:left;cursor:pointer}.dashboard-tool:hover{border-color:#d7c8ed;background:#faf7ff}.dashboard-tool .ico-visual{width:28px;height:28px;border-radius:9px;flex:0 0 28px}.dashboard-tool.primary{background:var(--primary-soft);border-color:#ddd0ff;color:var(--primary-dark)}
+
+/* Global process popup — synchronized with PWA shell */
+.psb-process-backdrop{position:fixed;inset:0;z-index:1800;display:grid;place-items:center;padding:18px;background:rgba(30,20,45,.30);backdrop-filter:blur(5px);animation:psbProcessFade .16s ease-out}
+.psb-process-card{width:min(420px,94vw);padding:20px 19px 16px;border:1px solid rgba(255,255,255,.85);border-radius:20px;background:rgba(255,255,255,.98);box-shadow:0 20px 65px rgba(30,20,45,.22)}
+.psb-process-head{display:flex;align-items:center;gap:12px}.psb-process-spinner{width:34px;height:34px;flex:0 0 34px;display:grid;place-items:center;border:3px solid #e9ddff;border-top-color:var(--primary);border-radius:50%;animation:spin .8s linear infinite;color:#15803d;font-size:21px;font-weight:900}
+.psb-process-copy{min-width:0;flex:1;display:grid;gap:3px}.psb-process-copy b{font-size:14px;font-weight:900;color:var(--text)}.psb-process-copy span{font-size:11px;line-height:1.45;color:var(--muted);overflow-wrap:anywhere}
+.psb-process-head>strong{font-size:17px;font-variant-numeric:tabular-nums;color:var(--primary-dark)}.psb-process-track{height:8px;margin-top:17px;overflow:hidden;border-radius:99px;background:#eee9f5}.psb-process-track span{display:block;height:100%;border-radius:inherit;background:linear-gradient(90deg,#8b5cf6,#6d28d9);transition:width .28s ease}
+.psb-process-foot{margin-top:10px;font-size:10px;line-height:1.4;color:#8a8192}.psb-process-backdrop.is-done .psb-process-spinner{border:0;background:#dcfce7;animation:none}.psb-process-backdrop.is-done .psb-process-spinner:before{content:'✓'}.psb-process-backdrop.is-error .psb-process-spinner{border:0;background:#fee2e2;color:#b91c1c;animation:none}.psb-process-backdrop.is-error .psb-process-spinner:before{content:'!'}.psb-process-backdrop.is-done .psb-process-track span{background:linear-gradient(90deg,#22c55e,#16a34a)}.psb-process-backdrop.is-error .psb-process-track span{background:linear-gradient(90deg,#fb7185,#dc2626)}@keyframes psbProcessFade{from{opacity:0}
 </style>
 </head>
 <body>
@@ -464,6 +472,6 @@ input:focus,select:focus,textarea:focus{background:#fff!important;box-shadow:0 0
 <div id="bootProgress" class="boot-progress hidden"><span class="mini-spin"></span><span class="boot-copy" id="bootProgressText">Menyiapkan aplikasi...</span></div>
 <div id="loading" class="loading hidden"><div class="loading-box splash-box"><div class="splash-logo-wrap"><div class="splash-logo" id="splashLogo"></div></div><b id="loadingText">Memuat aplikasi...</b><div class="muted splash-subtitle">Menyiapkan PSB Fathan Mubina</div><div class="splash-progress"><span></span></div></div></div>
 
-<script src="https://appfathanmubina.github.io/psb-pcbfm/psb-fm-apps-script.js?v=20261104-1"></script>
+<script src="https://appfathanmubina.github.io/psb-pcbfm/psb-fm-apps-script.js?v=20261105-1"></script>
 </body>
 </html>
