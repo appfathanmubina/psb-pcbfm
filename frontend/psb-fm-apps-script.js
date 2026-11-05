@@ -1142,7 +1142,7 @@ function validateRegistrationRequiredUI(){
     }
   }
   const nisn=$('rf_nisn')?.value||'';
-  if(nisn && !/^\\d{10}$/.test(nisn))return {valid:false,label:'NISN harus terdiri dari 10 digit jika diisi.'};
+  if(nisn && !/^\d{10}$/.test(nisn))return {valid:false,label:'NISN harus terdiri dari 10 digit jika diisi.'};
   return {valid:true};
 }
 function exitRegistrationForm(){showConfirm('Keluar dari formulir?','Jika data belum tersimpan sebagai draft, perubahan terakhir dapat hilang. Pastikan sudah menyimpan sebelum keluar.',()=>goPage('registration'),'Keluar')}
