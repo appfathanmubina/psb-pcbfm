@@ -1819,9 +1819,9 @@ function getWaliHomeData(sessionToken) {
 
     let completed = 0;
     if (!['DRAFT'].includes(registrationStatus)) completed = 1;
-    if (documentsComplete && registrationStatus !== 'DRAFT') completed = Math.max(completed, 2);
-    if (formPaid) completed = Math.max(completed, 3);
-    if (formPaid && ['UNDER_REVIEW','VERIFIED','PAYMENT_VERIFIED','SELECTION','PASSED','NOT_PASSED','REREGISTRATION','COMPLETED'].includes(registrationStatus)) completed = Math.max(completed, 4);
+    if (formPaid) completed = Math.max(completed, 2);
+    if (formPaid && documentsComplete) completed = Math.max(completed, 3);
+    if (formPaid && documentsComplete && ['UNDER_REVIEW','VERIFIED','PAYMENT_VERIFIED','SELECTION','PASSED','NOT_PASSED','REREGISTRATION','COMPLETED'].includes(registrationStatus)) completed = Math.max(completed, 4);
     if (participant && (result || ['COMPLETED','PRESENT','ABSENT'].includes(String(participant.status).toUpperCase()))) completed = Math.max(completed, 5);
     if (published) completed = Math.max(completed, 6);
     if (registrationStatus === 'COMPLETED') completed = 7;
@@ -1830,8 +1830,9 @@ function getWaliHomeData(sessionToken) {
     if (registrationStatus === 'COMPLETED') next = {key:'', title:'Pendaftaran Selesai', description:'Seluruh tahapan pendaftaran dan daftar ulang telah selesai. Tidak ada tindakan lanjutan yang perlu dilakukan.', button:''};
     else if (registrationStatus === 'REVISION') next = {key:'registration', title:'Perbaiki Pendaftaran', description:'Petugas meminta perbaikan data atau dokumen. Baca catatan revisi lalu perbarui bagian yang diminta.', button:'Perbaiki Pendaftaran'};
     else if (registrationStatus === 'DRAFT') next = {key:'registration', title:'Lanjutkan Pendaftaran', description:'Pendaftaran masih berupa draft dan belum dikirim.', button:'Lanjutkan Pendaftaran'};
-    else if (['SUBMITTED','UNDER_REVIEW'].includes(registrationStatus) && !formPaid) next = {key:'documents', title:'Lengkapi Dokumen dan Pembayaran', description:'Anda dapat mengunggah dokumen dan melakukan pembayaran secara bersamaan. Verifikasi PSB dimulai setelah pembayaran formulir dikonfirmasi oleh Keuangan.', button:'Lihat Langkah Berikutnya'};
-    else if (['SUBMITTED','UNDER_REVIEW'].includes(registrationStatus) && formPaid) next = {key:'documents', title:'Menunggu Verifikasi PSB', description:'Pembayaran formulir sudah dikonfirmasi. Petugas PSB akan memeriksa data dan dokumen. Jika ada kekurangan, Anda akan menerima instruksi perbaikan.', button:'Lihat Dokumen'};
+    else if (['SUBMITTED','UNDER_REVIEW','PAYMENT_VERIFIED'].includes(registrationStatus) && !formPaid) next = {key:'payments', title:'Pembayaran Formulir', description:'Selesaikan pembayaran formulir terlebih dahulu. Menu Upload Dokumen akan aktif setelah pembayaran dikonfirmasi oleh Keuangan.', button:'Buka Pembayaran'};
+    else if (formPaid && !documentsComplete && ['SUBMITTED','UNDER_REVIEW','PAYMENT_VERIFIED','VERIFIED'].includes(registrationStatus)) next = {key:'documents', title:'Upload Dokumen', description:'Pembayaran formulir sudah dikonfirmasi. Silakan unggah dokumen persyaratan sebelum proses verifikasi PSB.', button:'Upload Dokumen'};
+    else if (formPaid && documentsComplete && ['SUBMITTED','UNDER_REVIEW','PAYMENT_VERIFIED'].includes(registrationStatus)) next = {key:'verification', title:'Menunggu Verifikasi PSB', description:'Pembayaran sudah dikonfirmasi dan dokumen wajib telah diunggah. Petugas PSB akan memeriksa berkas pendaftaran.', button:'Lihat Status Verifikasi'};
     else if (registrationStatus === 'VERIFIED' && !formPaid) next = {key:'payments', title:'Pembayaran Formulir', description:'Pendaftaran sudah terverifikasi. Silakan lanjutkan pembayaran formulir.', button:'Buka Pembayaran'};
     else if (formPaid && !participant) next = {key:'selection', title:'Menunggu / Persiapan Tes', description:'Pembayaran formulir sudah terverifikasi. Pastikan mengikuti jadwal tes.', button:'Buka Tes'};
     else if (participant && !result) next = {key:'selection', title:'Ikuti Tes Seleksi', description:'Anda sudah terdaftar sebagai peserta. Periksa jadwal dan status tes.', button:'Buka Tes'};
@@ -1853,7 +1854,7 @@ function getWaliHomeData(sessionToken) {
   return {success:true,registrations:items,activeYear};
 }
 function statusLabel_(s) {
-  return ({DRAFT:'Draft',SUBMITTED:'Menunggu pembayaran & dokumen',UNDER_REVIEW:'Sedang diverifikasi',REVISION:'Perlu perbaikan',VERIFIED:'Terverifikasi',PAYMENT_PENDING:'Menunggu pembayaran',PAYMENT_VERIFIED:'Pembayaran terverifikasi',SELECTION:'Seleksi',PASSED:'Lulus',NOT_PASSED:'Tidak lulus',REREGISTRATION:'Daftar ulang',COMPLETED:'Selesai',CANCELLED:'Dibatalkan'})[String(s||'').toUpperCase()] || String(s||'-');
+  return ({DRAFT:'Draft',SUBMITTED:'Menunggu pembayaran formulir',UNDER_REVIEW:'Sedang diverifikasi',REVISION:'Perlu perbaikan',VERIFIED:'Terverifikasi',PAYMENT_PENDING:'Menunggu pembayaran',PAYMENT_VERIFIED:'Pembayaran terverifikasi',SELECTION:'Seleksi',PASSED:'Lulus',NOT_PASSED:'Tidak lulus',REREGISTRATION:'Daftar ulang',COMPLETED:'Selesai',CANCELLED:'Dibatalkan'})[String(s||'').toUpperCase()] || String(s||'-');
 }
 
 function getMyRegistrations(sessionToken) {
@@ -1927,7 +1928,7 @@ function ensureFormBillForRegistration_(registrationId, paymentTypes, actorUserI
   sheet.appendRow(headers.map(h=>record[h]));
   try{writeAudit_(actorUserId||'SYSTEM','CREATE','PAYMENT',billId,'',JSON.stringify(record),'Tagihan formulir dibuat otomatis saat pendaftaran dikirim');}catch(auditError){console.error('Auto form bill audit failed: '+auditError);}
   if(!suppressOwnerNotification){
-    try{notifyRegistrationOwner_(id,'Tagihan Formulir Telah Tersedia','Tagihan biaya formulir sebesar Rp '+amount.toLocaleString('id-ID')+' telah dibuat otomatis. Silakan buka menu Pembayaran untuk mengunggah bukti transfer. Dokumen persyaratan tetap dapat dilengkapi secara bersamaan.','INFO');}catch(notificationError){console.error('Auto form bill notification failed: '+notificationError);}
+    try{notifyRegistrationOwner_(id,'Tagihan Formulir Telah Tersedia','Tagihan biaya formulir sebesar Rp '+amount.toLocaleString('id-ID')+' telah dibuat otomatis. Silakan buka menu Pembayaran untuk mengunggah bukti transfer. Menu Upload Dokumen akan aktif setelah pembayaran dikonfirmasi oleh Keuangan.','INFO');}catch(notificationError){console.error('Auto form bill notification failed: '+notificationError);}
   }
   return {success:true,created:true,bill:record};
 }
@@ -2044,7 +2045,7 @@ function createBill(sessionToken,payload){
   sheet.appendRow(headers.map(h=>record[h]));
   writeAudit_(actor.userId,'CREATE','PAYMENT',billId,'',JSON.stringify(record),'Tagihan pembayaran dibuat');
   if(/formulir/i.test(String(type.name||''))) {
-    try { notifyRegistrationOwner_(registrationId,'Tagihan Formulir Telah Diterbitkan','Tagihan biaya formulir sebesar Rp '+amount.toLocaleString('id-ID')+' telah tersedia. Silakan buka menu Pembayaran untuk mengunggah bukti transfer. Dokumen persyaratan tetap dapat dilengkapi secara bersamaan.','INFO'); } catch(notificationError) { console.error('Bill notification failed: '+notificationError); }
+    try { notifyRegistrationOwner_(registrationId,'Tagihan Formulir Telah Diterbitkan','Tagihan biaya formulir sebesar Rp '+amount.toLocaleString('id-ID')+' telah tersedia. Silakan buka menu Pembayaran untuk mengunggah bukti transfer. Menu Upload Dokumen akan aktif setelah pembayaran dikonfirmasi oleh Keuangan.','INFO'); } catch(notificationError) { console.error('Bill notification failed: '+notificationError); }
   }
   return {success:true,message:'Tagihan berhasil dibuat.',bill:JSON.parse(JSON.stringify(record))};
   });
@@ -3579,6 +3580,7 @@ function getDocumentOptions(sessionToken, registrationId) {
   if (!found) return fail_('Pendaftaran tidak ditemukan.');
   if (!canAccessRegistration_(actor, found.registration)) return fail_('Anda tidak memiliki akses ke dokumen pendaftaran ini.');
 
+  const paymentRequired = hasRoleDirect_(actor, ['WALI']) && !hasRoleDirect_(actor, ['SUPERADMIN','ADMIN_PSB','VERIFIKATOR']) && !isFormPaymentVerified_(String(registrationId));
   const types = getActiveMasterItems_('MASTER_DOKUMEN');
   const documents = getCurrentDocuments_(String(registrationId));
   const byType = {};
@@ -3595,7 +3597,8 @@ function getDocumentOptions(sessionToken, registrationId) {
     documentTypes: types,
     documents: documents,
     checklist: checklist,
-    canUpload: PSB_DOCUMENT_EDITABLE_REGISTRATION_STATUSES.indexOf(String(found.registration.status)) >= 0 || hasRoleDirect_(actor, ['SUPERADMIN','ADMIN_PSB','VERIFIKATOR'])
+    paymentRequired: paymentRequired,
+    canUpload: !paymentRequired && (PSB_DOCUMENT_EDITABLE_REGISTRATION_STATUSES.indexOf(String(found.registration.status)) >= 0 || hasRoleDirect_(actor, ['SUPERADMIN','ADMIN_PSB','VERIFIKATOR']))
   };
 }
 
@@ -3682,12 +3685,13 @@ function getDocumentPageData(sessionToken, registrationId) {
     document: byType[String(t.documentTypeId)] || null,
     uploaded: !!byType[String(t.documentTypeId)]
   }));
+  const paymentRequired = isWali && !hasRoleDirect_(actor, ['SUPERADMIN','ADMIN_PSB','VERIFIKATOR']) && !isFormPaymentVerified_(selected);
   const documentData = {
     success:true, registration:registration, candidate:candidate, guardian:guardian,
     address:address, school:school, documentTypes:types, documents:documents,
-    checklist:checklist,
-    canUpload: PSB_DOCUMENT_EDITABLE_REGISTRATION_STATUSES.indexOf(String(registration.status)) >= 0 ||
-      hasRoleDirect_(actor, ['SUPERADMIN','ADMIN_PSB','VERIFIKATOR'])
+    checklist:checklist, paymentRequired:paymentRequired,
+    canUpload: !paymentRequired && (PSB_DOCUMENT_EDITABLE_REGISTRATION_STATUSES.indexOf(String(registration.status)) >= 0 ||
+      hasRoleDirect_(actor, ['SUPERADMIN','ADMIN_PSB','VERIFIKATOR']))
   };
   return { success:true, registrations:registrations, documentData:documentData };
 }
@@ -3720,6 +3724,7 @@ function uploadDocument(sessionToken, payload) {
     const found = findRegistration_(registrationId);
     if (!found) return fail_('Pendaftaran tidak ditemukan.');
     if (!canAccessRegistration_(actor, found.registration)) return fail_('Anda tidak memiliki akses ke dokumen pendaftaran ini.');
+    if (hasRoleDirect_(actor, ['WALI']) && !hasRoleDirect_(actor, ['SUPERADMIN','ADMIN_PSB','VERIFIKATOR']) && !isFormPaymentVerified_(registrationId)) return fail_('Upload Dokumen baru dapat dilakukan setelah pembayaran formulir dikonfirmasi oleh Keuangan.');
 
     const canEditByStatus = PSB_DOCUMENT_EDITABLE_REGISTRATION_STATUSES.indexOf(String(found.registration.status)) >= 0;
     if (!canEditByStatus && !hasRoleDirect_(actor, ['SUPERADMIN','ADMIN_PSB','VERIFIKATOR'])) return fail_('Dokumen tidak dapat diubah pada status pendaftaran saat ini.');
@@ -3964,6 +3969,14 @@ function sanitizeFolderName_(name) {
   return raw.substring(0, 120) || 'Pendaftaran';
 }
 
+function ensureCandidateNisnColumn_(sheet) {
+  if (!sheet) throw new Error('Sheet CANDIDATES tidak ditemukan.');
+  const lastColumn = Math.max(1, sheet.getLastColumn());
+  const headers = sheet.getRange(1,1,1,lastColumn).getValues()[0].map(String);
+  if (headers.indexOf('nisn') >= 0) return;
+  sheet.getRange(1,lastColumn+1).setValue('nisn');
+}
+
 function saveRegistration(sessionToken, payload) {
   const actor = requireRole_(sessionToken, PSB_REGISTRATION_EDIT_ROLES);
   assertOperationalMutation_(actor);
@@ -3978,6 +3991,7 @@ function saveRegistration(sessionToken, payload) {
     const addressSheet = ss.getSheetByName(PSB_SHEETS.ADDRESSES);
     const schoolSheet = ss.getSheetByName(PSB_SHEETS.SCHOOLS);
     if ([regSheet,candidateSheet,guardianSheet,addressSheet,schoolSheet].some(x => !x)) return fail_('Struktur database pendaftaran belum tersedia. Jalankan setup database terlebih dahulu.');
+    ensureCandidateNisnColumn_(candidateSheet);
 
     const registrationId = String(payload.registrationId || '').trim();
     // A new form may carry a stable client-side REG-* id so a retry updates
@@ -4014,7 +4028,7 @@ function saveRegistration(sessionToken, payload) {
     const registrationNumber = existing ? String(existing.registration.registrationNumber) : nextRegistrationNumber_(regSheet, payload.tahunAjaranId);
 
     const candidate = {
-      candidateId, fullName: clean_(payload.candidate?.fullName), nik: digits_(payload.candidate?.nik), birthPlace: clean_(payload.candidate?.birthPlace),
+      candidateId, fullName: clean_(payload.candidate?.fullName), nik: digits_(payload.candidate?.nik), nisn: digits_(payload.candidate?.nisn), birthPlace: clean_(payload.candidate?.birthPlace),
       birthDate: dateOrBlank_(payload.candidate?.birthDate), gender: clean_(payload.candidate?.gender), birthOrder: numberOrBlank_(payload.candidate?.birthOrder),
       familyStatus: clean_(payload.candidate?.familyStatus), photoFileId: existing?.candidate?.photoFileId || '', createdAt: existing?.candidate?.createdAt || now, updatedAt: now
     };
@@ -4029,7 +4043,7 @@ function saveRegistration(sessionToken, payload) {
       createdAt: existing?.address?.createdAt || now, updatedAt: now
     };
     const school = {
-      schoolId, candidateId, schoolName: clean_(payload.school?.schoolName), schoolType: clean_(payload.school?.schoolType), npsn: clean_(payload.school?.npsn),
+      schoolId, candidateId, schoolName: clean_(payload.school?.schoolName), schoolType: clean_(existing?.school?.schoolType || ''), npsn: clean_(payload.school?.npsn),
       address: clean_(payload.school?.address), graduationYear: numberOrBlank_(payload.school?.graduationYear), createdAt: existing?.school?.createdAt || now, updatedAt: now
     };
     const registration = {
@@ -4105,8 +4119,8 @@ function submitRegistration(sessionToken, registrationId) {
   writeAudit_(actor.userId, 'SUBMIT', 'REGISTRATION', found.registration.registrationId, JSON.stringify({status:found.registration.status}), JSON.stringify({status:'SUBMITTED'}), 'Pendaftaran dikirim dan tagihan formulir dibuat otomatis');
   const candidateName=String(found.candidate?.fullName||'calon santri');
   notifyUsersByRoles_(['SUPERADMIN','ADMIN_PSB','KEUANGAN'],'Pendaftaran Baru — Verifikasi Pembayaran Formulir',candidateName+' telah mengirim pendaftaran '+String(found.registration.registrationNumber||found.registration.registrationId)+'. Tagihan formulir telah dibuat otomatis. Silakan periksa bukti pembayaran dan verifikasi setelah Wali mengunggahnya.','INFO');
-  notifyRegistrationOwner_(found.registration.registrationId,'Pendaftaran Berhasil Dikirim','Formulir berhasil dikirim dan tagihan pembayaran formulir telah tersedia. Silakan unggah bukti pembayaran melalui menu Pembayaran. Dokumen persyaratan tetap dapat dilengkapi secara bersamaan. Verifikasi PSB dimulai setelah pembayaran dikonfirmasi oleh bagian Keuangan.','SUCCESS');
-  return { success:true, message:'Pendaftaran berhasil dikirim. Tagihan formulir telah dibuat otomatis; silakan unggah bukti pembayaran dan lengkapi dokumen secara bersamaan.', status:'SUBMITTED', bill:autoBill.bill };
+  notifyRegistrationOwner_(found.registration.registrationId,'Pendaftaran Berhasil Dikirim','Formulir berhasil dikirim dan tagihan pembayaran formulir telah tersedia. Silakan unggah bukti pembayaran melalui menu Pembayaran. Menu Upload Dokumen akan aktif setelah pembayaran dikonfirmasi oleh Keuangan. Verifikasi PSB dimulai setelah pembayaran dikonfirmasi oleh bagian Keuangan.','SUCCESS');
+  return { success:true, message:'Pendaftaran berhasil dikirim. Tagihan formulir telah dibuat otomatis; silakan unggah bukti pembayaran terlebih dahulu. Menu Upload Dokumen akan aktif setelah pembayaran dikonfirmasi oleh Keuangan.', status:'SUBMITTED', bill:autoBill.bill };
   } finally { lock.releaseLock(); }
 }
 
@@ -4126,6 +4140,7 @@ function validateRegistrationPayload_(payload, strict) {
   if (c.gender && String(c.gender) !== 'L' && String(c.gender) !== 'P') return fail_('Jenis kelamin tidak valid.');
   if (String(g.phone || '').trim() && digits_(g.phone).length < 8) return fail_('No. HP wali tidak valid.');
   if (c.nik && digits_(c.nik).length !== 16) return fail_('NIK calon santri harus 16 digit jika diisi.');
+  if (c.nisn && digits_(c.nisn).length !== 10) return fail_('NISN calon santri harus 10 digit jika diisi.');
   if (g.nik && digits_(g.nik).length !== 16) return fail_('NIK wali harus 16 digit jika diisi.');
   if (String(s.graduationYear == null ? '' : s.graduationYear).trim()) {
     const year = Number(s.graduationYear);

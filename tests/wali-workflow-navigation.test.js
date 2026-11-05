@@ -6,11 +6,13 @@ const shell = fs.readFileSync('frontend/psb-fm-apps-script.js', 'utf8');
 const css = fs.readFileSync('frontend/styles.css', 'utf8');
 
 for (const [name, source] of [['PWA', app], ['Apps Script shell', shell]]) {
-  assert.match(source, /WALI:\['home','registration','documents','payments'\]/,
-    name + ': Wali bottom navigation must show Beranda, Pendaftaran, Dokumen, Pembayaran, then Lainnya');
+  assert.match(source, /WALI:\['home','registration','payments','documents'\]/,
+    name + ': Wali bottom navigation must show Beranda, Pendaftaran, Pembayaran, Dokumen, then Lainnya');
+  assert.match(source, /if\(wali\)return \[\s*\['home','Beranda','home'\],\['registration','Pendaftaran','clipboard'\],\['payments','Pembayaran','wallet'\],\['documents','Dokumen','file'\]/,
+    name + ': Wali sidebar must put Pembayaran before Dokumen');
   assert.match(source, /\['more','Lainnya','settings'\]/,
     name + ': Wali navigation must keep a fifth More button');
-  assert.match(source, /const stageActions=\['registration','documents','payments','verification','selection','announcement','reregistration'\]/,
+  assert.match(source, /const stageActions=\['registration','payments','documents','verification','selection','announcement','reregistration'\]/,
     name + ': all seven workflow stages must map to their matching pages');
   assert.match(source, /class=\"wali-flow-item wali-flow-clickable[^\"]*\" onclick=\"waliFlowAction\(/,
     name + ': each Wali flow stage must be a real clickable button');
