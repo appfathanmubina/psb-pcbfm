@@ -1806,6 +1806,7 @@ function getWaliHomeData(sessionToken) {
     regDocuments.forEach(d => { uploadedByType[String(d.documentTypeId)] = d; });
     const uploadedRequiredCount = requiredDocumentTypes.filter(t => !!uploadedByType[String(t.documentTypeId)]).length;
     const verifiedRequiredCount = requiredDocumentTypes.filter(t => String(uploadedByType[String(t.documentTypeId)]?.status || '').toUpperCase() === 'VERIFIED').length;
+    const revisionRequiredCount = requiredDocumentTypes.filter(t => String(uploadedByType[String(t.documentTypeId)]?.status || '').toUpperCase() === 'REVISION').length;
     const missingRequiredCount = Math.max(0, requiredDocumentTypes.length - uploadedRequiredCount);
     const documentsComplete = missingRequiredCount === 0;
     const paymentStatus = String(formPayment?.status || '').toUpperCase();
@@ -1845,7 +1846,7 @@ function getWaliHomeData(sessionToken) {
       registrationId:String(reg.registrationId), registrationNumber:String(reg.registrationNumber || reg.registrationId || '-'),
       candidateName:String(candidate.fullName || candidate.name || 'Calon Santri'), status:registrationStatus,
       statusLabel:registrationStatus==='SUBMITTED' && formPaid ? 'Menunggu verifikasi PSB' : statusLabel_(registrationStatus), completed, next, formPaid,
-      documents:{requiredCount:requiredDocumentTypes.length,uploadedRequiredCount,verifiedRequiredCount,missingRequiredCount,complete:documentsComplete},
+      documents:{requiredCount:requiredDocumentTypes.length,uploadedRequiredCount,verifiedRequiredCount,revisionRequiredCount,missingRequiredCount,complete:documentsComplete},
       formPayment:{billExists:!!formBill,billId:String(formBill?.billId||''),amount:Number(formBill?.amount||0),billStatus:String(formBill?.status||''),paymentStatus,paymentRejected:paymentStatus==='REJECTED',paymentSubmitted:paymentStatus==='SUBMITTED',paymentNote,paid:formPaid},
       participant:participant ? {status:String(participant.status||''), scheduleId:String(participant.scheduleId||''), scheduleName:String(schedules.find(x=>String(x.scheduleId)===String(participant.scheduleId))?.name || '')} : null,
       result:result ? {status:resultStatus, published, announcementDate:result.announcementDate||'', note:result.note||''} : null
@@ -4359,7 +4360,7 @@ function getRegistrationPaymentDocumentStatusMap_(items) {
     required.forEach(t=>{const d=byDoc[id+'|'+String(t.documentTypeId)];if(!d)return;uploaded++;const s=String(d.status||'').toUpperCase();if(s==='VERIFIED')verified++;if(s==='REVISION')revisions++;});
     const total=required.length,missing=Math.max(0,total-uploaded);
     let documentKey='NOT_REQUIRED',documentLabel='Tidak ada dokumen wajib';
-    if(total){if(missing&&uploaded===0){documentKey='NOT_UPLOADED';documentLabel='Belum upload';}else if(missing){documentKey='INCOMPLETE';documentLabel='Belum lengkap';}else if(revisions){documentKey='REVISION';documentLabel='Perlu perbaikan';}else if(verified>=total){documentKey='VERIFIED';documentLabel='Terverifikasi';}else{documentKey='PENDING_VERIFICATION';documentLabel='Menunggu verifikasi';}}
+    if(total){if(revisions){documentKey='REVISION';documentLabel='Perlu perbaikan';}else if(missing&&uploaded===0){documentKey='NOT_UPLOADED';documentLabel='Belum upload';}else if(missing){documentKey='INCOMPLETE';documentLabel='Belum lengkap';}else if(verified>=total){documentKey='VERIFIED';documentLabel='Terverifikasi';}else{documentKey='PENDING_VERIFICATION';documentLabel='Menunggu verifikasi';}}
     out[id]={formPaymentStatus:paymentKey,formPaymentStatusLabel:paymentLabel,documentsStatus:documentKey,documentsStatusLabel:documentLabel,documentsRequiredCount:total,documentsUploadedCount:uploaded,documentsVerifiedCount:verified,documentsMissingCount:missing,documentsRevisionCount:revisions};
   });
   return out;
