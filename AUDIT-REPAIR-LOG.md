@@ -305,3 +305,22 @@ Branch: `perf/payment-page-batch-reads`
 - The first matching raw registration row is retained for compatibility with the previous `findRegistration_()` behavior if duplicate IDs exist.
 - No spreadsheet schema, stored data, payment business rules, or role definitions were changed.
 - No Apps Script deployment or production data mutation was performed.
+
+
+## Repair batch 07 — current document and verification detail read optimization
+
+Branch: `perf/document-history-verification-batch-reads`
+
+| ID | Finding | Change | Status |
+|---|---|---|---|
+| PERF-DOC-002 | `getCurrentDocuments_()` converted every row in DOCUMENTS into an object before filtering by registration and replacement status. It also issued separate range reads for headers and data. | Read the table once, filter raw rows by registration and non-REPLACED status, then convert only matching rows. Preserve newest-first ordering and sheet row numbers. | Regression checks added; CI passed (34 checks), runtime/staging test pending |
+| PERF-VER-002 | `getVerificationDetail()` used `findRegistration_()`, which separately reread the header and body for each of five related sheets. `getDocumentOptions()` used the same lookup pattern. | Add `findRegistrationBatch_()`: read each related table once and preserve first registration/candidate match plus first-primary guardian/address/school selection. Reuse it in verification detail and document options. | Regression checks added; CI passed (34 checks), runtime/staging test pending |
+
+### Scope and safety
+
+- Verification role checks remain before registration detail is loaded.
+- Document options continue to enforce `canAccessRegistration_()` before returning document records.
+- Current document filtering still excludes `REPLACED` and sorts by `uploadedAt` newest first.
+- Active document master filtering, checklist construction, response fields, and upload eligibility logic are unchanged.
+- No spreadsheet schema, stored data, role definitions, verification decisions, or payment/reregistration business rules were changed.
+- No Apps Script deployment or production data mutation was performed.
