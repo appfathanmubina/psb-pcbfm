@@ -6,6 +6,7 @@ const fs = require('node:fs');
 const app = fs.readFileSync('frontend/app.js', 'utf8');
 const bundle = fs.readFileSync('frontend/psb-fm-apps-script.js', 'utf8');
 const backend = fs.readFileSync('apps-script/Code.gs', 'utf8');
+const css = fs.readFileSync('frontend/styles.css', 'utf8');
 
 for (const [name, source] of [['frontend', app], ['Apps Script bundle', bundle]]) {
   const nik = source.indexOf('<label>NIK</label>');
@@ -18,12 +19,16 @@ for (const [name, source] of [['frontend', app], ['Apps Script bundle', bundle]]
   assert.doesNotMatch(source, /<label>Jenis Sekolah<\/label>/, name + ': Jenis Sekolah must be removed from the form');
   assert.doesNotMatch(source, /schoolType:g\('rf_schoolType'\)/, name + ': removed school type must not be sent from the form');
   assert.match(source, /NISN: \$\{esc\(c\.nisn\|\|'-'\)\}/, name + ': registration detail must show NISN');
+
   const formStart = source.indexOf('function renderRegistrationForm(detail){');
-  const formEnd = source.indexOf('\\nfunction filterRegistrationWaves', formStart);
+  const formEnd = source.indexOf('\nfunction filterRegistrationWaves', formStart);
+  assert.ok(formStart >= 0 && formEnd > formStart, name + ': registration form function boundary must remain valid');
   const form = source.slice(formStart, formEnd);
-  assert.match(form, /<div class="registration-required-note"><span class="registration-required-mark">\\*<\\/span> wajib diisi<\\/div>/, name + ': required-field legend must appear before the form sections');
-  assert.equal((form.match(/class="registration-required-mark"/g)||[]).length, 18, name + ': all 17 required labels plus the legend must use the red marker');
-  assert.doesNotMatch(form, /<label>[^<]*\\*<\\/label>/, name + ': required labels must use the styled marker');
+  assert.ok(form.includes('<div class="registration-required-note"><span class="registration-required-mark">*</span> wajib diisi</div>'),
+    name + ': required-field legend must appear before the form sections');
+  assert.equal((form.match(/class="registration-required-mark"/g) || []).length, 18,
+    name + ': all 17 required labels plus the legend must use the red marker');
+  assert.doesNotMatch(form, /<label>[^<]*\*<\/label>/, name + ': required labels must use the styled marker');
 }
 
 assert.match(backend, /nisn: digits_\(payload\.candidate\?\.nisn\)/, 'backend must persist NISN');
@@ -32,9 +37,9 @@ assert.match(backend, /function ensureCandidateNisnColumn_\(sheet\)/, 'backend m
 assert.match(backend, /ensureCandidateNisnColumn_\(candidateSheet\)/, 'candidate sheet migration must run before save');
 assert.match(backend, /schoolType: clean_\(existing\?\.school\?\.schoolType \|\| ''\)/, 'legacy school type data must be preserved on edits');
 
-
-const css = fs.readFileSync('frontend/styles.css', 'utf8');
-assert.match(css, /#registrationForm \\.registration-required-mark\\{color:#dc2626!important;/, 'required asterisks must be red and scoped to the registration form');
-assert.match(css, /#registrationForm \\.registration-required-note\\{/, 'required-field legend must have dedicated styling');
+assert.ok(css.includes('#registrationForm .registration-required-mark{color:#dc2626!important;'),
+  'required asterisks must be red and scoped to the registration form');
+assert.ok(css.includes('#registrationForm .registration-required-note{'),
+  'required-field legend must have dedicated styling');
 
 console.log('Registration form field and required-indicator safeguards: OK');
