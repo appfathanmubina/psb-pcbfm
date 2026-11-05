@@ -74,6 +74,10 @@ assert.match(documentPage, /d\.paymentRequired/);
 assert.match(documentPage, /Buka Pembayaran Formulir/);
 assert.match(documentPage, /const canUpload=!!d\.canUpload/);
 
+const documentPageData = section(backend, 'function getDocumentPageData(sessionToken, registrationId)', 'function uploadDocument(sessionToken, payload)');
+assert.match(documentPageData, /paymentRequired = isWali/);
+assert.match(documentPageData, /canUpload: !paymentRequired/);
+
 const documentOptions = section(backend, 'function getDocumentOptions(sessionToken, registrationId)', 'function getRegistrationDocuments');
 assert.match(documentOptions, /paymentRequired/);
 assert.match(documentOptions, /!paymentRequired &&/);
