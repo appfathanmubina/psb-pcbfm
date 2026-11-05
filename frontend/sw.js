@@ -1,10 +1,10 @@
-// PSB PWA 32.14.0 — refresh same-origin assets from the network before using offline cache.
+// PSB PWA 32.16.0 — refresh same-origin assets from the network before using offline cache.
 const CACHE='psb-pwa-shell-v32-14-0';
 const ASSETS=[
   './',
   './index.html',
-  './manifest.webmanifest?v=32.14.0',
-  './styles.css?v=32.14.0',
+  './manifest.webmanifest?v=32.15.0',
+  './styles.css?v=32.15.0',
   './api-bridge.js?v=32.13.0',
   './app.js?v=32.16.0',
   './assets/logo-fathanmubina.svg?v=32.7.0',
@@ -31,8 +31,8 @@ self.addEventListener('fetch',event=>{
   const url=new URL(request.url);
   if(url.origin!==self.location.origin)return;
 
-  // Render aset shell dari cache terlebih dahulu agar buka ulang terasa instan.
-  // Pembaruan jaringan berjalan di belakang layar; HTML navigasi tetap network-first.
+  // Aset aplikasi memakai network-first agar reload tidak terus menampilkan
+  // JavaScript/CSS lama. Cache hanya menjadi fallback ketika perangkat offline.
   if(CACHE_FIRST_ASSETS.has(request.url)){
     const update=fetch(request,{cache:'no-cache'}).then(response=>{
       if(response&&response.ok&&response.type==='basic'){
@@ -41,7 +41,7 @@ self.addEventListener('fetch',event=>{
       return response;
     });
     event.waitUntil(update.catch(()=>{}));
-    event.respondWith(caches.match(request).then(cached=>cached||update).catch(()=>caches.match(request)));
+    event.respondWith(update.catch(()=>caches.match(request)));
     return;
   }
 
