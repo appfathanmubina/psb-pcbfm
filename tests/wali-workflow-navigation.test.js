@@ -7,7 +7,8 @@ const css = fs.readFileSync('frontend/styles.css', 'utf8');
 
 for (const [name, source] of [['PWA', app], ['Apps Script shell', shell]]) {
   assert.match(source, /WALI:\['home','registration','payments','documents'\]/,
-    name + ': Wali bottom navigation must show Beranda, Pendaftaran, Dokumen, Pembayaran, then Lainnya');
+    name + ': Wali bottom navigation must show Beranda, Pendaftaran, Pembayaran, Dokumen, then Lainnya');
+  assert.match(source, /if\(wali\)return \[\s*\['home','Beranda','home'\],\['registration','Pendaftaran','clipboard'\],\['payments','Pembayaran','wallet'\],\['documents','Dokumen','file'\]/,\n    name + ': Wali sidebar must put Pembayaran before Dokumen');
   assert.match(source, /\['more','Lainnya','settings'\]/,
     name + ': Wali navigation must keep a fifth More button');
   assert.match(source, /const stageActions=\['registration','payments','documents','verification','selection','announcement','reregistration'\]/,
