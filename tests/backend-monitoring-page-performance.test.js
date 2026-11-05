@@ -38,8 +38,8 @@ assert.match(page, /allChildRows\.REREGISTRATIONS\.filter/,
 
 assert.match(page, /paymentsByBill\[k\]\.push\(x\)/,
   'Payment rows must be grouped by bill once');
-assert.match(page, /latestPaymentByBill\[k\]=x/,
-  'Latest payment per bill must be indexed once');
+assert.match(page, /latestPaymentByBill\\[k\\]=paymentsByBill\\[k\\]\\.slice\\(\\)\\.sort\\(/,
+  'Latest payment per bill must preserve the original sort comparator');
 assert.match(page, /verificationsByPayment\[k\]\.push\(x\)/,
   'Verification rows must be grouped by payment once');
 assert.match(page, /const ps=paymentsByBill\[String\(b\.billId\)\]\|\|\[\]/,
