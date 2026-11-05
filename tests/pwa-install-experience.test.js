@@ -1,0 +1,34 @@
+'use strict';
+const assert = require('node:assert/strict');
+const fs = require('node:fs');
+
+const html = fs.readFileSync('frontend/index.html', 'utf8');
+const manifest = JSON.parse(fs.readFileSync('frontend/manifest.webmanifest', 'utf8'));
+const sw = fs.readFileSync('frontend/sw.js', 'utf8');
+
+assert.match(html, /id="pwaInstallOpen"/, 'a persistent install action must be available without a query parameter');
+assert.match(html, /Pasang Aplikasi/, 'install action must have a clear Indonesian label');
+assert.match(html, /beforeinstallprompt/, 'Android browsers must use the native install prompt when available');
+assert.match(html, /prompt\.userChoice/, 'the install prompt result must be handled');
+assert.match(html, /appinstalled/, 'successful installation must update the page state');
+assert.match(html, /display-mode:\s*standalone/, 'standalone launches must be detected');
+assert.match(html, /navigator\.standalone===true/, 'iOS standalone launches must be detected');
+assert.match(html, /getInstalledRelatedApps/, 'supported browsers must detect an installed PWA from a browser tab');
+assert.match(html, /isIOS\(\)/, 'iOS must have a dedicated installation guide');
+assert.match(html, /Tambahkan ke Layar Utama/, 'iOS guide must explain Add to Home Screen');
+assert.match(html, /menu tiga titik/, 'Android fallback guide must explain browser menu installation');
+assert.match(html, /Install app atau Tambahkan ke layar utama/, 'Android fallback must not depend on beforeinstallprompt');
+assert.match(html, /32\.23\.0/, 'HTML must register the current service worker version');
+assert.doesNotMatch(html, /if\(!installMode\)return/, 'installation guidance must not be restricted to ?install');
+assert.equal(manifest.id, './', 'manifest app identity must remain stable');
+assert.equal(manifest.start_url, './', 'manifest start URL must remain stable');
+assert.equal(manifest.scope, './', 'manifest scope must remain stable');
+assert.equal(manifest.display, 'standalone', 'installed app must retain standalone display mode');
+assert.ok(manifest.related_applications?.some(app => app.platform === 'webapp'), 'manifest must declare its identity for installed-app detection');
+assert.ok(manifest.icons.some(icon => icon.type === 'image/png' && icon.purpose === 'any'), 'manifest must retain the official PNG app icon');
+assert.ok(manifest.icons.some(icon => icon.type === 'image/svg+xml' && icon.purpose === 'any'), 'manifest must retain a scalable standard icon');
+assert.ok(manifest.icons.some(icon => icon.type === 'image/svg+xml' && icon.purpose === 'maskable'), 'manifest must retain a maskable icon');
+assert.match(sw, /psb-pwa-shell-v32-23-0/, 'service worker cache namespace must be bumped');
+assert.match(sw, /manifest\.webmanifest\?v=32\.16\.0/, 'service worker must precache the current manifest');
+assert.match(sw, /icon-maskable-512\.svg/, 'service worker must continue precaching the maskable icon');
+console.log('PWA mobile installation experience safeguards: OK');

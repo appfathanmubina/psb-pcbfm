@@ -72,6 +72,8 @@ jobs:
         run: node tests/setup-script-properties.test.js
       - name: Test PWA icon metadata and dimensions
         run: node tests/pwa-icon-metadata.test.js
+      - name: Test Android and iOS PWA installation experience
+        run: node tests/pwa-install-experience.test.js
       - name: Test Apps Script and PWA UI function parity safeguards
         run: node tests/ui-function-parity.test.js
       - name: Test retired PSB Chat and legacy trigger cleanup safeguards
