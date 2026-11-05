@@ -388,3 +388,24 @@ Branch: `perf/selection-page-batch-indexes`
 - Response fields and all selection business rules remain unchanged.
 - No spreadsheet schema, stored data, role definitions, or production deployment changed.
 - Apps Script runtime/staging data tests remain pending; CI regression guards validate static contracts only.
+
+
+## Repair batch 11 — reporting page payment aggregation and index optimization
+
+Branch: `perf/reporting-payment-aggregation`
+
+| ID | Finding | Change | Status |
+|---|---|---|---|
+| PERF-REP-001 | `getReportingPageData()` grouped payments by registration and copied/sorted each group again while constructing every report row. | Build a request-local latest-payment index once. Equal valid timestamps retain the first sheet row; groups containing invalid timestamps use the original stable-sort comparator as a compatibility fallback. | Implemented; CI pending |
+| PERF-REP-002 | Each report row filtered and reduced its bills to calculate paid amount, then scanned the same bills again to determine whether any bill was PAID. | Aggregate paid amount and the PAID indicator together in one pass per bill row, indexed by registration. | Implemented; CI pending |
+
+### Scope and safety
+
+- The reporting role gate remains the first operation before database access.
+- Active academic-year selection and explicit year, wave, level, gender, and status filters remain unchanged.
+- A PAID bill continues to take precedence over payment status from the latest payment; paid amount retains the existing numeric coercion and sum behavior.
+- Latest-payment selection retains first-row behavior for equal timestamps. Groups containing invalid timestamps retain the previous sort comparator and selection behavior.
+- Participant, selection-result, and reregistration maps retain their existing last-matching-row behavior.
+- Summary counts, grouping, option lists, response fields, and generated timestamp remain unchanged.
+- No spreadsheet schema, stored data, role definitions, business rules, or production deployment changed.
+- Apps Script runtime/staging data tests remain pending; CI regression tests validate the endpoint behavior with controlled fixtures.
