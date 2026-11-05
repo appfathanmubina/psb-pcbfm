@@ -332,8 +332,26 @@ function decodeAndValidateUpload_(base64Input, mimeTypeInput, maxBytes) {
     return { success: false, message: 'Format file tidak didukung.' };
   }
   let bytes;
-  try { bytes = Utilities.base64Decode(encoded); }
-  catch (e) { return { success: false, message: 'Data file tidak valid atau rusak.' }; }
+  try {
+    // Decode in bounded chunks. A single 10 MB Base64 decode can exceed
+    // Apps Script's transient memory/argument limits for some mobile uploads.
+    const chunkSize = 32768; // divisible by four, so Base64 boundaries remain valid
+    const decodedChunks = [];
+    let totalBytes = 0;
+    for (let offset = 0; offset < encoded.length; offset += chunkSize) {
+      const chunkBytes = Utilities.base64Decode(encoded.slice(offset, offset + chunkSize));
+      decodedChunks.push(chunkBytes);
+      totalBytes += chunkBytes.length;
+    }
+    bytes = new Array(totalBytes);
+    let writeOffset = 0;
+    decodedChunks.forEach(function(part) {
+      for (let i = 0; i < part.length; i++) bytes[writeOffset++] = part[i];
+    });
+  } catch (e) {
+    console.error('PSB_UPLOAD_BASE64_DECODE_FAILED: ' + String(e && e.message || e));
+    return { success: false, message: 'Data file tidak valid atau rusak. Silakan pilih file kembali.' };
+  }
   if (!bytes || !bytes.length || bytes.length > limit) {
     return { success: false, message: 'Ukuran file melebihi batas yang diizinkan.' };
   }
@@ -3689,7 +3707,7 @@ function uploadDocument(sessionToken, payload) {
     payload = payload || {};
     const registrationId = String(payload.registrationId || '').trim();
     const documentTypeId = String(payload.documentTypeId || '').trim();
-    const fileName = sanitizeFileName_(payload.fileName || 'dokumen');
+    const originalFileName = String(payload.fileName || 'dokumen').trim();
     const mimeType = String(payload.mimeType || '').trim().toLowerCase();
     const base64 = String(payload.base64 || '').trim();
     const clientSize = Number(payload.fileSize || 0);
@@ -3709,6 +3727,7 @@ function uploadDocument(sessionToken, payload) {
     stage = 'READ_DOCUMENT_TYPE';
     const type = findMasterItemById_('MASTER_DOKUMEN', 'documentTypeId', documentTypeId);
     if (!type || !type.isActive) return fail_('Jenis dokumen tidak aktif atau tidak ditemukan.');
+    const fileName = buildDocumentUploadFileName_(found.candidate?.fullName || found.candidate?.name || 'Calon Santri', type.name || 'Dokumen', originalFileName);
     if (!mimeType) return fail_('Tipe file tidak terbaca.');
 
     const allowed = String(type.allowedMimeTypes || '').split(',').map(x => x.trim().toLowerCase()).filter(Boolean);
@@ -3917,6 +3936,14 @@ function getRegistrationDocumentFolder_(registration) {
   const docsRoot = getOrCreateFolderInParent_(yearFolder, 'Dokumen Santri');
   const safeName = sanitizeFolderName_(registration.registrationNumber || registration.registrationId);
   return getOrCreateFolderInParent_(docsRoot, safeName);
+}
+
+function buildDocumentUploadFileName_(candidateName, documentName, originalFileName) {
+  const original = String(originalFileName || '').trim();
+  const extensionMatch = original.match(/\.([A-Za-z0-9]{1,10})$/);
+  const extension = extensionMatch ? '.' + extensionMatch[1].toLowerCase() : '';
+  const base = String(candidateName || 'Calon Santri').trim() + '_' + String(documentName || 'Dokumen').trim();
+  return sanitizeFileName_(base).replace(/\s+/g, '_').replace(/_+/g, '_').replace(/^_+|_+$/g, '').substring(0, 160) + extension;
 }
 
 function sanitizeFileName_(name) {
