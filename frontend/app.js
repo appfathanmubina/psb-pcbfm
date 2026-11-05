@@ -1411,6 +1411,39 @@ async function prepareUploadFile(file,allowedMimeTypes){
   }finally{if(typeof image.close==='function')image.close();}
 }
 
+const UPLOAD_IMAGE_MAX_SIDE=2000;
+const UPLOAD_IMAGE_COMPRESSION_THRESHOLD=1.5*1024*1024;
+function uploadMimeAllowed(mime,rulesText){
+  const rules=String(rulesText||'').split(',').map(x=>x.trim().toLowerCase()).filter(Boolean),type=String(mime||'').toLowerCase();
+  return !rules.length||rules.some(rule=>rule===type||(rule.endsWith('/*')&&type.startsWith(rule.slice(0,-1))));
+}
+async function decodeUploadImage(file){
+  if(typeof createImageBitmap==='function')return await createImageBitmap(file);
+  const url=URL.createObjectURL(file);
+  try{return await new Promise((resolve,reject)=>{const img=new Image();img.onload=()=>resolve(img);img.onerror=()=>reject(new Error('Format foto tidak dapat dibaca.'));img.src=url;});}
+  finally{URL.revokeObjectURL(url);}
+}
+async function prepareUploadFile(file,allowed){
+  const original={blob:file,fileName:file.name,mimeType:file.type||'application/octet-stream',fileSize:file.size,compressed:false};
+  if(!/^image\/(jpeg|png|webp)$/i.test(String(file.type||'')))return original;
+  let image;try{image=await decodeUploadImage(file);}catch(e){return original;}
+  try{
+    const w=Number(image.width||image.naturalWidth||0),h=Number(image.height||image.naturalHeight||0);
+    if(!w||!h)return original;
+    const scale=Math.min(1,UPLOAD_IMAGE_MAX_SIDE/Math.max(w,h));
+    if(scale===1&&file.size<=UPLOAD_IMAGE_COMPRESSION_THRESHOLD)return original;
+    const canvas=document.createElement('canvas');canvas.width=Math.max(1,Math.round(w*scale));canvas.height=Math.max(1,Math.round(h*scale));
+    const ctx=canvas.getContext('2d');if(!ctx)return original;ctx.drawImage(image,0,0,canvas.width,canvas.height);
+    const rules=String(allowed||'').toLowerCase(),jpegAllowed=!rules||rules.includes('image/jpeg')||rules.includes('image/*');
+    const outType=jpegAllowed?'image/jpeg':(uploadMimeAllowed(file.type,allowed)?file.type:'image/jpeg');
+    const blob=await new Promise(resolve=>canvas.toBlob(resolve,outType,0.82));if(!blob)return original;
+    if(blob.size>=file.size&&uploadMimeAllowed(file.type,allowed))return original;
+    const mime=blob.type||outType,ext=mime==='image/png'?'.png':mime==='image/webp'?'.webp':'.jpg';
+    const base=String(file.name||'dokumen').replace(/\.[^.]*$/,'')||'dokumen';
+    return {blob,fileName:base+ext,mimeType:mime,fileSize:blob.size,compressed:true};
+  }finally{if(typeof image.close==='function')image.close();}
+}
+
 function formatFileSize(bytes){const n=Number(bytes||0);if(!n)return '-';if(n<1024)return n+' B';if(n<1024*1024)return (n/1024).toFixed(1)+' KB';if(n<1024*1024*1024)return (n/1024/1024).toFixed(2)+' MB';return (n/1024/1024/1024).toFixed(2)+' GB';}
 function getDocumentMaxSizeMb(type){
   const configured=Number(type?.maxSizeMb);
