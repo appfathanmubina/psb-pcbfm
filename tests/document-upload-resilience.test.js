@@ -19,7 +19,7 @@ assert.ok(tryIndex >= 0, 'upload lock acquisition must be inside guarded error h
 assert.equal(waitLocks.length, 2, 'folder preparation and document commit must use separate lock windows');
 assert.ok(waitLocks.every(index => index > tryIndex), 'lock timeouts must be caught by the upload handler');
 assert.match(upload, /lockAcquired\s*=\s*true/, 'upload must track whether it owns the ScriptLock');
-assert.match(upload, /lock\.releaseLock\(\);\s*lockAcquired\s*=\s*false;\s*\n\s*stage\s*=\s*'CREATE_DRIVE_FILE'/,
+assert.match(upload, /const folder = getRegistrationDocumentFolder_\(found\.registration\);\s*lock\.releaseLock\(\);\s*lockAcquired\s*=\s*false;\s*\n\s*stage\s*=\s*'CREATE_DRIVE_FILE';\s*const blob\s*=\s*Utilities\.newBlob/,
   'Drive file creation must not hold the global ScriptLock');
 assert.match(upload, /finally\s*\{\s*if\(lockAcquired\)\s*\{\s*try\s*\{\s*lock\.releaseLock\(\)/,
   'upload must release the ScriptLock only when acquired');
