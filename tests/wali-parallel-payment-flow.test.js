@@ -36,7 +36,8 @@ assert.match(finalizeVerification, /isFormPaymentVerified_\(registrationId\)/);
 
 const submitRegistration = section(backend, 'function submitRegistration(sessionToken, registrationId)', 'function validateRegistrationPayload_(payload, strict)');
 assert.match(submitRegistration, /KEUANGAN/);
-assert.match(submitRegistration, /secara bersamaan/);
+assert.match(submitRegistration, /unggah bukti pembayaran terlebih dahulu/i);
+assert.match(submitRegistration, /Upload Dokumen akan aktif setelah pembayaran dikonfirmasi oleh Keuangan/i);
 assert.match(submitRegistration, /ensureFormBillForRegistration_/);
 assert.match(submitRegistration, /Tagihan formulir telah dibuat otomatis/);
 assert.match(submitRegistration, /Verifikasi PSB dimulai setelah pembayaran dikonfirmasi/i);
@@ -59,13 +60,26 @@ assert.match(waliHome, /registrationStatus === 'COMPLETED'/);
 
 const waliDashboard = section(frontend, 'function renderWaliHomeFlow(data)', 'function dashboardTaskItems(items, emptyText)');
 assert.match(waliDashboard, /Pembayaran Formulir/);
-assert.match(waliDashboard, /stageActions=\['registration','documents','payments','verification','selection','announcement','reregistration'\]/);
+assert.match(waliDashboard, /stageActions=\['registration','payments','documents','verification','selection','announcement','reregistration'\]/);
 assert.match(waliDashboard, /wali-flow-list/);
+assert.doesNotMatch(waliDashboard, /secara bersamaan/);
 assert.doesNotMatch(waliDashboard, /wali-flow-parallel|wali-flow-current|wali-flow-next/);
 
 const verifyPaymentUi = section(frontend, 'async function verifyPaymentUI(paymentId,status)', 'function openCreateBill()');
 assert.match(verifyPaymentUi, /Tuliskan alasan penolakan/i);
 assert.match(verifyPaymentUi, /if\(status==='REJECTED'&&!note\)/);
+
+const documentPage = section(frontend, 'function renderDocumentContent()', 'function formatFileSize(bytes)');
+assert.match(documentPage, /d\.paymentRequired/);
+assert.match(documentPage, /Buka Pembayaran Formulir/);
+assert.match(documentPage, /const canUpload=!!d\.canUpload/);
+
+const documentOptions = section(backend, 'function getDocumentOptions(sessionToken, registrationId)', 'function getRegistrationDocuments');
+assert.match(documentOptions, /paymentRequired/);
+assert.match(documentOptions, /!paymentRequired &&/);
+const documentUpload = section(backend, 'function uploadDocument(sessionToken, payload)', 'function canAccessRegistration_');
+assert.match(documentUpload, /isFormPaymentVerified_\(registrationId\)/);
+assert.match(documentUpload, /Upload Dokumen baru dapat dilakukan setelah pembayaran formulir dikonfirmasi/i);
 
 const paymentPage = section(frontend, 'function renderPaymentContent()', 'function openPaymentUpload(billId)');
 assert.match(paymentPage, /Tagihan formulir akan dibuat otomatis setelah pendaftaran dikirim/);
