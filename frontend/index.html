@@ -197,8 +197,8 @@
     openButton.hidden=true;
     hide();
   });
-  window.addEventListener('load',function(){
-    syncInstallState();
+  window.addEventListener('load',async function(){
+    await syncInstallState();
     if(installMode&&!installed){
       renderGuide();
       show();
