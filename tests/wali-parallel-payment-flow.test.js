@@ -42,6 +42,8 @@ assert.match(submitRegistration, /Verifikasi PSB dimulai setelah pembayaran diko
 const verifyPayment = section(backend, 'function verifyPayment(sessionToken,payload)', 'function getSelectionPageData(sessionToken, registrationId)');
 assert.match(verifyPayment, /notifyUsersByRoles_\(\['SUPERADMIN','ADMIN_PSB','VERIFIKATOR'\]/);
 assert.match(verifyPayment, /notifyRegistrationOwner_\(String\(regFound\.registration\.registrationId\)/);
+assert.match(verifyPayment, /Alasan penolakan pembayaran wajib diisi/i);
+assert.match(verifyPayment, /note\.length>500/);
 
 
 const paymentData = section(backend, 'function buildPaymentData_(registrationId, paymentTypes)', 'function createBill(sessionToken,payload)');
@@ -51,6 +53,7 @@ assert.match(paymentData, /verificationNote/);
 const waliHome = section(backend, 'function getWaliHomeData(sessionToken)', 'function statusLabel_(s)');
 assert.match(waliHome, /paymentNote/);
 assert.match(waliHome, /uploadedRequiredCount/);
+assert.match(waliHome, /registrationStatus === 'COMPLETED'/);
 
 const waliDashboard = section(frontend, 'function renderWaliHomeFlow(data)', 'function dashboardTaskItems(items, emptyText)');
 assert.match(waliDashboard, /Pembayaran Formulir/);
