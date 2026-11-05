@@ -86,7 +86,7 @@ function loading(show,text='Memproses...'){const t=$('loadingText');if(t)t.textC
 const MUTATING_SERVER_FUNCTIONS=new Set(['registerWali','changePassword','saveRegistration','submitRegistration','uploadDocument','verifyDocument','finalizeVerification','submitPayment','verifyPayment','createBill','createSelectionSchedule','updateSelectionScheduleStatus','addSelectionParticipant','addSelectionParticipantsBulk','updateSelectionParticipantStatus','saveSelectionScore','saveSelectionResult','publishAnnouncement','markNotificationRead','markAllNotificationsRead','finalizeReregistration','openReregistration','saveMasterItem','deactivateMasterItem','setActiveAcademicYear','createManualUser','adminResetUserPassword','runSecurityMaintenance','sendCommunication']);
 function invalidatePageSnapshots(){state.pageSnapshots={};}
 function server(fn,...args){return new Promise((resolve,reject)=>{const tracked=!!state.appInitialized&&!(Number(state.processSilentDepth||0)>0);if(tracked)processBegin(processLabelFor(fn));let settled=false;const finish=(result,error)=>{if(settled)return;settled=true;if(tracked)processEnd(result,error);};const success=result=>{if(MUTATING_SERVER_FUNCTIONS.has(fn)&&result?.success){invalidatePageDataCache();}finish(result,null);resolve(result);};const failure=error=>{finish(null,error);reject(error);};try{if(window.PSBBridge&&typeof window.PSBBridge.call==='function'){Promise.resolve(window.PSBBridge.call(fn,args)).then(success).catch(failure);return;}if(window.google?.script?.run){window.google.script.run.withSuccessHandler(success).withFailureHandler(failure)[fn](...args);return;}failure(new Error('PSBBridge belum tersedia. Jalankan melalui Apps Script atau konfigurasi API bridge.'));}catch(e){failure(e);}});}
-const SNAPSHOT_PAGES=new Set(['home','profile','master','registration','applicants','documents','notifications','announcement','verification','payments','selection','reregistration','reports','audit','userManagement','more']);
+const SNAPSHOT_PAGES=new Set(['home','profile','master','registration','applicants','documents','notifications','announcement','verification','verificationStatus','payments','selection','reregistration','reports','audit','userManagement','more']);
 function pageSnapshotKey(page){let key=String(page||'');if(page==='documents')key+=':'+String(state.documentRegistrationId||'');if(page==='payments')key+=':'+String(state.paymentRegistrationId||'');if(page==='selection')key+=':'+String(state.selectionRegistrationId||'');if(page==='master')key+=':'+String(state.masterKey||'');return key;}
 function savePageSnapshot(page){if(!SNAPSHOT_PAGES.has(page)||!$('content')?.innerHTML)return;state.pageSnapshots[pageSnapshotKey(page)]={html:$('content').innerHTML,ts:Date.now()};}
 function restorePageSnapshot(page){if(!SNAPSHOT_PAGES.has(page))return false;const snap=state.pageSnapshots[pageSnapshotKey(page)];if(!snap)return false;$('content').innerHTML=snap.html;return true;}
@@ -471,7 +471,7 @@ function buildMobileNav(){
   const preferred={
     SUPERADMIN:['home','applicants','reports','announcement'],
     ADMIN_PSB:['home','applicants','reports','announcement'],
-    WALI:['home','registration','announcement','documents']
+    WALI:['home','registration','documents','payments']
   };
   const role=hasAnyRole(['SUPERADMIN'])?'SUPERADMIN':hasAnyRole(['ADMIN_PSB'])?'ADMIN_PSB':hasAnyRole(['WALI'])?'WALI':'';
   const ids=preferred[role]||all.slice(0,4).map(x=>x[0]);
@@ -542,9 +542,11 @@ function goPage(page){
   state.page=page;
   try{sessionStorage.setItem('psb_current_page',page);}catch(e){}
   document.querySelectorAll('.nav-btn,.side-btn').forEach(x=>x.classList.remove('active'));
-  $('nav-'+page)?.classList.add('active');$('side-'+page)?.classList.add('active');
+  const waliMorePages=['verificationStatus','selection','announcement','reregistration'];
+  const mobileNavPage=hasAnyRole(['WALI'])&&waliMorePages.includes(page)?'more':page;
+  $('nav-'+mobileNavPage)?.classList.add('active');$('side-'+page)?.classList.add('active');
   if(restorePageSnapshot(page)){window.scrollTo({top:0,behavior:'auto'});return;}
-  if(page==='home')renderHome();else if(page==='profile')renderProfile();else if(page==='master')renderMasterData();else if(page==='registration')renderRegistrationHub();else if(page==='applicants')renderApplicants();else if(page==='documents')renderDocuments();else if(page==='notifications')renderNotifications();else if(page==='announcement')renderAnnouncements();else if(page==='verification')renderVerification();else if(page==='payments')renderPayments();else if(page==='selection')renderSelection();else if(page==='reregistration')renderReregistration();else if(page==='reports')renderReports();else if(page==='audit')renderAudit();else if(page==='userManagement')renderUserManagementPage();else renderMore();
+  if(page==='home')renderHome();else if(page==='verificationStatus')renderWaliVerificationStatus();else if(page==='profile')renderProfile();else if(page==='master')renderMasterData();else if(page==='registration')renderRegistrationHub();else if(page==='applicants')renderApplicants();else if(page==='documents')renderDocuments();else if(page==='notifications')renderNotifications();else if(page==='announcement')renderAnnouncements();else if(page==='verification')renderVerification();else if(page==='payments')renderPayments();else if(page==='selection')renderSelection();else if(page==='reregistration')renderReregistration();else if(page==='reports')renderReports();else if(page==='audit')renderAudit();else if(page==='userManagement')renderUserManagementPage();else renderMore();
   window.scrollTo({top:0,behavior:'auto'});
 }
 function dashboardLocalKey(){return 'psb_dashboard_'+String(state.user?.userId||'guest')+'_'+String(state.config?.ACTIVE_YEAR||'2027/2028');}
@@ -570,8 +572,10 @@ function waliFlowAction(key,id){
   if(key==='registration') goPage('registration');
   else if(key==='documents'){state.documentRegistrationId=id;goPage('documents');}
   else if(key==='payments'){state.paymentRegistrationId=id;goPage('payments');}
+  else if(key==='verification') goPage('verificationStatus');
   else if(key==='selection'){state.selectionRegistrationId=id;state.selectionData=null;goPage('selection');}
   else if(key==='announcement') goPage('announcement');
+  else if(key==='reregistration') goPage('reregistration');
 }
 function renderWaliHomeFlow(data){
   // Apps Script shell mirrors the Wali parallel-step workflow.
@@ -589,7 +593,8 @@ function renderWaliHomeFlow(data){
   ];
   el.innerHTML=items.map(r=>{
     const completed=Math.max(0,Math.min(7,Number(r.completed||0)));
-    const flow=stages.map((st,i)=>{const n=i+1,done=n<=completed,current=n===completed+1&&!((r.result?.published)&&r.result?.status==='NOT_PASSED');let badge=done?'Sudah dilewati':current?'Berikutnya':'Selanjutnya';if(r.result?.published&&r.result?.status==='NOT_PASSED'&&n===7)badge='Tidak diperlukan';if(r.result?.published&&r.result?.status==='WAITLIST'&&n===7)badge='Menunggu informasi';return `<div class="wali-flow-item ${done?'done':''} ${current?'current':''}"><div class="wali-flow-dot">${done?'✓':n}</div><div class="wali-flow-copy"><b>${esc(st[0])}</b><span>${esc(st[1])}</span><span class="wali-flow-badge">${esc(badge)}</span></div></div>`}).join('');
+    const stageActions=['registration','documents','payments','verification','selection','announcement','reregistration'];
+    const flow=stages.map((st,i)=>{const n=i+1,done=n<=completed,current=n===completed+1&&!((r.result?.published)&&r.result?.status==='NOT_PASSED');let badge=done?'Sudah dilewati':current?'Berikutnya':'Selanjutnya';if(r.result?.published&&r.result?.status==='NOT_PASSED'&&n===7)badge='Tidak diperlukan';if(r.result?.published&&r.result?.status==='WAITLIST'&&n===7)badge='Menunggu informasi';const action=stageActions[i];return `<button type="button" class="wali-flow-item wali-flow-clickable ${done?'done':''} ${current?'current':''}" onclick="waliFlowAction('${action}','${esc(r.registrationId)}')" aria-label="Buka tahap ${esc(st[0])}"><span class="wali-flow-dot">${done?'✓':n}</span><span class="wali-flow-copy"><b>${esc(st[0])}</b><span>${esc(st[1])}</span><span class="wali-flow-badge">${esc(badge)}</span></span><span class="wali-flow-open" aria-hidden="true">${ico('chevron-right')}</span></button>`}).join('');
     const next=r.next||{};
     const stageIndex=Math.max(0,Math.min(7,completed));
     const progress=Math.round((stageIndex/7)*100);
@@ -1327,7 +1332,34 @@ function renderReregistrationPanel(data){
 }
 async function openReregistrationUI(registrationId){loading(true,'Membuka daftar ulang...');try{const r=await server('openReregistration',state.token,registrationId);if(r.success){showToast(r.message,'success');await renderReregistration()}else showAlert('Belum dapat dibuka',r.message||'Daftar ulang belum dapat dibuka.','warning')}catch(e){showAlert('Gagal membuka daftar ulang','Terjadi gangguan saat membuka daftar ulang.','error')}finally{loading(false)}}
 async function finalizeReregistrationUI(registrationId){showConfirm('Selesaikan Daftar Ulang?','Pastikan dokumen wajib sudah lengkap dan pembayaran Daftar Ulang sudah lunas.',async()=>{loading(true,'Menyelesaikan daftar ulang...');try{const r=await server('finalizeReregistration',state.token,registrationId);if(r.success){showToast(r.message,'success');await renderReregistration()}else showAlert('Belum dapat diselesaikan',r.message||'Periksa dokumen dan pembayaran.','warning')}catch(e){showAlert('Gagal menyelesaikan','Terjadi gangguan saat menyimpan daftar ulang.','error')}finally{loading(false)}} ,'Selesaikan');}
+async function renderWaliVerificationStatus(){
+  if(!hasAnyRole(['WALI'])){renderMore();return;}
+  $('content').innerHTML=`<section class="hero"><h2>Verifikasi</h2><p>Pantau pemeriksaan data dan dokumen pendaftaran Anda.</p></section><div id="waliVerificationPanel"><div class="empty-state">Memuat status verifikasi...</div></div>`;
+  try{
+    const r=await server('getWaliHomeData',state.token);
+    const el=$('waliVerificationPanel');if(!el)return;
+    if(!r?.success){el.innerHTML=showMessage(r?.message||'Status verifikasi belum dapat dimuat.');return;}
+    const items=r.registrations||[];
+    if(!items.length){el.innerHTML='<div class="empty-state">Belum ada pendaftaran untuk dipantau.</div>';return;}
+    el.innerHTML=items.map(x=>{
+      const paid=!!x.formPaid, docs=x.documents||{};
+      const status=paid?(x.statusLabel||x.status||'Menunggu pemeriksaan'):'Menunggu pembayaran formulir';
+      const message=paid?'Pembayaran formulir sudah dikonfirmasi. Petugas PSB dapat memeriksa data dan dokumen pendaftaran.': 'Verifikasi PSB dimulai setelah pembayaran formulir dikonfirmasi. Anda tetap dapat melengkapi dokumen sambil menunggu.';
+      return `<article class="card wali-verification-card"><div class="wali-flow-head"><div><div class="wali-flow-title">${esc(x.candidateName||'-')}</div><div class="wali-flow-sub">${esc(x.registrationNumber||'-')}</div></div><span class="pill ${paid?'ok':'warning'}">${esc(status)}</span></div><p class="muted" style="font-size:12px;line-height:1.55;margin:10px 0">${esc(message)}</p><div class="registration-meta"><span>Dokumen diunggah: ${Number(docs.uploadedRequiredCount||0)}/${Number(docs.requiredCount||0)}</span><span>Dokumen kurang: ${Number(docs.missingRequiredCount||0)}</span></div><div class="registration-actions" style="margin-top:10px"><button class="btn btn-secondary" onclick="state.documentRegistrationId='${esc(x.registrationId)}';goPage('documents')">Lihat Dokumen</button><button class="btn btn-primary" onclick="state.paymentRegistrationId='${esc(x.registrationId)}';goPage('payments')">Lihat Pembayaran</button></div></article>`;
+    }).join('');
+  }catch(e){const el=$('waliVerificationPanel');if(el)el.innerHTML=showMessage('Gagal memuat status verifikasi. Silakan coba lagi.');}
+}
 function renderMore(){
+  if(hasAnyRole(['WALI'])){
+    const items=[
+      ['verificationStatus','Verifikasi','Pantau status pemeriksaan data dan dokumen setelah pembayaran formulir dikonfirmasi.','shield'],
+      ['selection','Tes','Lihat jadwal tes, status peserta, dan hasil seleksi.','grad'],
+      ['announcement','Pengumuman','Lihat hasil seleksi yang sudah dipublikasikan.','megaphone'],
+      ['reregistration','Daftar Ulang','Lanjutkan proses akhir jika calon santri dinyatakan lulus.','refresh']
+    ];
+    $('content').innerHTML=`<section class="hero"><h2>Lainnya</h2><p>Menu lanjutan sesuai tahapan penerimaan santri baru.</p></section><div class="wali-more-list">${items.map(([page,title,desc,icon])=>`<button type="button" class="status-card wali-more-item" onclick="goPage('${page}')"><span class="wali-more-icon">${ico(icon)}</span><span class="wali-more-copy"><b>${title}</b><span>${desc}</span></span><span class="wali-flow-open" aria-hidden="true">${ico('chevron-right')}</span></button>`).join('')}</div>`;
+    return;
+  }
   const canPayment=hasAnyRole(['SUPERADMIN','ADMIN_PSB','KEUANGAN']);
   const canSelection=hasAnyRole(['SUPERADMIN','ADMIN_PSB','SELEKSI']);
   const canAnnouncement=hasAnyRole(['SUPERADMIN','ADMIN_PSB','SELEKSI']);
