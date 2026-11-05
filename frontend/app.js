@@ -28,7 +28,7 @@
     root.style.setProperty('--app-viewport-height', (window.visualViewport?.height || window.innerHeight || root.clientHeight || 0) + 'px');
   }
 })();
-const state={token:localStorage.getItem('psb_session')||'',user:null,config:(()=>{try{return JSON.parse(localStorage.getItem('psb_public_config')||'{}')}catch(e){return {}}})(),page:'home',appInitialized:false,initialData:null,preloadRunning:false,preloadReady:false,cache:{registration:null,documents:{},payments:{},pages:{}},pageSnapshots:{},pageSnapshotTtlMs:180000,publicGalleryLoadScheduled:false,paymentRegistrationId:'',paymentData:null,paymentTypes:[],masterKey:'MASTER_TAHUN_AJARAN',masterItems:[],masterDefinitions:{},masterCache:{},academicYearLifecycle:null,auditData:null,registrationList:[],registrationOptions:null,registrationDetail:null,documentRegistrationId:'',documentData:null,selectionData:null,selectionTab:'overview',selectionRegistrationId:'',detailLoadingLocks:{}};
+const state={token:localStorage.getItem('psb_session')||'',user:null,config:(()=>{try{return JSON.parse(localStorage.getItem('psb_public_config')||'{}')}catch(e){return {}}})(),page:'home',appInitialized:false,initialData:null,preloadRunning:false,preloadReady:false,cache:{registration:null,documents:{},payments:{},pages:{}},pageSnapshots:{},publicGalleryLoadScheduled:false,paymentRegistrationId:'',paymentData:null,paymentTypes:[],masterKey:'MASTER_TAHUN_AJARAN',masterItems:[],masterDefinitions:{},masterCache:{},academicYearLifecycle:null,auditData:null,registrationList:[],registrationOptions:null,registrationDetail:null,documentRegistrationId:'',documentData:null,selectionData:null,selectionTab:'overview',selectionRegistrationId:'',detailLoadingLocks:{}};
 const $=id=>document.getElementById(id);
 function esc(v){return String(v??'').replace(/[&<>'"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c]));}
 function normalizeAssetUrl(raw){
@@ -125,11 +125,11 @@ async function refreshPublicConfig(){
 }
 const MUTATING_SERVER_FUNCTIONS=new Set(['registerWali','changePassword','saveRegistration','submitRegistration','uploadDocument','verifyDocument','finalizeVerification','submitPayment','verifyPayment','createBill','createSelectionSchedule','updateSelectionScheduleStatus','addSelectionParticipant','addSelectionParticipantsBulk','updateSelectionParticipantStatus','saveSelectionScore','saveSelectionResult','publishAnnouncement','markNotificationRead','markAllNotificationsRead','finalizeReregistration','openReregistration','saveMasterItem','deactivateMasterItem','setActiveAcademicYear','createManualUser','adminResetUserPassword','runSecurityMaintenance','sendCommunication']);
 function invalidatePageSnapshots(){state.pageSnapshots={};}
-function server(fn,...args){return new Promise((resolve,reject)=>{const tracked=!!state.appInitialized&&!(Number(state.processSilentDepth||0)>0);if(tracked)processBegin(processLabelFor(fn));let settled=false;const finish=(result,error)=>{if(settled)return;settled=true;if(tracked)processEnd(result,error);};const success=result=>{if(MUTATING_SERVER_FUNCTIONS.has(fn)&&result?.success){invalidatePageSnapshots();invalidatePageDataCache();}finish(result,null);resolve(result);};const failure=error=>{finish(null,error);reject(error);};try{if(window.PSBBridge&&typeof window.PSBBridge.call==='function'){Promise.resolve(window.PSBBridge.call(fn,args)).then(success).catch(failure);return;}if(window.google?.script?.run){window.google.script.run.withSuccessHandler(success).withFailureHandler(failure)[fn](...args);return;}failure(new Error('PSBBridge belum tersedia. Jalankan melalui Apps Script atau konfigurasi API bridge.'));}catch(e){failure(e);}});}
-const SNAPSHOT_PAGES=new Set(['documents','notifications','announcement','payments','reregistration','reports','audit','master']);
+function server(fn,...args){return new Promise((resolve,reject)=>{const tracked=!!state.appInitialized&&!(Number(state.processSilentDepth||0)>0);if(tracked)processBegin(processLabelFor(fn));let settled=false;const finish=(result,error)=>{if(settled)return;settled=true;if(tracked)processEnd(result,error);};const success=result=>{if(MUTATING_SERVER_FUNCTIONS.has(fn)&&result?.success){invalidatePageDataCache();}finish(result,null);resolve(result);};const failure=error=>{finish(null,error);reject(error);};try{if(window.PSBBridge&&typeof window.PSBBridge.call==='function'){Promise.resolve(window.PSBBridge.call(fn,args)).then(success).catch(failure);return;}if(window.google?.script?.run){window.google.script.run.withSuccessHandler(success).withFailureHandler(failure)[fn](...args);return;}failure(new Error('PSBBridge belum tersedia. Jalankan melalui Apps Script atau konfigurasi API bridge.'));}catch(e){failure(e);}});}
+const SNAPSHOT_PAGES=new Set(['home','profile','master','registration','applicants','documents','notifications','announcement','verification','payments','selection','reregistration','reports','audit','userManagement','more']);
 function pageSnapshotKey(page){let key=String(page||'');if(page==='documents')key+=':'+String(state.documentRegistrationId||'');if(page==='payments')key+=':'+String(state.paymentRegistrationId||'');if(page==='selection')key+=':'+String(state.selectionRegistrationId||'');if(page==='master')key+=':'+String(state.masterKey||'');return key;}
 function savePageSnapshot(page){if(!SNAPSHOT_PAGES.has(page)||!$('content')?.innerHTML)return;state.pageSnapshots[pageSnapshotKey(page)]={html:$('content').innerHTML,ts:Date.now()};}
-function restorePageSnapshot(page){if(!SNAPSHOT_PAGES.has(page))return false;const key=pageSnapshotKey(page),snap=state.pageSnapshots[key];if(!snap||Date.now()-snap.ts>state.pageSnapshotTtlMs){if(snap)delete state.pageSnapshots[key];return false;}$('content').innerHTML=snap.html;return true;}
+function restorePageSnapshot(page){if(!SNAPSHOT_PAGES.has(page))return false;const snap=state.pageSnapshots[pageSnapshotKey(page)];if(!snap)return false;$('content').innerHTML=snap.html;return true;}
 function pageDataCached(page,ttl=180000){const x=state.cache.pages?.[page];if(!x||Date.now()-x.ts>ttl){if(x)delete state.cache.pages[page];return null;}return x.data;}
 function setPageDataCache(page,data){state.cache.pages[page]={data:data,ts:Date.now()};return data;}
 function invalidatePageDataCache(){if(state.cache.pages)state.cache.pages={};}
@@ -244,12 +244,15 @@ async function boot(){
       const session=await server('validateSession',state.token);
       if(session?.success){
         state.user=session.user;
+        const savedPage=sessionStorage.getItem('psb_current_page')||'home';
         renderApp();
+        if(savedPage!=='home')goPage(savedPage);
         loading(false);
         initializeAfterLogin();
       }else{
         state.token='';
         localStorage.removeItem('psb_session');
+        sessionStorage.removeItem('psb_current_page');
         renderPublicHome('Sesi sebelumnya sudah berakhir. Silakan masuk kembali.');
       }
     }else{
@@ -257,10 +260,13 @@ async function boot(){
     }
   }catch(e){
     console.error('PSB boot error:',e);
-    if(state.token)renderLogin('Koneksi untuk memeriksa sesi belum tersedia. Silakan coba kembali.');
+    if(state.token)renderSessionRecovery('Sesi tersimpan, tetapi server belum dapat dihubungi. Muat ulang atau coba periksa koneksi internet.');
     else renderPublicHome('Sebagian informasi belum dapat dimuat. Periksa koneksi internet Anda.');
   }finally{loading(false);}
   configTask.catch(()=>{});
+}
+function renderSessionRecovery(message){
+  $('app').innerHTML=`<div class="login-wrap"><div class="login-card"><div class="logo login-logo center">${appLogoMarkup()}</div><div class="center"><h1 class="login-title">PSB Fathan Mubina</h1><div class="login-sub">Memulihkan sesi pengguna</div></div>${showMessage(message,'warning')}<button class="btn btn-primary" style="width:100%;margin-top:16px" onclick="boot()">Coba Hubungkan Kembali</button><button class="btn btn-secondary" style="width:100%;margin-top:8px" onclick="renderPublicHome()">Ke Beranda Publik</button></div></div>`;
 }
 function renderPublicHome(message=''){
   const year=esc(state.config.ACTIVE_YEAR||'2027/2028');
@@ -624,6 +630,7 @@ function goPage(page){
   }
   if(state.page)savePageSnapshot(state.page);
   state.page=page;
+  try{sessionStorage.setItem('psb_current_page',page);}catch(e){}
   document.querySelectorAll('.nav-btn,.side-btn').forEach(x=>x.classList.remove('active'));
   $('nav-'+page)?.classList.add('active');$('side-'+page)?.classList.add('active');
   if(restorePageSnapshot(page)){window.scrollTo({top:0,behavior:'auto'});return;}
@@ -1302,21 +1309,21 @@ function renderDocumentContent(){
   const d=state.documentData||{}, checks=d.checklist||[], current=d.documents||[];
   const required=checks.filter(x=>x.required), uploadedRequired=required.filter(x=>x.uploaded).length, pending=current.filter(x=>String(x.status||'').toUpperCase()==='PENDING').length;
   const canUpload=!!d.canUpload;
-  const cards=checks.length?checks.map(x=>{const doc=x.document;const st=String(doc?.status||'').toUpperCase();const statusClass=st==='VERIFIED'?'verified':st==='REVISION'?'revision':st==='PENDING'?'pending':'';return `<article class="doc-item"><div class="doc-item-top"><div class="doc-icon">${ico('file')}</div><div class="doc-copy"><div class="doc-title">${esc(x.name||'-')}</div><div class="doc-meta">${x.required?'Dokumen wajib':'Dokumen opsional'} · Maks. ${esc(x.maxSizeMb||'-')} MB${x.allowedMimeTypes?' · '+esc(x.allowedMimeTypes):''}</div></div><span class="doc-required ${x.uploaded?'ok':''}">${x.uploaded?(st==='VERIFIED'?'Lengkap':'Sudah ada'):(x.required?'Wajib':'Opsional')}</span></div>${doc?`<div class="doc-meta" style="margin-top:10px"><b>${esc(doc.fileName||'-')}</b> · ${esc(formatFileSize(doc.fileSize))} · ${esc(statusLabel(doc.status))}${doc.revisionNote?`<br>Catatan: ${esc(doc.revisionNote)}`:''}</div>`:'<div class="doc-meta" style="margin-top:10px">Belum ada file yang diunggah.</div>'}<div class="doc-actions ${doc?'':'single'}">${doc?.fileUrl?`<button class="btn btn-secondary" onclick="window.open('${esc(doc.fileUrl)}','_blank')">Buka File</button>`:''}${canUpload?`<button class="btn btn-primary" onclick='openDocumentUpload(${JSON.stringify(x)})'>${doc?'Ganti File':'Unggah File'}</button>`:''}</div></article>`}).join(''):'<div class="doc-empty">Belum ada jenis dokumen aktif pada Master Data.</div>';
+  const cards=checks.length?checks.map(x=>{const doc=x.document;const st=String(doc?.status||'').toUpperCase();const statusClass=st==='VERIFIED'?'verified':st==='REVISION'?'revision':st==='PENDING'?'pending':'';return `<article class="doc-item"><div class="doc-item-top"><div class="doc-icon">${ico('file')}</div><div class="doc-copy"><div class="doc-title">${esc(x.name||'-')}</div><div class="doc-meta">${x.required?'Dokumen wajib':'Dokumen opsional'} · Maks. 10 MB${x.allowedMimeTypes?' · '+esc(x.allowedMimeTypes):''}</div></div><span class="doc-required ${x.uploaded?'ok':''}">${x.uploaded?(st==='VERIFIED'?'Lengkap':'Sudah ada'):(x.required?'Wajib':'Opsional')}</span></div>${doc?`<div class="doc-meta" style="margin-top:10px"><b>${esc(doc.fileName||'-')}</b> · ${esc(formatFileSize(doc.fileSize))} · ${esc(statusLabel(doc.status))}${doc.revisionNote?`<br>Catatan: ${esc(doc.revisionNote)}`:''}</div>`:'<div class="doc-meta" style="margin-top:10px">Belum ada file yang diunggah.</div>'}<div class="doc-actions ${doc?'':'single'}">${doc?.fileUrl?`<button class="btn btn-secondary" onclick="window.open('${esc(doc.fileUrl)}','_blank')">Buka File</button>`:''}${canUpload?`<button class="btn btn-primary" onclick='openDocumentUpload(${JSON.stringify(x)})'>${doc?'Ganti File':'Unggah File'}</button>`:''}</div></article>`}).join(''):'<div class="doc-empty">Belum ada jenis dokumen aktif pada Master Data.</div>';
   $('documentContent').innerHTML=`<div class="status-card"><div class="status-row"><div><b>${esc(d.candidate?.fullName||'Pendaftaran')}</b><div class="muted" style="font-size:11px;margin-top:4px">${esc(d.registration?.registrationNumber||'-')} · ${esc(statusLabel(d.registration?.status))}</div></div></div></div><div class="doc-summary"><div class="doc-stat"><b>${uploadedRequired}/${required.length}</b><span>Dokumen wajib tersedia</span></div><div class="doc-stat"><b>${pending}</b><span>Menunggu verifikasi</span></div></div><div class="doc-list">${cards}</div><div class="status-card" style="margin-top:12px"><div class="muted" style="font-size:11px;line-height:1.5">File fisik disimpan di folder Google Drive pendaftaran. Spreadsheet hanya menyimpan metadata file, status, dan jejak audit.</div></div>`;
 }
 function formatFileSize(bytes){const n=Number(bytes||0);if(!n)return '-';if(n<1024)return n+' B';if(n<1024*1024)return (n/1024).toFixed(1)+' KB';if(n<1024*1024*1024)return (n/1024/1024).toFixed(2)+' MB';return (n/1024/1024/1024).toFixed(2)+' GB';}
 function openDocumentUpload(type){
   const allowed=String(type.allowedMimeTypes||'').split(',').map(x=>x.trim()).filter(Boolean);const accept=allowed.join(',');
   const old=type.document||{};
-  document.body.insertAdjacentHTML('beforeend',`<div class="modal-backdrop" id="documentUploadModal"><div class="modal"><h3>${old.fileId?'Ganti':'Unggah'} ${esc(type.name||'Dokumen')}</h3><p>Pilih file yang sesuai dengan aturan dokumen. File akan disimpan pada folder Google Drive pendaftaran ini.</p><div id="documentUploadMsg"></div><div class="upload-box"><input id="documentFileInput" type="file" ${accept?`accept="${esc(accept)}"`:''} onchange="previewDocumentFile()"><div class="file-picker"><button type="button" class="file-picker-btn" onclick="$('documentFileInput').click()">Pilih File</button><span class="file-picker-name" id="documentFileName">Belum ada file dipilih</span></div><div id="documentFileInfo" class="upload-note">Tipe diizinkan: ${esc(type.allowedMimeTypes||'Semua tipe file')} · Maksimum ${esc(type.maxSizeMb||'-')} MB</div></div><div class="modal-actions"><button id="documentUploadSubmitBtn" class="btn btn-primary" onclick='submitDocumentUpload(${JSON.stringify(type)})'>${old.fileId?'Ganti File':'Unggah Sekarang'}</button><button class="btn btn-secondary" onclick="closeDocumentUpload()">Batal</button></div></div></div>`);
+  document.body.insertAdjacentHTML('beforeend',`<div class="modal-backdrop" id="documentUploadModal"><div class="modal"><h3>${old.fileId?'Ganti':'Unggah'} ${esc(type.name||'Dokumen')}</h3><p>Pilih file yang sesuai dengan aturan dokumen. File akan disimpan pada folder Google Drive pendaftaran ini.</p><div id="documentUploadMsg"></div><div class="upload-box"><input id="documentFileInput" type="file" ${accept?`accept="${esc(accept)}"`:''} onchange="previewDocumentFile()"><div class="file-picker"><button type="button" class="file-picker-btn" onclick="$('documentFileInput').click()">Pilih File</button><span class="file-picker-name" id="documentFileName">Belum ada file dipilih</span></div><div id="documentFileInfo" class="upload-note">Tipe diizinkan: ${esc(type.allowedMimeTypes||'Semua tipe file')} · Maksimum 10 MB</div></div><div class="modal-actions"><button id="documentUploadSubmitBtn" class="btn btn-primary" onclick='submitDocumentUpload(${JSON.stringify(type)})'>${old.fileId?'Ganti File':'Unggah Sekarang'}</button><button class="btn btn-secondary" onclick="closeDocumentUpload()">Batal</button></div></div></div>`);
 }
 function previewDocumentFile(){const input=$('documentFileInput'),info=$('documentFileInfo'),name=$('documentFileName');const f=input?.files?.[0];if(!f||!info)return;if(name){name.textContent=f.name;name.classList.add('selected')}info.innerHTML=`<div class="file-name">${esc(f.name)}</div><div class="upload-note">${formatFileSize(f.size)} · ${esc(f.type||'Tipe tidak terdeteksi')}</div>`;}
 function closeDocumentUpload(){$('documentUploadModal')?.remove()}
 async function submitDocumentUpload(type){
   const input=$('documentFileInput'),msg=$('documentUploadMsg'),file=input?.files?.[0],btn=$('documentUploadSubmitBtn');
   if(!file){msg.innerHTML=showMessage('Pilih file terlebih dahulu.','warning');return}
-  const max=Number(type.maxSizeMb||0);if(max>0&&file.size>max*1024*1024){msg.innerHTML=showMessage('Ukuran file melebihi batas '+max+' MB.','warning');return}
+  const max=10;if(file.size>max*1024*1024){msg.innerHTML=showMessage('Ukuran file melebihi batas 10 MB.','warning');return}
   const allowed=String(type.allowedMimeTypes||'').split(',').map(x=>x.trim().toLowerCase()).filter(Boolean);const mime=String(file.type||'').toLowerCase();if(allowed.length&&!allowed.some(rule=>rule===mime||(rule.endsWith('/*')&&mime.startsWith(rule.slice(0,-1))))){msg.innerHTML=showMessage('Tipe file tidak diizinkan untuk dokumen ini.','warning');return}
   if(btn?.disabled)return;
   if(btn){btn.disabled=true;btn.textContent=type.document?.fileId?'Mengganti...':'Mengunggah...'}
