@@ -7,7 +7,7 @@ const pwa = fs.readFileSync('frontend/app.js','utf8');
 const bridge = code.slice(code.indexOf('const PSB_PWA_BRIDGE_ALLOWED_FUNCTIONS'),code.indexOf(']);',code.indexOf('const PSB_PWA_BRIDGE_ALLOWED_FUNCTIONS')));
 assert.ok(code.includes('function registerWali(payload)'), 'direct Wali registration endpoint must exist');
 assert.ok(code.includes('function validateWaliRegistrationPayload_(payload)'), 'registration validation must remain');
-assert.ok(code.includes("hashPassword_(input.password,passwordSalt)"), 'password must remain hashed');
+assert.ok(code.includes("hashPassword_(input.password, passwordSalt)"), 'password must remain hashed');
 assert.ok(code.includes("createSession_(userId)"), 'new account must receive a session');
 assert.ok(code.includes("'WALI','ACTIVE'"), 'new account must be an active Wali');
 assert.ok(code.includes("!phoneNormalized && !emailNormalized"), 'at least one login identifier must be required');

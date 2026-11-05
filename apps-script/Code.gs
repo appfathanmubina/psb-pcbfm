@@ -274,7 +274,7 @@ function login(identifier, password) {
     // Tidak mengubah identitas, role, atau data pendaftaran pengguna.
     if (passwordCheck.needsUpgrade) {
       enterTimingStage_('legacyPasswordMigration');
-      if (!migratePbkdf2PasswordToLegacySha256AfterLogin_(user, password)) {
+      if (!migrateLegacyPasswordToPbkdf2AfterLogin_(user, password)) {
         registerLoginFailure_(key);
         return finishLoginTiming_(fail_('Login belum dapat diselesaikan. Silakan coba kembali.'), 'migration_failed');
       }
@@ -390,7 +390,8 @@ function validateWaliRegistrationPayload_(payload) {
 function registerWali(payload) {
   const input = validateWaliRegistrationPayload_(payload);
   if (!input.success) return fail_(input.message);
-
+  const passwordSalt = Utilities.getUuid().replace(/-/g,'').substring(0,32);
+  const passwordHash = hashPassword_(input.password, passwordSalt);
   const lock = LockService.getScriptLock();
   lock.waitLock(15000);
   try {
@@ -410,8 +411,6 @@ function registerWali(payload) {
 
     const userId = generateId_('USR');
     const createdAt = new Date();
-    const passwordSalt = Utilities.getUuid().replace(/-/g,'').substring(0,32);
-    const passwordHash = hashPassword_(input.password,passwordSalt);
     usersSheet.appendRow(safeSheetRow_([
       userId,input.name,input.phone,input.phoneNormalized,input.email,input.emailNormalized,
       passwordHash,passwordSalt,'WALI','ACTIVE','','',createdAt,createdAt,false
@@ -991,14 +990,15 @@ function adminResetUserPassword(sessionToken, payload) {
   if (newPassword.trim().length === 0 || newPassword.length < 6 || newPassword.length > 128) return fail_('Password baru harus terdiri dari 6 sampai 128 karakter.');
   if (newPassword !== confirmPassword) return fail_('Konfirmasi password tidak sama.');
 
+  const targetBeforeLock = findUserById_(userId, true);
+  if (!targetBeforeLock) return fail_('Pengguna tidak ditemukan.');
+  const salt = Utilities.getUuid().replace(/-/g, '').substring(0, 32);
+  const hash = hashPassword_(newPassword, salt);
   const lock = LockService.getScriptLock();
   lock.waitLock(20000);
   try {
     const target = findUserById_(userId, true);
-    if (!target) return fail_('Pengguna tidak ditemukan.');
-
-    const salt = Utilities.getUuid().replace(/-/g, '').substring(0, 32);
-    const hash = hashPassword_(newPassword, salt);
+    if (!target || target.passwordHash !== targetBeforeLock.passwordHash || target.passwordSalt !== targetBeforeLock.passwordSalt || String(target.status).toUpperCase() !== String(targetBeforeLock.status).toUpperCase()) return fail_('Data pengguna telah berubah. Silakan ulangi reset password.');
     const sheet = getDatabaseSpreadsheet_().getSheetByName('USERS');
     if (!sheet) return fail_('Sheet USERS tidak ditemukan.');
 
@@ -1045,6 +1045,8 @@ function createManualUser(sessionToken, payload) {
 
   const phoneNormalized = phone ? normalizePhone_(phone) : '';
   const emailNormalized = email ? email.toLowerCase() : '';
+  const salt = Utilities.getUuid().replace(/-/g, '').substring(0, 32);
+  const hash = hashPassword_(password, salt);
   const lock = LockService.getScriptLock();
   lock.waitLock(10000);
   try {
@@ -1061,8 +1063,6 @@ function createManualUser(sessionToken, payload) {
 
     const now = new Date();
     const userId = generateId_('USR');
-    const salt = Utilities.getUuid().replace(/-/g, '').substring(0, 32);
-    const hash = hashPassword_(password, salt);
     const values = [
       userId, name, phone, phoneNormalized, email, emailNormalized,
       hash, salt, roles.join(','), status, '', '', now, now, true
@@ -1114,31 +1114,29 @@ const PSB_PASSWORD_HASH_MIN_ITERATIONS_ = 10000;
 const PSB_PASSWORD_HASH_MAX_ITERATIONS_ = 250000;
 
 function hashPassword_(password, salt) {
-  return sha256Hex_(String(password) + String(salt));
+  const iterations = PSB_PASSWORD_HASH_ITERATIONS_;
+  const derivedKey = pbkdf2Sha256Hex_(String(password), String(salt), iterations);
+  return PSB_PASSWORD_HASH_SCHEME_ + '$' + iterations + '$' + derivedKey;
 }
 
 function verifyPasswordForUser_(password, user) {
   const stored = String(user && user.passwordHash || '');
   const salt = String(user && user.passwordSalt || '');
   if (!stored || !salt) return { valid: false, needsUpgrade: false };
-
   if (stored.indexOf(PSB_PASSWORD_HASH_SCHEME_ + '$') === 0) {
     const parts = stored.split('$');
     const iterations = Number(parts[1]);
-    if (parts.length !== 3 ||
-        !Number.isInteger(iterations) ||
+    if (parts.length !== 3 || !Number.isInteger(iterations) ||
         iterations < PSB_PASSWORD_HASH_MIN_ITERATIONS_ ||
         iterations > PSB_PASSWORD_HASH_MAX_ITERATIONS_ ||
-        !/^[a-f0-9]{64}$/i.test(parts[2])) {
-      return { valid: false, needsUpgrade: false };
-    }
+        !/^[a-f0-9]{64}$/i.test(parts[2])) return { valid: false, needsUpgrade: false };
     const actual = pbkdf2Sha256Hex_(String(password), salt, iterations);
-    return { valid: constantTimeEqual_(actual, parts[2].toLowerCase()), needsUpgrade: true };
+    const valid = constantTimeEqual_(actual, parts[2].toLowerCase());
+    return { valid: valid, needsUpgrade: valid && iterations !== PSB_PASSWORD_HASH_ITERATIONS_ };
   }
-
   const legacy = sha256Hex_(String(password) + salt);
   const valid = constantTimeEqual_(legacy, stored.toLowerCase());
-  return { valid: valid, needsUpgrade: false };
+  return { valid: valid, needsUpgrade: valid };
 }
 
 function pbkdf2Sha256Hex_(password, salt, iterations) {
@@ -1154,25 +1152,21 @@ function pbkdf2Sha256Hex_(password, salt, iterations) {
   return output.map(b => (b < 0 ? b + 256 : b).toString(16).padStart(2, '0')).join('');
 }
 
-function migratePbkdf2PasswordToLegacySha256AfterLogin_(verifiedUser, password) {
-  // PBKDF2 lama diverifikasi sekali saat login. Setelah berhasil, simpan ulang
-  // ke format SHA-256 awal PSB agar login berikutnya jauh lebih cepat.
+function migrateLegacyPasswordToPbkdf2AfterLogin_(verifiedUser, password) {
+  // Hash baru dibuat sebelum lock; data akun diperiksa ulang sebelum commit.
   const beforeLock = findUserById_(verifiedUser.userId, true);
   if (!beforeLock || String(beforeLock.status).toUpperCase() !== 'ACTIVE' ||
       beforeLock.passwordHash !== verifiedUser.passwordHash ||
       beforeLock.passwordSalt !== verifiedUser.passwordSalt) return false;
-
   const salt = Utilities.getUuid().replace(/-/g, '').substring(0, 32);
   const hash = hashPassword_(String(password), salt);
   const lock = LockService.getScriptLock();
   lock.waitLock(20000);
   try {
-    // Recheck under lock so a concurrent password or status change is never overwritten.
     const current = findUserById_(verifiedUser.userId, true);
     if (!current || String(current.status).toUpperCase() !== 'ACTIVE' ||
         current.passwordHash !== verifiedUser.passwordHash ||
         current.passwordSalt !== verifiedUser.passwordSalt) return false;
-
     const sheet = getDatabaseSpreadsheet_().getSheetByName('USERS');
     if (!sheet) return false;
     sheet.getRange(current.rowNumber, 7, 1, 2).setValues([[hash, salt]]);
@@ -1182,12 +1176,12 @@ function migratePbkdf2PasswordToLegacySha256AfterLogin_(verifiedUser, password) 
       CacheService.getScriptCache().remove('PSB_USER_ID_' + sha256Hex_(String(current.userId)).substring(0, 32));
     } catch (e) {}
     try {
-      writeAudit_(current.userId, 'PASSWORD_HASH_MIGRATED', 'AUTH', current.userId, PSB_PASSWORD_HASH_SCHEME_.toUpperCase(), 'SHA256', 'Hash PBKDF2 dikonversi ke format SHA-256 awal PSB setelah login berhasil');
+      const fromScheme = String(verifiedUser.passwordHash || '').indexOf(PSB_PASSWORD_HASH_SCHEME_ + '$') === 0
+        ? 'PBKDF2_SHA256_OLD_ITERATIONS' : 'LEGACY_SHA256';
+      writeAudit_(current.userId, 'PASSWORD_HASH_MIGRATED', 'AUTH', current.userId, fromScheme, PSB_PASSWORD_HASH_SCHEME_.toUpperCase(), 'Hash password dimigrasikan ke PBKDF2-HMAC-SHA256 setelah login berhasil');
     } catch (e) {}
     return true;
-  } finally {
-    lock.releaseLock();
-  }
+  } finally { lock.releaseLock(); }
 }
 
 function sha256Hex_(value) {
