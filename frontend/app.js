@@ -1461,24 +1461,15 @@ async function submitDocumentUpload(type){
   const input=$('documentFileInput'),msg=$('documentUploadMsg'),file=input?.files?.[0],btn=$('documentUploadSubmitBtn');
   if(!file){msg.innerHTML=showMessage('Pilih file terlebih dahulu.','warning');return}
   if(btn?.disabled)return;
-  if(btn){btn.disabled=true;btn.textContent=type.document?.fileId?'Menyiapkan...':'Menyiapkan...'}
-  if(input)input.disabled=true;
+  if(btn){btn.disabled=true;btn.textContent='Menyiapkan...'}if(input)input.disabled=true;
   loading(true,'Mengoptimalkan foto dokumen...');
-  let prepared;
   try{
-    prepared=await prepareUploadFile(file,type.allowedMimeTypes);
-    const max=getDocumentMaxSizeMb(type);
-    if(prepared.fileSize>max*1024*1024){
-      msg.innerHTML=showMessage('Ukuran file setelah diproses masih melebihi batas '+max+' MB untuk dokumen '+(type.name||'ini')+'. Silakan pilih foto dengan resolusi lebih rendah atau file yang lebih kecil.','warning');
-      return;
-    }
-    if(!uploadMimeAllowed(prepared.mimeType,type.allowedMimeTypes)){
-      msg.innerHTML=showMessage('Tipe file tidak diizinkan untuk dokumen ini. Gunakan format yang tercantum pada petunjuk upload.','warning');
-      return;
-    }
+    const prepared=await prepareUploadFile(file,type.allowedMimeTypes),max=getDocumentMaxSizeMb(type);
+    if(prepared.fileSize>max*1024*1024){msg.innerHTML=showMessage('Ukuran file setelah diproses masih melebihi batas '+max+' MB untuk dokumen '+(type.name||'ini')+'. Silakan pilih foto beresolusi lebih rendah atau file yang lebih kecil.','warning');return}
+    if(!uploadMimeAllowed(prepared.mimeType,type.allowedMimeTypes)){msg.innerHTML=showMessage('Tipe file tidak diizinkan untuk dokumen ini. Gunakan format yang tercantum pada petunjuk upload.','warning');return}
     if(prepared.compressed)processPopupUpdate(22,'Foto berhasil dioptimalkan',formatFileSize(file.size)+' menjadi '+formatFileSize(prepared.fileSize),false);
     const reader=new FileReader();
-    reader.onprogress=event=>{if(event.lengthComputable)processPopupUpdate(25+Math.round(event.loaded/event.total*25),'Membaca file dokumen...','Menyiapkan '+prepared.fileName,false);};
+    reader.onprogress=e=>{if(e.lengthComputable)processPopupUpdate(25+Math.round(e.loaded/e.total*25),'Membaca file dokumen...','Menyiapkan '+prepared.fileName,false)};
     reader.onload=async()=>{
       const dataUrl=String(reader.result||''),base64=dataUrl.indexOf(',')>=0?dataUrl.split(',')[1]:dataUrl;
       processPopupUpdate(55,'Mengirim dokumen...','File siap dikirim ke Google Drive.',false);
@@ -1487,14 +1478,11 @@ async function submitDocumentUpload(type){
         if(!r.success){msg.innerHTML=showMessage(r.message);return}
         closeDocumentUpload();showToast(r.message,'success');delete state.cache.documents[state.documentRegistrationId];await loadDocumentsForRegistration(state.documentRegistrationId);
       }catch(e){if($('documentUploadMsg'))$('documentUploadMsg').innerHTML=showMessage('Gagal mengunggah dokumen. Silakan coba lagi.')}
-      finally{loading(false);if(btn?.isConnected){btn.disabled=false;btn.textContent=type.document?.fileId?'Ganti File':'Unggah Sekarang'}if(input?.isConnected)input.disabled=false;}
+      finally{loading(false);if(btn?.isConnected){btn.disabled=false;btn.textContent=type.document?.fileId?'Ganti File':'Unggah Sekarang'}if(input?.isConnected)input.disabled=false}
     };
-    reader.onerror=()=>{if(msg)msg.innerHTML=showMessage('File tidak dapat dibaca. Silakan pilih file lain.','error');processEnd(null,new Error('File tidak dapat dibaca. Silakan pilih file lain.'));loading(false);if(btn?.isConnected){btn.disabled=false;btn.textContent=type.document?.fileId?'Ganti File':'Unggah Sekarang'}if(input?.isConnected)input.disabled=false;};
+    reader.onerror=()=>{if(msg)msg.innerHTML=showMessage('File tidak dapat dibaca. Silakan pilih file lain.','error');loading(false);if(btn?.isConnected){btn.disabled=false;btn.textContent=type.document?.fileId?'Ganti File':'Unggah Sekarang'}if(input?.isConnected)input.disabled=false};
     reader.readAsDataURL(prepared.blob);
-  }catch(error){
-    msg.innerHTML=showMessage('Foto tidak dapat diproses. Silakan pilih file JPG, PNG, atau WEBP lain.','error');
-    loading(false);if(btn){btn.disabled=false;btn.textContent=type.document?.fileId?'Ganti File':'Unggah Sekarang'}if(input)input.disabled=false;
-  }
+  }catch(e){msg.innerHTML=showMessage('Foto tidak dapat diproses. Silakan pilih file JPG, PNG, atau WEBP lain.','error');loading(false);if(btn){btn.disabled=false;btn.textContent=type.document?.fileId?'Ganti File':'Unggah Sekarang'}if(input)input.disabled=false}
 }
 function openDocumentsForRegistration(id){state.documentRegistrationId=id;goPage('documents');}
 
