@@ -19,7 +19,7 @@ assert.match(css, /@media\s*\(min-width:\s*900px\)\s*and\s*\(max-width:\s*1100px
 assert.match(html, /styles\.css\?v=32\.12\.0/,
   'HTML must request the updated responsive stylesheet');
 assert.match(fs.readFileSync('frontend/sw.js', 'utf8'), /psb-pwa-shell-v32-12-0/,
-  'Service worker cache must be versioned for the current PWA shell v32.12.0');
+  'Service worker cache must be versioned for the current PWA shell v32.14.0');
 assert.match(app, /function renderPublicHome\(/,
   'Existing public home renderer must remain in place');
 
