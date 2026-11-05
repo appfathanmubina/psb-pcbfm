@@ -20,6 +20,10 @@
  */
 const PSB_PWA_BRIDGE_VERSION = '32.6.0';
 
+// Keep configured document limits below the 20 MiB Base64/JSON bridge ceiling.
+const PSB_DOCUMENT_UPLOAD_MAX_SIZE_MB = 14;
+const PSB_UPLOAD_SUPPORTED_MIME_TYPES = Object.freeze(['application/pdf','image/jpeg','image/png','image/webp']);
+
 const PSB_PWA_BRIDGE_ALLOWED_FUNCTIONS = Object.freeze([
   'getAppInfo','getPublicConfig',
   'login','finalizeLogin','registerWali','validateSession','logout','changePassword',
@@ -1658,7 +1662,16 @@ function validateMasterPayload_(masterKey, payload) {
     if (field.type === 'number' && payload[field.key] !== '' && payload[field.key] != null && (!isFinite(Number(payload[field.key])) || Number(payload[field.key]) < 0)) return fail_(field.label + ' harus berupa angka nol atau lebih.');
   }
   if (masterKey === 'MASTER_GELOMBANG' && payload.startDate && payload.endDate && String(payload.startDate) > String(payload.endDate)) return fail_('Tanggal mulai tidak boleh setelah tanggal selesai.');
-  if (masterKey === 'MASTER_DOKUMEN' && payload.maxSizeMb !== '' && payload.maxSizeMb != null && Number(payload.maxSizeMb) <= 0) return fail_('Maksimum ukuran file harus lebih dari 0 MB.');
+  if (masterKey === 'MASTER_DOKUMEN') {
+    if (payload.maxSizeMb !== '' && payload.maxSizeMb != null) {
+      const maxSizeMb = Number(payload.maxSizeMb);
+      if (maxSizeMb <= 0) return fail_('Maksimum ukuran file harus lebih dari 0 MB.');
+      if (maxSizeMb > PSB_DOCUMENT_UPLOAD_MAX_SIZE_MB) return fail_('Maksimum ukuran dokumen tidak boleh lebih dari ' + PSB_DOCUMENT_UPLOAD_MAX_SIZE_MB + ' MB agar dapat dikirim melalui aplikasi.');
+    }
+    const configuredTypes = String(payload.allowedMimeTypes || '').split(',').map(x => x.trim().toLowerCase()).filter(Boolean);
+    const supportedTypes = PSB_UPLOAD_SUPPORTED_MIME_TYPES.concat(['image/*']);
+    if (configuredTypes.some(type => supportedTypes.indexOf(type) < 0)) return fail_('Tipe file dokumen hanya dapat menggunakan PDF, JPG, PNG, WEBP, atau image/*.');
+  }
   return { success:true };
 }
 
@@ -3880,7 +3893,7 @@ function uploadDocument(sessionToken, payload) {
     // Jika kolom belum diisi pada data lama, gunakan default kompatibilitas 10 MB.
     const configuredMaxSizeMb = Number(type.maxSizeMb);
     const maxSizeMb = Number.isFinite(configuredMaxSizeMb) && configuredMaxSizeMb > 0
-      ? configuredMaxSizeMb
+      ? Math.min(configuredMaxSizeMb, PSB_DOCUMENT_UPLOAD_MAX_SIZE_MB)
       : 10;
     const maxBytes = Math.floor(maxSizeMb * 1024 * 1024);
     if (clientSize > maxBytes) {
