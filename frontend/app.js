@@ -564,7 +564,7 @@ async function submitLogin(e){
 function buildRoleNav(){
   const wali=hasAnyRole(['WALI']);
   if(wali)return [
-    ['home','Beranda','home'],['registration','Pendaftaran','clipboard'],['documents','Dokumen','file'],['payments','Pembayaran','wallet'],['selection','Tes','grad'],['announcement','Pengumuman','bell']
+    ['home','Beranda','home'],['registration','Pendaftaran','clipboard'],['payments','Pembayaran','wallet'],['documents','Dokumen','file'],['selection','Tes','grad'],['announcement','Pengumuman','bell']
   ];
   const finance=hasAnyRole(['KEUANGAN']);
   const operational=hasAnyRole(['SUPERADMIN','ADMIN_PSB','VERIFIKATOR','SELEKSI']);
@@ -587,7 +587,7 @@ function buildMobileNav(){
   const preferred={
     SUPERADMIN:['home','applicants','reports','announcement'],
     ADMIN_PSB:['home','applicants','reports','announcement'],
-    WALI:['home','registration','documents','payments']
+    WALI:['home','registration','payments','documents']
   };
   const role=hasAnyRole(['SUPERADMIN'])?'SUPERADMIN':hasAnyRole(['ADMIN_PSB'])?'ADMIN_PSB':hasAnyRole(['WALI'])?'WALI':'';
   const ids=preferred[role]||all.slice(0,4).map(x=>x[0]);
@@ -719,8 +719,8 @@ function renderWaliHomeFlow(data){
   if(!items.length){el.innerHTML=`<section class="card wali-flow-card"><div class="wali-flow-head"><div><div class="wali-flow-title">Alur Pendaftaran</div><div class="wali-flow-sub">Belum ada pendaftaran pada tahun ajaran ${esc(data.activeYear||'berjalan')}.</div></div></div><div class="wali-flow-empty-action"><button class="btn btn-primary" onclick="goPage('registration')">+ Pendaftaran Baru</button></div></section>`;return}
   const stages=[
     ['Pendaftaran','Isi dan kirim data calon santri.'],
-    ['Dokumen','Unggah seluruh dokumen persyaratan yang diwajibkan.'],
-    ['Pembayaran Formulir','Bayar biaya formulir dan unggah bukti pembayaran.'],
+    ['Pembayaran Formulir','Bayar biaya formulir dan tunggu konfirmasi Keuangan.'],
+    ['Upload Dokumen','Unggah seluruh dokumen persyaratan setelah pembayaran dikonfirmasi.'],
     ['Verifikasi PSB','Petugas memeriksa data dan dokumen setelah pembayaran dikonfirmasi.'],
     ['Tes & Seleksi','Ikuti tes sesuai jadwal dan tunggu hasil seleksi.'],
     ['Pengumuman','Lihat hasil seleksi setelah diumumkan.'],
@@ -728,7 +728,7 @@ function renderWaliHomeFlow(data){
   ];
   el.innerHTML=items.map(r=>{
     const completed=Math.max(0,Math.min(7,Number(r.completed||0)));
-    const stageActions=['registration','documents','payments','verification','selection','announcement','reregistration'];
+    const stageActions=['registration','payments','documents','verification','selection','announcement','reregistration'];
     const flow=stages.map((st,i)=>{const n=i+1,done=n<=completed,current=n===completed+1&&!((r.result?.published)&&r.result?.status==='NOT_PASSED');let badge=done?'Sudah dilewati':current?'Berikutnya':'Selanjutnya';if(r.result?.published&&r.result?.status==='NOT_PASSED'&&n===7)badge='Tidak diperlukan';if(r.result?.published&&r.result?.status==='WAITLIST'&&n===7)badge='Menunggu informasi';return `<button type="button" class="wali-flow-item wali-flow-clickable ${done?'done':''} ${current?'current':''}" onclick="waliFlowAction('${stageActions[i]}','${esc(r.registrationId)}')" aria-label="Buka tahap ${esc(st[0])}"><span class="wali-flow-dot">${done?'✓':n}</span><span class="wali-flow-copy"><b>${esc(st[0])}</b><span>${esc(st[1])}</span><span class="wali-flow-badge">${esc(badge)}</span></span><span class="wali-flow-open" aria-hidden="true">${ico('chevron-right')}</span></button>`}).join('');
     const stageIndex=Math.max(0,Math.min(7,completed));
     const progress=Math.round((stageIndex/7)*100);
@@ -1309,7 +1309,7 @@ async function saveRegistrationUI(andSubmit){
     buttons.forEach(b=>b.disabled=false);
   }
 }
-async function submitRegistrationUI(id){showConfirm('Kirim pendaftaran?','Setelah dikirim, Anda dapat melengkapi dokumen dan melakukan pembayaran secara bersamaan. Verifikasi PSB dimulai setelah pembayaran formulir dikonfirmasi oleh Keuangan.',async()=>{loading(true,'Mengirim pendaftaran...');try{const r=await server('submitRegistration',state.token,id);if(r.success){showToast(r.message,'success');await renderRegistrationHub();}else showAlert('Belum dapat dikirim',r.message||'Silakan periksa kembali data pendaftaran.','warning')}catch(e){showAlert('Gagal mengirim', 'Terjadi gangguan saat mengirim pendaftaran. Silakan coba lagi.','error')}finally{loading(false)}} ,'Kirim Pendaftaran')}
+async function submitRegistrationUI(id){showConfirm('Kirim pendaftaran?','Setelah dikirim, silakan selesaikan pembayaran formulir terlebih dahulu. Menu Upload Dokumen akan aktif setelah pembayaran dikonfirmasi oleh Keuangan.',async()=>{loading(true,'Mengirim pendaftaran...');try{const r=await server('submitRegistration',state.token,id);if(r.success){showToast(r.message,'success');await renderRegistrationHub();}else showAlert('Belum dapat dikirim',r.message||'Silakan periksa kembali data pendaftaran.','warning')}catch(e){showAlert('Gagal mengirim', 'Terjadi gangguan saat mengirim pendaftaran. Silakan coba lagi.','error')}finally{loading(false)}} ,'Kirim Pendaftaran')}
 async function viewRegistration(id){
   const key='registrationDetail';if(state.detailLoadingLocks[key])return;state.detailLoadingLocks[key]=true;
   let modal=$('registrationDetailModal');
@@ -1351,8 +1351,9 @@ function renderDocumentContent(){
   const d=state.documentData||{}, checks=d.checklist||[], current=d.documents||[];
   const required=checks.filter(x=>x.required), uploadedRequired=required.filter(x=>x.uploaded).length, pending=current.filter(x=>String(x.status||'').toUpperCase()==='PENDING').length;
   const canUpload=!!d.canUpload;
+  const paymentNotice=d.paymentRequired?`<div class="message warning" style="margin-bottom:12px"><b>Pembayaran formulir belum dikonfirmasi.</b><div>Menu Upload Dokumen akan aktif setelah Keuangan mengonfirmasi pembayaran.</div><button type="button" class="btn btn-primary" style="margin-top:10px" onclick="state.paymentRegistrationId='${esc(d.registration?.registrationId||state.documentRegistrationId||'')}';goPage('payments')">Buka Pembayaran Formulir</button></div>`:'';
   const cards=checks.length?checks.map(x=>{const doc=x.document;const st=String(doc?.status||'').toUpperCase();const statusClass=st==='VERIFIED'?'verified':st==='REVISION'?'revision':st==='PENDING'?'pending':'';return `<article class="doc-item"><div class="doc-item-top"><div class="doc-icon">${ico('file')}</div><div class="doc-copy"><div class="doc-title">${esc(x.name||'-')}</div><div class="doc-meta">${x.required?'Dokumen wajib':'Dokumen opsional'} · Maks. ${esc(getDocumentMaxSizeMb(x))} MB${x.allowedMimeTypes?' · '+esc(x.allowedMimeTypes):''}</div></div><span class="doc-required ${x.uploaded?'ok':''}">${x.uploaded?(st==='VERIFIED'?'Lengkap':'Sudah ada'):(x.required?'Wajib':'Opsional')}</span></div>${doc?`<div class="doc-meta" style="margin-top:10px"><b>${esc(doc.fileName||'-')}</b> · ${esc(formatFileSize(doc.fileSize))} · ${esc(statusLabel(doc.status))}${doc.revisionNote?`<br>Catatan: ${esc(doc.revisionNote)}`:''}</div>`:'<div class="doc-meta" style="margin-top:10px">Belum ada file yang diunggah.</div>'}<div class="doc-actions ${doc?'':'single'}">${doc?.fileUrl?`<button class="btn btn-secondary" onclick="window.open('${esc(doc.fileUrl)}','_blank')">Buka File</button>`:''}${canUpload?`<button class="btn btn-primary" onclick='openDocumentUpload(${JSON.stringify(x)})'>${doc?'Ganti File':'Unggah File'}</button>`:''}</div></article>`}).join(''):'<div class="doc-empty">Belum ada jenis dokumen aktif pada Master Data.</div>';
-  $('documentContent').innerHTML=`<div class="status-card"><div class="status-row"><div><b>${esc(d.candidate?.fullName||'Pendaftaran')}</b><div class="muted" style="font-size:11px;margin-top:4px">${esc(d.registration?.registrationNumber||'-')} · ${esc(statusLabel(d.registration?.status))}</div></div></div></div><div class="doc-summary"><div class="doc-stat"><b>${uploadedRequired}/${required.length}</b><span>Dokumen wajib tersedia</span></div><div class="doc-stat"><b>${pending}</b><span>Menunggu verifikasi</span></div></div><div class="doc-list">${cards}</div>`;
+  $('documentContent').innerHTML=`${paymentNotice}<div class="status-card"><div class="status-row"><div><b>${esc(d.candidate?.fullName||'Pendaftaran')}</b><div class="muted" style="font-size:11px;margin-top:4px">${esc(d.registration?.registrationNumber||'-')} · ${esc(statusLabel(d.registration?.status))}</div></div></div></div><div class="doc-summary"><div class="doc-stat"><b>${uploadedRequired}/${required.length}</b><span>Dokumen wajib tersedia</span></div><div class="doc-stat"><b>${pending}</b><span>Menunggu verifikasi</span></div></div><div class="doc-list">${cards}</div>`;
 }
 function formatFileSize(bytes){const n=Number(bytes||0);if(!n)return '-';if(n<1024)return n+' B';if(n<1024*1024)return (n/1024).toFixed(1)+' KB';if(n<1024*1024*1024)return (n/1024/1024).toFixed(2)+' MB';return (n/1024/1024/1024).toFixed(2)+' GB';}
 function getDocumentMaxSizeMb(type){
@@ -1475,7 +1476,7 @@ async function renderWaliVerificationStatus(){
     el.innerHTML=items.map(x=>{
       const paid=!!x.formPaid, docs=x.documents||{};
       const status=paid?(x.statusLabel||x.status||'Menunggu pemeriksaan'):'Menunggu pembayaran formulir';
-      const message=paid?'Pembayaran formulir sudah dikonfirmasi. Petugas PSB dapat memeriksa data dan dokumen pendaftaran.': 'Verifikasi PSB dimulai setelah pembayaran formulir dikonfirmasi. Anda tetap dapat melengkapi dokumen sambil menunggu.';
+      const message=paid?'Pembayaran formulir sudah dikonfirmasi. Anda dapat melengkapi dokumen pendaftaran.': 'Menu Upload Dokumen akan aktif setelah pembayaran formulir dikonfirmasi oleh Keuangan.';
       return `<article class="card wali-verification-card"><div class="wali-flow-head"><div><div class="wali-flow-title">${esc(x.candidateName||'-')}</div><div class="wali-flow-sub">${esc(x.registrationNumber||'-')}</div></div><span class="pill ${paid?'ok':'warning'}">${esc(status)}</span></div><p class="muted" style="font-size:12px;line-height:1.55;margin:10px 0">${esc(message)}</p><div class="registration-meta"><span>Dokumen diunggah: ${Number(docs.uploadedRequiredCount||0)}/${Number(docs.requiredCount||0)}</span><span>Dokumen kurang: ${Number(docs.missingRequiredCount||0)}</span></div><div class="registration-actions" style="margin-top:10px"><button class="btn btn-secondary" onclick="state.documentRegistrationId='${esc(x.registrationId)}';goPage('documents')">Lihat Dokumen</button><button class="btn btn-primary" onclick="state.paymentRegistrationId='${esc(x.registrationId)}';goPage('payments')">Lihat Pembayaran</button></div></article>`;
     }).join('');
   }catch(e){const el=$('waliVerificationPanel');if(el)el.innerHTML=showMessage('Gagal memuat status verifikasi. Silakan coba lagi.');}
