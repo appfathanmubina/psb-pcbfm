@@ -39,6 +39,10 @@ assert.match(submitRegistration, /KEUANGAN/);
 assert.match(submitRegistration, /secara bersamaan/);
 assert.match(submitRegistration, /Verifikasi PSB dimulai setelah pembayaran dikonfirmasi/i);
 
+const verifyPayment = section(backend, 'function verifyPayment(sessionToken,payload)', 'function getSelectionPageData(sessionToken, registrationId)');
+assert.match(verifyPayment, /notifyUsersByRoles_\(\['SUPERADMIN','ADMIN_PSB','VERIFIKATOR'\]/);
+assert.match(verifyPayment, /notifyRegistrationOwner_\(String\(regFound\.registration\.registrationId\)/);
+
 const waliDashboard = section(frontend, 'function renderWaliHomeFlow(data)', 'function dashboardTaskItems(items, emptyText)');
 assert.match(waliDashboard, /Pembayaran Formulir/);
 assert.match(waliDashboard, /Dokumen Persyaratan/);
