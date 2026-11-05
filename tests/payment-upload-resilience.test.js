@@ -32,7 +32,7 @@ assert.match(upload, /5\*1024\*1024/,
   'the existing 5 MB payment proof limit must remain unchanged');
 assert.ok(upload.includes(String.raw`mimeType!=='application/pdf'`),
   'PDF proof uploads must remain supported');
-assert.ok(upload.includes(String.raw`/^image\\/(jpeg|png|webp)$/i`),
+assert.ok(upload.includes(String.raw`/^image\/(jpeg|png|webp)$/i`),
   'JPG, PNG, and WEBP proof uploads must remain supported');
 
 console.log('Payment proof upload resilience safeguards passed.');
