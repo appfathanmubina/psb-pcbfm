@@ -21,7 +21,7 @@ assert.ok(waitLocks.every(index => index > tryIndex), 'lock timeouts must be cau
 assert.match(upload, /lockAcquired\s*=\s*true/, 'upload must track whether it owns the ScriptLock');
 assert.match(upload, /const folder = getRegistrationDocumentFolder_\(found\.registration\);\s*lock\.releaseLock\(\);\s*lockAcquired\s*=\s*false;\s*\n\s*stage\s*=\s*'CREATE_DRIVE_FILE';\s*const blob\s*=\s*Utilities\.newBlob/,
   'Drive file creation must not hold the global ScriptLock');
-assert.match(upload, /finally\s*\{\s*if\\s*\\(lockAcquired\\)\s*\{\s*try\s*\{\s*lock\.releaseLock\(\)/,
+assert.match(upload, /finally\s*\{\s*if\s*\(lockAcquired\)\s*\{\s*try\s*\{\s*lock\.releaseLock\(\)/,
   'upload must release the ScriptLock only when acquired');
 assert.match(upload, /if\s*\(uploadedFile\)\s*\{\s*try\s*\{\s*uploadedFile\.setTrashed\(true\)/,
   'uncommitted Drive files must be cleaned up after a failed upload');
