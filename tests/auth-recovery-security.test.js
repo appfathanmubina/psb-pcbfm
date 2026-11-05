@@ -8,7 +8,7 @@ assert.match(fn('validateWaliRegistrationPayload_'),/password\.trim\(\)\.length 
 assert.match(fn('validateWaliRegistrationPayload_'),/password\.length > 128/);
 assert.match(fn('registerWali'),/LockService\.getScriptLock\(\)/);
 assert.match(fn('registerWali'),/const duplicate = users\.some/);
-assert.match(fn('registerWali'),/hashPassword_\(input\.password,passwordSalt\)/);
+assert.match(fn('registerWali'),/hashPassword_\(input\.password,\s*passwordSalt\)/);
 assert.match(fn('validateWaliRegistrationPayload_'),/!phoneNormalized && !emailNormalized/);
 assert.doesNotMatch(source,/verifyWaliRegistration|resendWaliRegistrationEmailOtp|PSB_WALI_OTP/);
 assert.match(fn('changePassword'),/currentPasswordValue\.length > 1024/);
