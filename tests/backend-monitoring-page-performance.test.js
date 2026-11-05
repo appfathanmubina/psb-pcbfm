@@ -46,7 +46,7 @@ assert.match(page, /const ps=paymentsByBill\[String\(b\.billId\)\]\|\|\[\]/,
   'Bill reconciliation must use the payment index');
 assert.match(page, /const vs=verificationsByPayment\[String\(p\.paymentId\)\]\|\|\[\]/,
   'Duplicate verification detection must use the verification index');
-assert.match(page, /const p=latestPaymentByBill\[String\(b\.billId\|\|'\)\]\|\|null/,
+assert.match(page, /const p=latestPaymentByBill\[String\(b\.billId\|\|''\)\]\|\|null/,
   'Payment queue must use precomputed latest payment');
 assert.match(page, /const scheduleIds=\{\}/,
   'Schedule membership index must be built once');
