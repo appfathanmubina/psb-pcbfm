@@ -3113,13 +3113,22 @@ function getVerificationQueue(sessionToken, filters) {
 
 function getVerificationDetail(sessionToken, registrationId) {
   const actor = requireRole_(sessionToken, PSB_VERIFICATION_ROLES);
-  const found=findRegistration_(String(registrationId||''));
-  if(!found) return fail_('Pendaftaran tidak ditemukan.');
-  const documents=getCurrentDocuments_(registrationId);
-  const types=getActiveMasterItems_('MASTER_DOKUMEN');
-  const byType={}; documents.forEach(d=>byType[String(d.documentTypeId)]=d);
-  const checklist=types.map(t=>Object.assign({},t,{document:byType[String(t.documentTypeId)]||null,uploaded:!!byType[String(t.documentTypeId)]}));
-  return {success:true,registration:found.registration,candidate:found.candidate,guardian:found.guardian,address:found.address,school:found.school,documents,checklist};
+  const ss = getDatabaseSpreadsheet_();
+  const found = findRegistrationBatch_(ss, String(registrationId || ''));
+  if (!found) return fail_('Pendaftaran tidak ditemukan.');
+  const documents = getCurrentDocuments_(String(registrationId || ''));
+  const types = getActiveMasterItems_('MASTER_DOKUMEN');
+  const byType = {};
+  documents.forEach(d => { byType[String(d.documentTypeId)] = d; });
+  const checklist = types.map(t => Object.assign({}, t, {
+    document:byType[String(t.documentTypeId)] || null,
+    uploaded:!!byType[String(t.documentTypeId)]
+  }));
+  return {
+    success:true, registration:found.registration, candidate:found.candidate,
+    guardian:found.guardian, address:found.address, school:found.school,
+    documents:documents, checklist:checklist
+  };
 }
 
 function startVerification(sessionToken, registrationId) {
@@ -3227,7 +3236,7 @@ const PSB_DOCUMENT_EDITABLE_REGISTRATION_STATUSES = ['DRAFT','SUBMITTED','UNDER_
 
 function getDocumentOptions(sessionToken, registrationId) {
   const actor = requireRole_(sessionToken, PSB_DOCUMENT_ACCESS_ROLES);
-  const found = findRegistration_(String(registrationId || ''));
+  const found = findRegistrationBatch_(getDatabaseSpreadsheet_(), String(registrationId || ''));
   if (!found) return fail_('Pendaftaran tidak ditemukan.');
   if (!canAccessRegistration_(actor, found.registration)) return fail_('Anda tidak memiliki akses ke dokumen pendaftaran ini.');
 
@@ -3469,13 +3478,24 @@ function canAccessRegistration_(actor, registration) {
 function getCurrentDocuments_(registrationId) {
   const sheet = getDatabaseSpreadsheet_().getSheetByName(PSB_SHEETS.DOCUMENTS);
   if (!sheet || sheet.getLastRow() < 2) return [];
-  const headers = sheet.getRange(1,1,1,sheet.getLastColumn()).getValues()[0].map(String);
-  const rows = sheet.getRange(2,1,sheet.getLastRow()-1,sheet.getLastColumn()).getValues();
+  const lastRow = sheet.getLastRow();
+  const lastColumn = sheet.getLastColumn();
+  if (lastColumn < 1) return [];
+  // Read the table once, filter raw rows first, and only materialize documents
+  // belonging to this registration. Keep the original sheet row number.
+  const values = sheet.getRange(1,1,lastRow,lastColumn).getValues();
+  const headers = values[0].map(String);
   const regIdx = headers.indexOf('registrationId');
   const statusIdx = headers.indexOf('status');
-  return rows.map((r,i)=>rowObject_(headers,r,i+2))
-    .filter(x => String(x.registrationId) === String(registrationId) && String(x.status || '').toUpperCase() !== 'REPLACED')
-    .sort((a,b)=>String(b.uploadedAt||'').localeCompare(String(a.uploadedAt||'')));
+  if (regIdx < 0) return [];
+  const documents = [];
+  for (let i = 1; i < values.length; i++) {
+    const row = values[i];
+    if (String(row[regIdx] || '') !== String(registrationId)) continue;
+    if (statusIdx >= 0 && String(row[statusIdx] || '').toUpperCase() === 'REPLACED') continue;
+    documents.push(rowObject_(headers,row,i+1));
+  }
+  return documents.sort((a,b)=>String(b.uploadedAt||'').localeCompare(String(a.uploadedAt||'')));
 }
 
 function getRegistrationDocumentFolder_(registration) {
@@ -3687,6 +3707,54 @@ function validateRegistrationPayload_(payload, strict) {
 
 function validateCompleteRegistration_(found) {
   return validateRegistrationPayload_({tahunAjaranId:found.registration.tahunAjaranId,gelombangId:found.registration.gelombangId,jenjangId:found.registration.jenjangId,candidate:found.candidate,guardian:found.guardian,address:found.address,school:found.school}, true);
+}
+
+function findRegistrationBatch_(ss, registrationId) {
+  // Each related table is fetched with one range read. This preserves the
+  // first-match and first-primary semantics of findRegistration_ without
+  // repeatedly reading the header and body for the same sheet.
+  const readTable = sheet => {
+    if (!sheet || sheet.getLastRow() < 2) return {headers:[], rows:[]};
+    const values = sheet.getRange(1,1,sheet.getLastRow(),sheet.getLastColumn()).getValues();
+    return {headers:values[0].map(String), rows:values.slice(1)};
+  };
+  const findObject = (table, idField, idValue, preferPrimary) => {
+    const idx = table.headers.indexOf(idField);
+    if (idx < 0) return null;
+    const primaryIdx = table.headers.indexOf('isPrimary');
+    let fallback = null;
+    for (let i = 0; i < table.rows.length; i++) {
+      const row = table.rows[i];
+      if (String(row[idx] || '') !== String(idValue)) continue;
+      const found = {rowNumber:i+2, object:rowObject_(table.headers,row,i+2)};
+      if (!fallback) fallback = found;
+      if (preferPrimary && primaryIdx >= 0 &&
+          (row[primaryIdx] === true || String(row[primaryIdx]).toUpperCase() === 'TRUE')) {
+        return found;
+      }
+    }
+    return fallback;
+  };
+
+  const registration = findObject(readTable(ss.getSheetByName(PSB_SHEETS.REGISTRATIONS)),
+    'registrationId', registrationId, false);
+  if (!registration) return null;
+  const candidateId = registration.object.candidateId;
+  const candidate = findObject(readTable(ss.getSheetByName(PSB_SHEETS.CANDIDATES)),
+    'candidateId', candidateId, false);
+  const guardian = findObject(readTable(ss.getSheetByName(PSB_SHEETS.GUARDIANS)),
+    'candidateId', candidateId, true);
+  const address = findObject(readTable(ss.getSheetByName(PSB_SHEETS.ADDRESSES)),
+    'candidateId', candidateId, true);
+  const school = findObject(readTable(ss.getSheetByName(PSB_SHEETS.SCHOOLS)),
+    'candidateId', candidateId, true);
+  return {
+    registration:registration.object,
+    candidate:candidate?.object || null,
+    guardian:guardian?.object || null,
+    address:address?.object || null,
+    school:school?.object || null
+  };
 }
 
 function findRegistration_(registrationId) {
