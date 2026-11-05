@@ -153,26 +153,37 @@ function setPageDataCache(page,data){state.cache.pages[page]={data:data,ts:Date.
 function invalidatePageDataCache(){if(state.cache.pages)state.cache.pages={};}
 function warmPageData(page,loader){if(!state.prefetchPromises)state.prefetchPromises={};if(state.prefetchPromises[page])return state.prefetchPromises[page];const cached=pageDataCached(page);if(cached)return Promise.resolve(cached);const p=Promise.resolve().then(loader).then(data=>{if(data?.success!==false)setPageDataCache(page,data);return data;}).catch(()=>null).finally(()=>{delete state.prefetchPromises[page]});state.prefetchPromises[page]=p;return p;}
 async function warmNavigationData(){
-  if(!state.token)return;
-  const tasks=[];
-  if(hasAnyRole(['SUPERADMIN','ADMIN_PSB','VERIFIKATOR'])){
-    tasks.push(['applicants',()=>server('getRegistrationList',state.token,{})]);
-    tasks.push(['verification',()=>server('getVerificationQueue',state.token,{})]);
-  }
-  if(hasAnyRole(['SUPERADMIN','ADMIN_PSB','SELEKSI','VERIFIKATOR','WALI']))tasks.push(['selection',()=>server('getSelectionPageData',state.token,'')]);
-  tasks.push(['announcement',()=>server('getAnnouncementPageData',state.token)]);
-  tasks.push(['notifications',()=>server('getNotifications',state.token)]);
-  if(hasAnyRole(['WALI','SUPERADMIN','ADMIN_PSB','VERIFIKATOR','KEUANGAN']))tasks.push(['reregistration',()=>server('getReregistrationPageData',state.token)]);
-  if(hasAnyRole(['SUPERADMIN','ADMIN_PSB','VERIFIKATOR','SELEKSI','KEUANGAN']))tasks.push(['reports',()=>server('getReportingPageData',state.token,{})]);
-  if(hasAnyRole(['SUPERADMIN','ADMIN_PSB']))tasks.push(['audit',()=>server('getAuditLogPageData',state.token,{page:1,search:'',action:'',module:'',from:'',to:'',pageSize:50})]);
-  if(hasAnyRole(['SUPERADMIN','ADMIN_PSB']))tasks.push(['master',async()=>{const [defs,items,lifecycle]=await Promise.all([server('getMasterDefinitions',state.token),server('getMasterData',state.token,state.masterKey,true),server('getAcademicYearLifecycleData',state.token)]);return {success:!!(defs?.success&&items?.success),definitions:defs?.definitions||{},items:items?.items||[],lifecycle:lifecycle?.success?lifecycle:null};}]);
-  // Sequential background warm-up avoids flooding Apps Script with simultaneous Spreadsheet reads.
-  // Stop as soon as the user leaves Home so background work never competes with
-  // the page they explicitly opened.
+  if(!state.token||state.page!=='home'||document.visibilityState==='hidden')return;
+  // Hanya hangatkan dua menu ringan yang sering dibuka. Data berat seperti
+  // laporan, audit, master, dan antrean dimuat saat menu tersebut benar-benar dibuka.
+  const tasks=[
+    ['announcement',()=>server('getAnnouncementPageData',state.token)],
+    ['notifications',()=>server('getNotifications',state.token)]
+  ];
   for(const [page,loader] of tasks){
-    if(document.visibilityState==='hidden' || state.page!=='home' || !state.token)return;
+    if(document.visibilityState==='hidden'||state.page!=='home'||!state.token)return;
     if(pageDataCached(page))continue;
     await warmPageData(page,loader);
+  }
+}
+function scheduleWarmNavigationData(){
+  if(state.warmNavigationScheduled)return;
+  state.warmNavigationScheduled=true;
+  const run=()=>{
+    state.warmNavigationScheduled=false;
+    if(document.visibilityState!=='hidden'&&state.token&&state.page==='home')warmNavigationData();
+  };
+  if(typeof window.requestIdleCallback==='function'){
+    window.requestIdleCallback(deadline=>{
+      if(deadline&&!deadline.didTimeout&&deadline.timeRemaining()<80){
+        state.warmNavigationScheduled=false;
+        scheduleWarmNavigationData();
+        return;
+      }
+      run();
+    },{timeout:10000});
+  }else{
+    setTimeout(run,8000);
   }
 }
 
