@@ -21,7 +21,7 @@ assert.match(html, /isIOS\(\)/, 'iOS must have a dedicated installation guide');
 assert.match(html, /Tambahkan ke Layar Utama/, 'iOS guide must explain Add to Home Screen');
 assert.match(html, /menu tiga titik/, 'Android fallback guide must explain browser menu installation');
 assert.match(html, /Install app atau Tambahkan ke layar utama/, 'Android fallback must not depend on beforeinstallprompt');
-assert.match(html, /32\.23\.0/, 'HTML must register the current service worker version');
+assert.match(html, /32\\.24\\.0/, 'HTML must register the current service worker version');
 assert.doesNotMatch(html, /if\(!installMode\)return/, 'installation guidance must not be restricted to ?install');
 assert.equal(manifest.id, './', 'manifest app identity must remain stable');
 assert.equal(manifest.start_url, './', 'manifest start URL must remain stable');
