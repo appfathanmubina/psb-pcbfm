@@ -54,6 +54,8 @@ jobs:
         run: node tests/payment-upload-resilience.test.js
       - name: Test ScriptLock timeout and batch-write safeguards
         run: node tests/script-lock-safeguards.test.js
+      - name: Test incident mutation ScriptLock and batch-write safeguards
+        run: node tests/incident-lock-safeguards.test.js
       - name: Test session restore and one-load-per-session menu navigation
         run: node tests/session-navigation-cache.test.js
       - name: Test Wali workflow navigation and notification badge safeguards
