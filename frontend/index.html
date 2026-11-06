@@ -7,14 +7,15 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
-<meta name="description" content="Sistem Penerimaan Santri Baru Pesantren Ciawi Bogor Fathan Mubina">
+<meta name="description" content="LINGKUNGAN TESTING — Sistem Penerimaan Santri Baru Fathan Mubina">
 <link rel="manifest" href="./manifest.webmanifest?v=32.16.0">
 <link rel="stylesheet" href="./styles.css?v=32.23.0">
 <link rel="apple-touch-icon" sizes="256x256" href="./assets/logo-fathan-mubina.png?v=32.7.0">
 <link rel="icon" type="image/svg+xml" sizes="32x32" href="./icons/favicon-32.svg?v=32.7.0">
 <link rel="icon" type="image/svg+xml" sizes="48x48" href="./icons/favicon-48.svg?v=32.7.0">
-<title>PSB Fathan Mubina</title>
+<title>PSB Fathan Mubina — TESTING</title>
 <style>
+.testing-environment-banner{position:sticky;top:0;z-index:5000;width:100%;padding:7px 12px;background:#b42318;color:#fff;text-align:center;font:800 11px/1.3 system-ui,sans-serif;letter-spacing:.08em;box-shadow:0 2px 8px rgba(0,0,0,.18)}
 .pwa-install-fab{position:fixed;right:18px;bottom:calc(18px + env(safe-area-inset-bottom));z-index:950;display:inline-flex;align-items:center;gap:8px;min-height:46px;padding:0 17px;border:0;border-radius:999px;background:linear-gradient(120deg,#6d28d9,#8b5cf6);color:#fff;font:700 13px/1 system-ui,sans-serif;box-shadow:0 8px 24px rgba(91,33,182,.28);cursor:pointer}
 .pwa-install-icon{display:block;flex:0 0 20px;width:20px;height:20px}.pwa-install-fab[hidden]{display:none}.pwa-install-fab:focus-visible,.pwa-install-actions button:focus-visible{outline:3px solid #c4b5fd;outline-offset:3px}
 .pwa-install-overlay[hidden]{display:none}.pwa-install-overlay{position:fixed;inset:0;z-index:1000;display:flex;align-items:center;justify-content:center;padding:22px;background:rgba(34,20,55,.45);backdrop-filter:blur(5px)}
@@ -27,6 +28,7 @@
 </style>
 </head>
 <body>
+<div class="testing-environment-banner" role="alert">LINGKUNGAN PENGUJIAN · BUKAN PRODUKSI</div>
 <div id="app" class="app"></div>
 <div id="bootProgress" class="boot-progress hidden"><span class="mini-spin"></span><span class="boot-copy" id="bootProgressText">Menyiapkan aplikasi...</span></div>
 <div id="loading" class="loading" role="status" aria-live="polite"><div class="loading-box splash-box"><div class="splash-logo-wrap"><div class="splash-logo" id="splashLogo"><img class="app-logo-img splash-app-logo" src="./assets/logo-fathan-mubina.png?v=32.7.0" alt="PSB Fathan Mubina" width="96" height="96" loading="eager" fetchpriority="high" decoding="async" onerror="this.hidden=true;this.nextElementSibling.style.display='grid'"><span class="app-logo-fallback" aria-hidden="true"></span></div></div><b id="loadingText">Memuat aplikasi...</b><div class="muted splash-subtitle">Menyiapkan PSB Fathan Mubina</div><div class="splash-progress"><span></span></div></div></div>
