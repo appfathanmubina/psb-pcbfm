@@ -26,4 +26,25 @@ assert.ok(ids(menuFor('ADMIN_PSB')).includes('audit'));
 assert.ok(!ids(menuFor('ADMIN_PSB')).includes('userManagement'));
 assert.ok(ids(menuFor('SUPERADMIN')).includes('userManagement'));
 
+
+const renderMoreStart = source.indexOf('function renderMore(){');
+const renderMoreEnd = source.indexOf('\nfunction hasAnyRole(', renderMoreStart);
+assert.notEqual(renderMoreStart, -1, 'renderMore must exist');
+assert.notEqual(renderMoreEnd, -1, 'renderMore must have a stable boundary');
+const renderMore = source.slice(renderMoreStart, renderMoreEnd);
+assert.match(renderMore, /const canSelection=hasAnyRole\(\['SUPERADMIN','ADMIN_PSB','SELEKSI','VERIFIKATOR'\]\)/,
+  'VERIFIKATOR can view selection and must see it in the More menu');
+assert.match(renderMore, /const canAnnouncement=hasAnyRole\(\['SUPERADMIN','ADMIN_PSB','SELEKSI','VERIFIKATOR'\]\)/,
+  'VERIFIKATOR can view announcements and must see them in the More menu');
+
+const renderAppStart = source.indexOf('function renderApp(options={})');
+const renderAppEnd = source.indexOf('\nasync function reloadCurrentData(', renderAppStart);
+assert.notEqual(renderAppStart, -1, 'renderApp must exist');
+assert.notEqual(renderAppEnd, -1, 'renderApp must have a stable boundary');
+const renderApp = source.slice(renderAppStart, renderAppEnd);
+assert.match(renderApp, /KEUANGAN:'KEUANGAN'/,
+  'KEUANGAN-only accounts must display their actual role label instead of WALI');
+assert.match(renderApp, /split\(','\)/,
+  'Multi-role labels must preserve all assigned roles');
+
 console.log('Role-based navigation consistency safeguards passed.');

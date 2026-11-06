@@ -610,7 +610,7 @@ function renderApp(options={}){
   const sideItems=buildRoleNav();
   const items=buildMobileNav();
   const wali=hasAnyRole(['WALI']);
-  const roleLabel=hasAnyRole(['SUPERADMIN'])?'SUPERADMIN':hasAnyRole(['ADMIN_PSB'])?'ADMIN PSB':hasAnyRole(['VERIFIKATOR'])?'VERIFIKATOR':hasAnyRole(['SELEKSI'])?'SELEKSI':'WALI';
+  const roleLabel=String(state.user?.role||'').split(',').map(role=>{const key=role.trim().toUpperCase();return ({SUPERADMIN:'SUPERADMIN',ADMIN_PSB:'ADMIN PSB',VERIFIKATOR:'VERIFIKATOR',SELEKSI:'SELEKSI',KEUANGAN:'KEUANGAN',WALI:'WALI'})[key]||key;}).filter(Boolean).join(' · ')||'PENGGUNA';
   const nav=navButtonsHtml(items,false);
   const side=navButtonsHtml(sideItems,true);
   $('app').innerHTML=`<aside class="sidebar"><div class="sidebar-nav">${side}</div><div class="sidebar-footer"><button class="side-user side-user-button" onclick="goPage('profile')" title="Buka profil"><div>${ico('user')}</div><div style="min-width:0"><div class="side-user-name">${esc(state.user.name)}</div><div class="side-user-role">${roleLabel}</div></div></button></div></aside><div class="topbar"><div class="brand"><button class="sidebar-toggle" type="button" title="Tampilkan/sembunyikan menu" aria-label="Tampilkan/sembunyikan menu" onclick="toggleSidebar()">${ico('menu')}</button><div class="logo">${appLogoMarkup()}</div><div class="brand-copy"><h1>PSB Fathan Mubina</h1><p>${esc(state.config.ACTIVE_YEAR||'2027/2028')}</p></div><div class="top-actions"><button class="header-action" id="reloadDataBtn" type="button" title="Reload data" aria-label="Reload data" onclick="reloadCurrentData()">${ico('refresh')}</button><button class="header-action notification-bell-wrap" title="Notifikasi" aria-label="Notifikasi" onclick="goPage('notifications')">${ico('bell')}<span id="notificationBadge" class="notification-badge" style="display:none">0</span></button><button class="user-chip" type="button" title="Profil" onclick="goPage('profile')"><span class="user-name">${esc(state.user.name)}</span><span class="user-icon">${ico('user')}</span></button></div></div></div><main class="shell" id="content"></main><nav class="bottom-nav"><div class="nav-inner" style="grid-template-columns:repeat(${items.length},minmax(0,1fr))">${nav}</div></nav>`;
@@ -1566,8 +1566,8 @@ function renderMore(){
     return;
   }
   const canPayment=hasAnyRole(['SUPERADMIN','ADMIN_PSB','KEUANGAN']);
-  const canSelection=hasAnyRole(['SUPERADMIN','ADMIN_PSB','SELEKSI']);
-  const canAnnouncement=hasAnyRole(['SUPERADMIN','ADMIN_PSB','SELEKSI']);
+  const canSelection=hasAnyRole(['SUPERADMIN','ADMIN_PSB','SELEKSI','VERIFIKATOR']);
+  const canAnnouncement=hasAnyRole(['SUPERADMIN','ADMIN_PSB','SELEKSI','VERIFIKATOR']);
   const canRereg=hasAnyRole(['WALI','SUPERADMIN','ADMIN_PSB','VERIFIKATOR','KEUANGAN']);
   const canReport=hasAnyRole(['SUPERADMIN','ADMIN_PSB','VERIFIKATOR','SELEKSI','KEUANGAN']);
   const isMaster=hasAnyRole(['SUPERADMIN','ADMIN_PSB']);
