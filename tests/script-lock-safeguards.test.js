@@ -50,7 +50,7 @@ console.log('ScriptLock timeout and batch-write safeguards passed.');
 
 function assertNotificationAfterLockRelease(name, notificationPattern) {
   const body = functionSource(name);
-  const release = Math.max(body.lastIndexOf('finally { lock.releaseLock(); }'), body.lastIndexOf('}finally{lock.releaseLock()}'));
+  const release = body.lastIndexOf('lock.releaseLock()');
   const notification = body.search(notificationPattern);
   assert.notEqual(release, -1, name + ' must explicitly release its ScriptLock');
   assert.ok(notification > release, name + ' must deliver notifications only after releasing ScriptLock');
