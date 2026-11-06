@@ -10,12 +10,12 @@ assert.match(html, /window\.location\.reload\(\)/, 'A newly activated worker mus
 assert.match(html, /app\.js\?v=32.33.0/, 'Application script must have a fresh URL');
 assert.match(html, /styles\.css\?v=32\.23\.0/, 'Stylesheet must have a fresh URL');
 assert.match(sw, /app\.js\?v=32.33.0/, 'Service worker must precache the updated application script');
-assert.match(sw, /psb-pwa-testing-shell-v1/, 'Service worker must use a new cache namespace');
+assert.match(sw, /psb-pwa-shell-v32-33-0/, 'Service worker must use a new cache namespace');
 assert.match(sw, /new Request\(asset,\{cache:'reload'\}\)/, 'Precache must bypass browser HTTP cache');
 assert.match(sw, /CACHE_FIRST_ASSETS\.has\(request\.url\)/, 'Versioned shell assets must render from cache before background refresh');
 assert.match(sw, /event\.waitUntil\(update\.catch\(\(\)=>\{\}\)\)/, 'Cached shell assets must refresh in the background');
 assert.match(sw, /Dokumen navigasi selalu memeriksa versi terbaru/, 'Navigation documents must remain network-first');
-assert.match(sw, /keys\.filter\(key=>key\.startsWith\('psb-pwa-testing-'\)&&key!==CACHE\)/, 'Testing worker must clean only its own previous testing caches');
+assert.match(sw, /keys\.filter\(key=>key!==CACHE\)/, 'Production worker must clean previous application caches');
 assert.match(sw, /self\.clients\.claim\(\)/, 'New worker must control existing tabs');
 assert.match(sw, /if\(url\.origin!==self\.location\.origin\)return/, 'Cross-origin Apps Script traffic must stay outside the service worker');
 assert.match(html, /api-bridge\.js\?v=32\.15\.0/, 'HTML must request the updated upload bridge');
