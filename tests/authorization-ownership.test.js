@@ -86,6 +86,15 @@ mustMatch(documentVerify, /requireRole_\(sessionToken,\s*PSB_VERIFICATION_ROLES\
 mustMatch(documentVerify, /LockService\.getScriptLock\(\)/,
   'Document verification must serialize status changes');
 
+// Opening a reregistration is a mutation that can create a bill and change
+// workflow state. View-only VERIFIKATOR/KEUANGAN roles must not be able to
+// trigger it for arbitrary registrations; WALI must still pass ownership.
+const openReregistration = functionSource('openReregistration');
+mustMatch(openReregistration, /requireRole_\(sessionToken,\s*\['WALI','SUPERADMIN','ADMIN_PSB'\]\)/,
+  'Opening reregistration must be limited to WALI owners and PSB administrators');
+mustMatch(openReregistration, /hasRoleDirect_\(actor,\s*\['WALI'\]\)\s*&&\s*String\(found\.registration\.userId\)!==String\(actor\.userId\)/,
+  'WALI must only open their own reregistration');
+
 // Public WALI registration must serialize account creation, reject duplicate identifiers,
 // store only a password hash, and issue a WALI session after successful creation.
 const waliRegistration = functionSource('registerWali');
