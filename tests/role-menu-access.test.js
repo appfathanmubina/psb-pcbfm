@@ -44,7 +44,7 @@ assert.notEqual(renderAppEnd, -1, 'renderApp must have a stable boundary');
 const renderApp = source.slice(renderAppStart, renderAppEnd);
 assert.match(renderApp, /KEUANGAN:'KEUANGAN'/,
   'KEUANGAN-only accounts must display their actual role label instead of WALI');
-assert.match(renderApp, /split\(', '\)/,
+assert.match(renderApp, /split\(','\)/,
   'Multi-role labels must preserve all assigned roles');
 
 console.log('Role-based navigation consistency safeguards passed.');
