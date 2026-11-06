@@ -2937,7 +2937,9 @@ function getReregistrationPageData(sessionToken) {
   return {success:true,items,summary:{eligible:items.length,completed,pending:items.length-completed},canManage:hasRoleDirect_(actor,PSB_REREGISTRATION_ADMIN_ROLES)};
 }
 function openReregistration(sessionToken, registrationId) {
-  const actor = requireRole_(sessionToken, PSB_REREGISTRATION_VIEW_ROLES);
+  // Opening a reregistration creates a bill and advances workflow state.
+  // View-only roles (VERIFIKATOR/KEUANGAN) must not trigger this mutation.
+  const actor = requireRole_(sessionToken, ['WALI','SUPERADMIN','ADMIN_PSB']);
   assertOperationalMutation_(actor);
   const id = String(registrationId || '').trim();
   if (!id) return fail_('Pendaftaran wajib dipilih.');
