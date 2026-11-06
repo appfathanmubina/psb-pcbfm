@@ -28,7 +28,7 @@
     root.style.setProperty('--app-viewport-height', (window.visualViewport?.height || window.innerHeight || root.clientHeight || 0) + 'px');
   }
 })();
-const state={token:localStorage.getItem('psb_session_testing')||'',user:null,config:(()=>{try{return JSON.parse(localStorage.getItem('psb_public_config_testing')||'{}')}catch(e){return {}}})(),page:'home',appInitialized:false,initialData:null,preloadRunning:false,preloadReady:false,cache:{registration:null,documents:{},payments:{},pages:{}},pageSnapshots:{},publicGalleryLoadScheduled:false,paymentRegistrationId:'',paymentData:null,paymentTypes:[],masterKey:'MASTER_TAHUN_AJARAN',masterItems:[],masterDefinitions:{},masterCache:{},academicYearLifecycle:null,auditData:null,registrationList:[],registrationOptions:null,registrationDetail:null,documentRegistrationId:'',documentData:null,selectionData:null,selectionTab:'overview',selectionRegistrationId:'',detailLoadingLocks:{}};
+const state={token:localStorage.getItem('psb_session')||'',user:null,config:(()=>{try{return JSON.parse(localStorage.getItem('psb_public_config')||'{}')}catch(e){return {}}})(),page:'home',appInitialized:false,initialData:null,preloadRunning:false,preloadReady:false,cache:{registration:null,documents:{},payments:{},pages:{}},pageSnapshots:{},publicGalleryLoadScheduled:false,paymentRegistrationId:'',paymentData:null,paymentTypes:[],masterKey:'MASTER_TAHUN_AJARAN',masterItems:[],masterDefinitions:{},masterCache:{},academicYearLifecycle:null,auditData:null,registrationList:[],registrationOptions:null,registrationDetail:null,documentRegistrationId:'',documentData:null,selectionData:null,selectionTab:'overview',selectionRegistrationId:'',detailLoadingLocks:{}};
 const $=id=>document.getElementById(id);
 function esc(v){return String(v??'').replace(/[&<>'"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c]));}
 function normalizeAssetUrl(raw){
@@ -52,8 +52,8 @@ function configAssetUrl(...keys){
   return '';
 }
 const BRAND_ASSET_FALLBACKS={
-  icon:'./assets/logo-fathan-mubina.png?v=32.6.0',
-  logo:'./assets/logo-fathan-mubina.png?v=32.6.0'
+  icon:'https://appfathanmubina.github.io/psb-pcbfm/assets/logo-fathan-mubina.png?v=32.6.0',
+  logo:'https://appfathanmubina.github.io/psb-pcbfm/assets/logo-fathan-mubina.png?v=32.6.0'
 };
 function configAssetSources(kind='logo'){
   // CONFIG Database adalah sumber kebenaran utama. Asset yang ditanam di script
@@ -113,7 +113,7 @@ async function refreshPublicConfig(){
     const config=result?.config||{};
     if(Object.keys(config).length){
       state.config=config;
-      try{localStorage.setItem('psb_public_config_testing',JSON.stringify(config));}catch(e){}
+      try{localStorage.setItem('psb_public_config',JSON.stringify(config));}catch(e){}
       applyAppIcon();
       if(!state.user){
         const yearLabel=document.querySelector('.public-brand p');
@@ -272,7 +272,7 @@ async function boot(){
         await goPage(savedPage);
       }else{
         state.token='';
-        localStorage.removeItem('psb_session_testing');
+        localStorage.removeItem('psb_session');
         sessionStorage.removeItem('psb_current_page');
         renderPublicHome('Sesi sebelumnya sudah berakhir. Silakan masuk kembali.');
       }
@@ -399,7 +399,7 @@ function playPublicVideo(index){
   if(caption)caption.style.display='none';
   slide.appendChild(iframe);
 }
-const PSB_PUBLIC_GALLERY_BASE_URL = './gallery/';
+const PSB_PUBLIC_GALLERY_BASE_URL = 'https://appfathanmubina.github.io/psb-pcbfm/gallery/';
 const PSB_PUBLIC_GALLERY_FILES = Object.freeze([
   "0. Abby KH. Chairuman Kamal, Lc.M.jpg",
   "1. Gerbang Depan.jpg",
@@ -508,7 +508,7 @@ async function submitRegisterWali(e){
     const r=await server('registerWali',{name:$('regName').value,phone:phone,email:email,password:$('regPassword').value,confirmPassword:$('regConfirmPassword').value});
     if(r.success){
       state.token=r.sessionToken;state.user=r.user;state.appInitialized=false;state.preloadRunning=false;state.preloadReady=false;state.initialData=null;
-      localStorage.setItem('psb_session_testing',state.token);
+      localStorage.setItem('psb_session',state.token);
       showToast('Akun berhasil dibuat. Selamat datang!','success');
       renderApp();setTimeout(()=>goPage('registration'),0);
     }else renderRegisterWali(r.message);
@@ -539,7 +539,7 @@ async function submitLogin(e){
       state.registrationList=[];
       state.documentData=null;
       state.paymentData=null;
-      localStorage.setItem('psb_session_testing',state.token);
+      localStorage.setItem('psb_session',state.token);
       // Aktifkan pelacakan sebelum Beranda dirender agar RPC data awal
       // ikut menahan popup sampai renderer selesai memperbarui tampilan.
       initializeAfterLogin();
@@ -632,7 +632,7 @@ async function reloadCurrentData(){
       server('validateSession',state.token)
     ]);
     if(!session?.success){
-      localStorage.removeItem('psb_session_testing');
+      localStorage.removeItem('psb_session');
       state.token='';
       state.user=null;
       renderPublicHome('Sesi sudah berakhir. Silakan masuk kembali.');
@@ -1778,7 +1778,7 @@ async function doLogout(){
   const token=state.token;
   // Tutup sesi di UI segera agar tidak ada dialog/status keluar yang tertinggal.
   state.token='';state.user=null;state.appInitialized=false;state.preloadRunning=false;state.preloadReady=false;state.cache={registration:null,documents:{},payments:{},pages:{}};state.prefetchPromises={};state.pageSnapshots={};state.registrationList=[];state.documentData=null;state.paymentData=null;
-  localStorage.removeItem('psb_session_testing');
+  localStorage.removeItem('psb_session');
   try{sessionStorage.clear();}catch(e){}
   loading(false);
   renderPublicHome();
