@@ -8,7 +8,7 @@ assert.match(html, /sw\.js\?v=32.33.0/, 'HTML must request the current service w
 assert.match(html, /controllerchange/, 'HTML must reload when a new worker takes control');
 assert.match(html, /window\.location\.reload\(\)/, 'A newly activated worker must refresh the open PWA');
 assert.match(html, /app\.js\?v=32.33.0/, 'Application script must have a fresh URL');
-assert.match(html, /styles\.css\?v=32\.22\.0/, 'Stylesheet must have a fresh URL');
+assert.match(html, /styles\.css\?v=32\.23\.0/, 'Stylesheet must have a fresh URL');
 assert.match(sw, /app\.js\?v=32.33.0/, 'Service worker must precache the updated application script');
 assert.match(sw, /psb-pwa-shell-v32-33-0/, 'Service worker must use a new cache namespace');
 assert.match(sw, /new Request\(asset,\{cache:'reload'\}\)/, 'Precache must bypass browser HTTP cache');
