@@ -7,7 +7,7 @@ const pwaSource = fs.readFileSync('frontend/app.js', 'utf8');
 const onlyInAppsScript = ['installStaticBrandIcons', 'renderPublicVideo'];
 const onlyInPwa = ['closeNotificationPopup', 'decodeUploadImage', 'getSupportedDocumentMimeTypes', 'goPublicVideo', 'openNotificationPopup', 'prepareUploadFile', 'refreshNotificationPopup', 'refreshPublicConfig', 'renderPublicVideoSection', 'toggleNotificationPopup', 'updatePublicVideo', 'uploadMimeAllowed'];
 const intentionallyDifferentBodies = [
-  'appLogoMarkup', 'applyAppIcon', 'boot', 'buildRoleNav', 'configAssetSources', 'initializeAfterLogin', 'renderLogin',
+  'appLogoMarkup', 'applyAppIcon', 'boot', 'buildRoleNav', 'configAssetSources', 'initializeAfterLogin', 'markAllNotificationsReadUI', 'markNotificationReadUI', 'renderLogin',
   'getDocumentMaxSizeMb', 'hydrateSplashLogo', 'movePublicVideo', 'openDocumentUpload',
   'playPublicVideo', 'renderApp', 'renderPublicHome', 'renderApplicants', 'renderRegistrationList', 'renderVerificationList', 'renderWaliVerificationStatus', 'statusLabel', 'submitDocumentUpload', 'submitLogin', 'submitPaymentUpload'
 ];
