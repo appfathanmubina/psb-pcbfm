@@ -1,8 +1,8 @@
 {
-  "name": "PSB Fathan Mubina",
-  "short_name": "PSB FM",
+  "name": "PSB Fathan Mubina — TESTING",
+  "short_name": "PSB FM TEST",
   "description": "Sistem Penerimaan Santri Baru Fathan Mubina",
-  "id": "./",
+  "id": "./testing/",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",
@@ -37,7 +37,7 @@
     {
       "platform": "webapp",
       "url": "./manifest.webmanifest",
-      "id": "https://appfathanmubina.github.io/psb-pcbfm/"
+      "id": "https://appfathanmubina.github.io/psb-pcbfm/testing/"
     }
   ]
 }
