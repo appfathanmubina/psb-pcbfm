@@ -19,10 +19,12 @@ assert.match(css, /@media\s*\(min-width:\s*900px\)\s*and\s*\(max-width:\s*1100px
 assert.match(html, /styles\.css\?v=32\.22\.0/,
   'HTML must request the updated responsive stylesheet');
 const serviceWorker = fs.readFileSync('frontend/sw.js', 'utf8');
-const appVersion = html.match(/app\\.js\\?v=([0-9.]+)/)?.[1];
-assert.ok(appVersion, 'HTML must declare its current app shell version');
-assert.ok(serviceWorker.includes('psb-pwa-shell-v' + appVersion.split('.').join('-')),
-  'Service worker cache must match the current PWA app shell version');
+const shellVersion = serviceWorker.match(/psb-pwa-shell-v([0-9-]+)/)?.[1];
+assert.ok(shellVersion, 'Service worker must declare its current shell cache version');
+assert.ok(html.includes(shellVersion.split('-').join('.')),
+  'HTML must register the current service worker version');
+assert.ok(serviceWorker.includes('./app.js?v=' + shellVersion.split('-').join('.')),
+  'Service worker must precache the app version declared by the HTML');
 assert.match(app, /function renderPublicHome\(/,
   'Existing public home renderer must remain in place');
 
