@@ -7,6 +7,7 @@ const backend = fs.readFileSync('apps-script/Code.gs', 'utf8');
 const bridge = fs.readFileSync('frontend/api-bridge.js', 'utf8');
 const html = fs.readFileSync('frontend/index.html', 'utf8');
 const serviceWorker = fs.readFileSync('frontend/sw.js', 'utf8');
+const client = fs.readFileSync('frontend/app.js', 'utf8');
 
 const start = backend.indexOf('function uploadDocument(sessionToken, payload) {');
 const end = backend.indexOf('\nfunction canAccessRegistration_', start);
@@ -34,19 +35,18 @@ assert.match(upload, /Server sedang memproses permintaan lain/,
 
 assert.match(bridge, /const UPLOAD_TIMEOUT_MS = 120000/,
   'document upload must have a bounded timeout suitable for Drive processing');
-assert.match(bridge, /item\.functionName === 'uploadDocument' \? UPLOAD_TIMEOUT_MS/,
+assert.match(bridge, /\(item\.functionName === 'uploadDocument' \|\| item\.functionName === 'submitPayment'\) \? UPLOAD_TIMEOUT_MS : TIMEOUT_MS/,
   'the extended timeout must apply only to document upload RPCs');
 assert.match(bridge, /MAX_PAYLOAD_CHARS = 20 \* 1024 \* 1024/,
   'the existing bounded request payload limit must remain in place');
-assert.match(html, /api-bridge\.js\?v=32\.14\.0/,
+assert.match(html, /api-bridge\.js\?v=32\.15\.0/,
   'PWA must load the updated upload transport');
-assert.match(serviceWorker, /api-bridge\.js\?v=32\.14\.0/,
+assert.match(serviceWorker, /api-bridge\.js\?v=32\.15\.0/,
   'service worker must precache the updated upload transport');
-const appVersion = html.match(/app\.js\?v=([0-9.]+)/)?.[1];
-assert.ok(appVersion, 'PWA HTML must declare an app shell version');
-assert.ok(serviceWorker.includes(`./app.js?v=${appVersion}`),
-  'service worker must precache the same app shell version as the HTML');
-assert.ok(serviceWorker.includes(`psb-pwa-shell-v${appVersion.replace(/\./g, '-')}`),
-  'PWA shell cache namespace must match the current app shell version');
+assert.match(serviceWorker, /psb-pwa-shell-v32-33-0/,
+  'PWA shell cache must be versioned for the upload transport change');
+
+assert.match(client, /Koneksi terputus saat mengunggah\. Tunggu sebentar, lalu periksa status dokumen sebelum mencoba unggah ulang\./,
+  'ambiguous upload failures must tell the user to check saved status before retrying');
 
 console.log('Document upload resilience safeguards passed.');

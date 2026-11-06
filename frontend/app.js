@@ -566,17 +566,27 @@ function buildRoleNav(){
   if(wali)return [
     ['home','Beranda','home'],['registration','Pendaftaran','clipboard'],['payments','Pembayaran','wallet'],['documents','Dokumen','file'],['selection','Tes','grad'],['announcement','Pengumuman','bell']
   ];
-  const finance=hasAnyRole(['KEUANGAN']);
-  const operational=hasAnyRole(['SUPERADMIN','ADMIN_PSB','VERIFIKATOR','SELEKSI']);
-  if(operational||finance){
+
+  const admin=hasAnyRole(['SUPERADMIN','ADMIN_PSB']);
+  if(admin){
     const items=[
       ['home','Dashboard','home'],['applicants','Pendaftar','users'],['verification','Verifikasi','check'],['payments','Pembayaran','wallet'],['selection','Tes','grad'],['announcement','Pengumuman','megaphone'],['reregistration','Daftar Ulang','refresh'],['reports','Laporan','chart'],['master','Data','database']
     ];
-    if(hasAnyRole(['SUPERADMIN','ADMIN_PSB']))items.push(['audit','Audit','shield']);
+    items.push(['audit','Audit','shield']);
     if(hasAnyRole(['SUPERADMIN']))items.push(['userManagement','Manajemen Pengguna','users']);
     return items;
   }
-  return [['home','Beranda','home']];
+
+  // Staff menus follow the same role gates as their page renderers.
+  // Build a union so accounts with multiple operational roles see only
+  // modules that at least one of their roles is authorized to open.
+  const items=[['home','Dashboard','home']];
+  if(hasAnyRole(['VERIFIKATOR']))items.push(['applicants','Pendaftar','users'],['verification','Verifikasi','check']);
+  if(hasAnyRole(['KEUANGAN']))items.push(['payments','Pembayaran','wallet']);
+  if(hasAnyRole(['SELEKSI','VERIFIKATOR']))items.push(['selection','Tes','grad'],['announcement','Pengumuman','megaphone']);
+  if(hasAnyRole(['VERIFIKATOR','KEUANGAN']))items.push(['reregistration','Daftar Ulang','refresh']);
+  if(hasAnyRole(['VERIFIKATOR','SELEKSI','KEUANGAN']))items.push(['reports','Laporan','chart']);
+  return items;
 }
 function buildMobileNav(){
   const all=buildRoleNav();
@@ -600,10 +610,10 @@ function renderApp(options={}){
   const sideItems=buildRoleNav();
   const items=buildMobileNav();
   const wali=hasAnyRole(['WALI']);
-  const roleLabel=hasAnyRole(['SUPERADMIN'])?'SUPERADMIN':hasAnyRole(['ADMIN_PSB'])?'ADMIN PSB':hasAnyRole(['VERIFIKATOR'])?'VERIFIKATOR':hasAnyRole(['SELEKSI'])?'SELEKSI':'WALI';
+  const roleLabel=String(state.user?.role||'').split(',').map(role=>{const key=role.trim().toUpperCase();return ({SUPERADMIN:'SUPERADMIN',ADMIN_PSB:'ADMIN PSB',VERIFIKATOR:'VERIFIKATOR',SELEKSI:'SELEKSI',KEUANGAN:'KEUANGAN',WALI:'WALI'})[key]||key;}).filter(Boolean).join(' · ')||'PENGGUNA';
   const nav=navButtonsHtml(items,false);
   const side=navButtonsHtml(sideItems,true);
-  $('app').innerHTML=`<aside class="sidebar"><div class="sidebar-nav">${side}</div><div class="sidebar-footer"><button class="side-user side-user-button" onclick="goPage('profile')" title="Buka profil"><div>${ico('user')}</div><div style="min-width:0"><div class="side-user-name">${esc(state.user.name)}</div><div class="side-user-role">${roleLabel}</div></div></button></div></aside><div class="topbar"><div class="brand"><button class="sidebar-toggle" type="button" title="Tampilkan/sembunyikan menu" aria-label="Tampilkan/sembunyikan menu" onclick="toggleSidebar()">${ico('menu')}</button><div class="logo">${appLogoMarkup()}</div><div class="brand-copy"><h1>PSB Fathan Mubina</h1><p>${esc(state.config.ACTIVE_YEAR||'2027/2028')}</p></div><div class="top-actions"><button class="header-action" id="reloadDataBtn" type="button" title="Reload data" aria-label="Reload data" onclick="reloadCurrentData()">${ico('refresh')}</button><button class="header-action notification-bell-wrap" title="Notifikasi" aria-label="Notifikasi" onclick="goPage('notifications')">${ico('bell')}<span id="notificationBadge" class="notification-badge" style="display:none">0</span></button><button class="user-chip" type="button" title="Profil" onclick="goPage('profile')"><span class="user-name">${esc(state.user.name)}</span><span class="user-icon">${ico('user')}</span></button></div></div></div><main class="shell" id="content"></main><nav class="bottom-nav"><div class="nav-inner" style="grid-template-columns:repeat(${items.length},minmax(0,1fr))">${nav}</div></nav>`;
+  $('app').innerHTML=`<aside class="sidebar"><div class="sidebar-nav">${side}</div><div class="sidebar-footer"><button class="side-user side-user-button" onclick="goPage('profile')" title="Buka profil"><div>${ico('user')}</div><div style="min-width:0"><div class="side-user-name">${esc(state.user.name)}</div><div class="side-user-role">${roleLabel}</div></div></button></div></aside><div class="topbar"><div class="brand"><button class="sidebar-toggle" type="button" title="Tampilkan/sembunyikan menu" aria-label="Tampilkan/sembunyikan menu" onclick="toggleSidebar()">${ico('menu')}</button><div class="logo">${appLogoMarkup()}</div><div class="brand-copy"><h1>PSB Fathan Mubina</h1><p>${esc(state.config.ACTIVE_YEAR||'2027/2028')}</p></div><div class="top-actions"><button class="header-action" id="reloadDataBtn" type="button" title="Reload data" aria-label="Reload data" onclick="reloadCurrentData()">${ico('refresh')}</button><button class="header-action notification-bell-wrap" title="Notifikasi" aria-label="Notifikasi" onclick="toggleNotificationPopup()" aria-haspopup="dialog" aria-controls="notificationPopupBackdrop" aria-expanded="false">${ico('bell')}<span id="notificationBadge" class="notification-badge" style="display:none">0</span></button><button class="user-chip" type="button" title="Profil" onclick="goPage('profile')"><span class="user-name">${esc(state.user.name)}</span><span class="user-icon">${ico('user')}</span></button></div></div></div><main class="shell" id="content"></main><nav class="bottom-nav"><div class="nav-inner" style="grid-template-columns:repeat(${items.length},minmax(0,1fr))">${nav}</div></nav>`;
   if(options.deferInitialPage!==true)goPage('home');
   updateNotificationBadge();
 }
@@ -1080,7 +1090,18 @@ async function openSelectionDetailUI(registrationId){
   }finally{state.selectionDetailOpening=false}
 }
 function closeSelectionDetailUI(){state.selectionDetailOpening=false;$('selectionDetailModal')?.remove();}
-function renderSelectionDetail(data,targetEl){const el=targetEl||$('selectionTabContent');if(!el)return;const d=data.detail||{},admin=hasAnyRole(['SUPERADMIN','ADMIN_PSB','SELEKSI']);const p=d.participant,res=d.result,scores=d.scores||[];if(!p){el.innerHTML='<div class="selection-empty">Peserta tes belum tersedia.</div>';return}const scoreRows=scores.map(x=>`<tr><td>${esc(x.component)}</td><td>${esc(x.score)}</td><td>${esc(x.note||'-')}</td></tr>`).join('');const internal=admin?`<section class="card" style="margin-top:14px"><div class="section-title" style="margin-top:0">Input Nilai</div><div class="selection-form"><div class="field"><label>Komponen *</label><input id="selScoreComponent" class="input-field" placeholder="Contoh: Wawancara"></div><div class="field"><label>Nilai *</label><input id="selScoreValue" class="input-field" type="number" min="0" max="100" step="0.01" placeholder="0 - 100"></div><div class="field full"><label>Catatan</label><textarea id="selScoreNote" class="textarea-field" placeholder="Catatan hasil tes"></textarea></div></div><div class="registration-actions" style="margin-top:12px"><button class="btn btn-primary" onclick="saveSelectionScoreUI('${esc(p.participantId)}')">Simpan Nilai</button></div></section><section class="card" style="margin-top:14px"><div class="section-title" style="margin-top:0">Hasil Seleksi</div><div class="selection-form"><div class="field"><label>Status *</label><select id="selResultStatus" class="select-field"><option value="PENDING">Menunggu hasil</option><option value="PASSED">Lulus</option><option value="NOT_PASSED">Tidak lulus</option><option value="WAITLIST">Cadangan</option></select></div><div class="field"><label>Catatan</label><input id="selResultNote" class="input-field" value="${esc(res?.note||'')}" placeholder="Catatan keputusan"></div></div><div class="registration-actions" style="margin-top:12px"><button class="btn btn-primary" onclick="saveSelectionResultUI('${esc(d.registration?.registrationId||'')}')">Simpan Hasil</button></div><p class="selection-note" style="margin-top:10px">Hasil ini masih merupakan hasil internal. Publikasi pengumuman dilakukan setelah hasil ditetapkan.</p></section>`:'';el.innerHTML=`<section class="selection-grid" style="margin-top:0"><article class="selection-card"><h3>${esc(d.registration?.candidateName||'-')}</h3><div class="selection-note">${esc(d.registration?.registrationNumber||'-')}</div><div class="selection-meta"><span>${esc(selectionStatusLabel(p.status))}</span>${res?`<span>${esc(selectionStatusLabel(res.status))}</span>`:''}</div></article><article class="selection-card"><h3>Nilai Seleksi</h3>${scoreRows?`<table class="score-table"><thead><tr><th>Komponen</th><th>Nilai</th><th>Catatan</th></tr></thead><tbody>${scoreRows}</tbody></table>`:'<div class="selection-note">Belum ada nilai.</div>'}</article></section>${internal}${!admin?`<div class="selection-note" style="margin-top:12px">Informasi di atas adalah hasil seleksi yang tersedia untuk akun Wali.</div>`:''}`;}
+function renderSelectionDetail(data,targetEl){
+  const el=targetEl||$('selectionTabContent');if(!el)return;
+  const d=data.detail||{},admin=hasAnyRole(['SUPERADMIN','ADMIN_PSB','SELEKSI']),isWali=hasAnyRole(['WALI']);
+  const p=d.participant,res=d.result,scores=d.scores||[];
+  if(!p){el.innerHTML='<div class="selection-empty">Peserta tes belum tersedia.</div>';return}
+  const publicResult=!isWali||(res&&String(res.announcementDate||'').trim())?res:null;
+  const scoreRows=scores.map(x=>`<tr><td>${esc(x.component)}</td><td>${esc(x.score)}</td><td>${esc(x.note||'-')}</td></tr>`).join('');
+  const internal=admin?`<section class="card" style="margin-top:14px"><div class="section-title" style="margin-top:0">Input Nilai</div><div class="selection-form"><div class="field"><label>Komponen *</label><input id="selScoreComponent" class="input-field" placeholder="Contoh: Wawancara"></div><div class="field"><label>Nilai *</label><input id="selScoreValue" class="input-field" type="number" min="0" max="100" step="0.01" placeholder="0 - 100"></div><div class="field full"><label>Catatan</label><textarea id="selScoreNote" class="textarea-field" placeholder="Catatan hasil tes"></textarea></div></div><div class="registration-actions" style="margin-top:12px"><button class="btn btn-primary" onclick="saveSelectionScoreUI('${esc(p.participantId)}')">Simpan Nilai</button></div></section><section class="card" style="margin-top:14px"><div class="section-title" style="margin-top:0">Hasil Seleksi</div><div class="selection-form"><div class="field"><label>Status *</label><select id="selResultStatus" class="select-field"><option value="PENDING">Menunggu hasil</option><option value="PASSED">Lulus</option><option value="NOT_PASSED">Tidak lulus</option><option value="WAITLIST">Cadangan</option></select></div><div class="field"><label>Catatan</label><input id="selResultNote" class="input-field" value="${esc(res?.note||'')}" placeholder="Catatan keputusan"></div></div><div class="registration-actions" style="margin-top:12px"><button class="btn btn-primary" onclick="saveSelectionResultUI('${esc(d.registration?.registrationId||'')}')">Simpan Hasil</button></div><p class="selection-note" style="margin-top:10px">Hasil ini masih merupakan hasil internal. Publikasi pengumuman dilakukan setelah hasil ditetapkan.</p></section>`:'';
+  const scoreSection=isWali?'':`<article class="selection-card"><h3>Nilai Seleksi</h3>${scoreRows?`<table class="score-table"><thead><tr><th>Komponen</th><th>Nilai</th><th>Catatan</th></tr></thead><tbody>${scoreRows}</tbody></table>`:'<div class="selection-note">Belum ada nilai.</div>'}</article>`;
+  const resultSection=isWali?(publicResult?`<div class="selection-meta"><span>Keterangan Hasil: ${esc(selectionStatusLabel(publicResult.status))}</span></div>`:''):`<div class="selection-meta">${res?`<span>${esc(selectionStatusLabel(res.status))}</span>`:''}</div>`;
+  el.innerHTML=`<section class="selection-grid" style="margin-top:0"><article class="selection-card"><h3>${esc(d.registration?.candidateName||'-')}</h3><div class="selection-note">${esc(d.registration?.registrationNumber||'-')}</div><div class="selection-meta"><span>${esc(selectionStatusLabel(p.status))}</span></div>${resultSection}</article>${scoreSection}</section>${internal}${!admin&&!isWali?`<div class="selection-note" style="margin-top:12px">Informasi di atas adalah hasil seleksi yang tersedia untuk akun staf.</div>`:''}`;
+}
 async function saveSelectionScoreUI(participantId){const component=String($('selScoreComponent')?.value||'').trim(),score=Number($('selScoreValue')?.value),note=String($('selScoreNote')?.value||'').trim();if(!component||!Number.isFinite(score)){showAlert('Nilai belum lengkap','Komponen dan nilai wajib diisi.','warning');return}loading(true,'Menyimpan nilai...');try{const r=await server('saveSelectionScore',state.token,{participantId,component,score,note});if(r.success){showToast(r.message,'success');await openSelectionDetailUI(state.selectionRegistrationId)}else showAlert('Nilai belum tersimpan',r.message,'warning')}catch(e){showAlert('Gagal menyimpan','Terjadi gangguan saat menyimpan nilai.','error')}finally{loading(false)}}
 async function saveSelectionResultUI(registrationId){const status=$('selResultStatus')?.value||'',note=String($('selResultNote')?.value||'').trim();loading(true,'Menyimpan hasil seleksi...');try{const r=await server('saveSelectionResult',state.token,{registrationId,status,note});if(r.success){showToast(r.message,'success');await openSelectionDetailUI(registrationId)}else showAlert('Hasil belum tersimpan',r.message,'warning')}catch(e){showAlert('Gagal menyimpan','Terjadi gangguan saat menyimpan hasil seleksi.','error')}finally{loading(false)}}
 
@@ -1148,8 +1169,23 @@ async function renderNotifications(force=false){
 function notificationTypeLabel(type){return ({SUCCESS:'Berhasil',WARNING:'Perlu perhatian',INFO:'Informasi',ERROR:'Kesalahan'})[String(type||'INFO').toUpperCase()]||'Informasi'}
 function formatNotificationDate(value){const d=new Date(value);if(Number.isNaN(d.getTime()))return String(value||'-');return d.toLocaleString('id-ID',{day:'2-digit',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'});}
 function renderNotificationPanel(data){const el=$('notificationPanel');if(!el)return;const items=data.items||[];const unreadCount=Number(data.unreadCount||0);if(!items.length){el.innerHTML='<div class="announcement-empty">Belum ada notifikasi.</div>';updateNotificationBadge();return}el.innerHTML=`<div class="notification-toolbar" style="display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:12px"><div><strong>${unreadCount}</strong> belum dibaca</div><button class="btn btn-secondary" onclick="markAllNotificationsReadUI()">Tandai semua dibaca</button></div><div class="notification-list">${items.map(x=>{const unread=String(x.isRead).toUpperCase()!=='TRUE';const type=String(x.type||'INFO').toUpperCase();const cls=type==='SUCCESS'?'ok':type==='WARNING'?'warn':type==='ERROR'?'bad':'';return `<article class="notification-card ${unread?'unread':''}"><div class="announcement-top"><div><b>${esc(x.title||'Notifikasi')}</b><div class="notification-meta">${esc(notificationTypeLabel(type))} · ${esc(formatNotificationDate(x.createdAt))}</div></div><span class="announcement-status ${cls}">${esc(notificationTypeLabel(type))}</span></div><p>${esc(x.message||'')}</p>${unread?`<div class="notification-actions"><button class="btn btn-secondary" onclick="markNotificationReadUI('${esc(x.notificationId)}')">Tandai dibaca</button></div>`:''}</article>`}).join('')}</div>`;updateNotificationBadge();}
-async function markNotificationReadUI(id){try{const r=await server('markNotificationRead',state.token,id);if(r.success){await renderNotifications();updateNotificationBadge();}}catch(e){}}
-async function markAllNotificationsReadUI(){loading(true,'Memperbarui notifikasi...');try{const r=await server('markAllNotificationsRead',state.token);if(r.success){showToast('Semua notifikasi ditandai sudah dibaca.','success');await renderNotifications();updateNotificationBadge()}}catch(e){showToast('Gagal memperbarui notifikasi.','error')}finally{loading(false)}}
+function closeNotificationPopup(){const popup=$('notificationPopupBackdrop');if(popup)popup.remove();const button=document.querySelector('.notification-bell-wrap');if(button)button.setAttribute('aria-expanded','false');}
+async function toggleNotificationPopup(){if($('notificationPopupBackdrop')){closeNotificationPopup();return;}await openNotificationPopup();}
+async function openNotificationPopup(force=false){
+  if(!state.token)return;
+  closeNotificationPopup();
+  document.body.insertAdjacentHTML('beforeend','<div class="notification-popover-backdrop" id="notificationPopupBackdrop" onclick="if(event.target===this)closeNotificationPopup()"><section class="notification-popover" role="dialog" aria-modal="false" aria-labelledby="notificationPopupTitle"><div class="notification-popover-head"><div><b id="notificationPopupTitle">Notifikasi</b><span>Informasi terbaru terkait proses PSB</span></div><button type="button" class="notification-popover-close" aria-label="Tutup notifikasi" onclick="closeNotificationPopup()">×</button></div><div id="notificationPanel"><div class="announcement-empty">Memuat notifikasi...</div></div></section></div>');
+  const button=document.querySelector('.notification-bell-wrap');if(button)button.setAttribute('aria-expanded','true');
+  await refreshNotificationPopup(force);
+}
+async function refreshNotificationPopup(force=true){
+  const panel=$('notificationPanel');if(!panel)return;
+  panel.innerHTML='<div class="announcement-empty">Memuat notifikasi...</div>';
+  try{const cached=pageDataCached('notifications');const r=force?await server('getNotifications',state.token):(cached||await warmPageData('notifications',()=>server('getNotifications',state.token)));if(!r?.success){panel.innerHTML=showMessage(r?.message||'Gagal memuat notifikasi.');return;}renderNotificationPanel(r);}
+  catch(e){if($('notificationPanel'))$('notificationPanel').innerHTML=showMessage('Gagal memuat notifikasi.');}
+}
+async function markNotificationReadUI(id){try{const r=await server('markNotificationRead',state.token,id);if(r.success){if($('notificationPopupBackdrop'))await refreshNotificationPopup();else await renderNotifications();updateNotificationBadge();}}catch(e){}}
+async function markAllNotificationsReadUI(){loading(true,'Memperbarui notifikasi...');try{const r=await server('markAllNotificationsRead',state.token);if(r.success){showToast('Semua notifikasi ditandai sudah dibaca.','success');if($('notificationPopupBackdrop'))await refreshNotificationPopup();else await renderNotifications();updateNotificationBadge()}}catch(e){showToast('Gagal memperbarui notifikasi.','error')}finally{loading(false)}}
 
 async function renderVerification(force=false){
   if(!hasAnyRole(['SUPERADMIN','ADMIN_PSB','VERIFIKATOR'])){renderMore();return}
@@ -1360,9 +1396,14 @@ function renderDocumentContent(){
 
 const UPLOAD_IMAGE_MAX_SIDE=2000;
 const UPLOAD_IMAGE_COMPRESSION_THRESHOLD=1.5*1024*1024;
+const SUPPORTED_UPLOAD_MIME_TYPES=['application/pdf','image/jpeg','image/png','image/webp'];
+function getSupportedDocumentMimeTypes(rulesText){
+  const rules=String(rulesText||'').split(',').map(x=>x.trim().toLowerCase()).filter(Boolean);
+  return SUPPORTED_UPLOAD_MIME_TYPES.filter(type=>!rules.length||rules.some(rule=>rule===type||(rule==='image/*'&&type.startsWith('image/'))));
+}
 function uploadMimeAllowed(mime,rulesText){
-  const rules=String(rulesText||'').split(',').map(x=>x.trim().toLowerCase()).filter(Boolean),type=String(mime||'').toLowerCase();
-  return !rules.length||rules.some(rule=>rule===type||(rule.endsWith('/*')&&type.startsWith(rule.slice(0,-1))));
+  const type=String(mime||'').toLowerCase();
+  return SUPPORTED_UPLOAD_MIME_TYPES.includes(type)&&getSupportedDocumentMimeTypes(rulesText).includes(type);
 }
 async function decodeUploadImage(file){
   if(typeof createImageBitmap==='function')return await createImageBitmap(file);
@@ -1392,15 +1433,17 @@ async function prepareUploadFile(file,allowed){
 }
 
 function formatFileSize(bytes){const n=Number(bytes||0);if(!n)return '-';if(n<1024)return n+' B';if(n<1024*1024)return (n/1024).toFixed(1)+' KB';if(n<1024*1024*1024)return (n/1024/1024).toFixed(2)+' MB';return (n/1024/1024/1024).toFixed(2)+' GB';}
+const DOCUMENT_UPLOAD_MAX_SIZE_MB=14;
 function getDocumentMaxSizeMb(type){
   const configured=Number(type?.maxSizeMb);
-  return Number.isFinite(configured)&&configured>0?configured:10;
+  return Number.isFinite(configured)&&configured>0?Math.min(configured,DOCUMENT_UPLOAD_MAX_SIZE_MB):10;
 }
 function openDocumentUpload(type){
   const maxSizeMb=getDocumentMaxSizeMb(type);
-  const allowed=String(type.allowedMimeTypes||'').split(',').map(x=>x.trim()).filter(Boolean);const accept=allowed.join(',');
+  const allowed=getSupportedDocumentMimeTypes(type.allowedMimeTypes),accept=allowed.join(','),disabledAttr=allowed.length?'':'disabled';
   const old=type.document||{};
-  document.body.insertAdjacentHTML('beforeend',`<div class="modal-backdrop" id="documentUploadModal"><div class="modal"><h3>${old.fileId?'Ganti':'Unggah'} ${esc(type.name||'Dokumen')}</h3><p>Pilih file yang sesuai dengan aturan dokumen. File akan disimpan pada folder Google Drive pendaftaran ini.</p><div id="documentUploadMsg"></div><div class="upload-box"><input id="documentFileInput" type="file" ${accept?`accept="${esc(accept)}"`:''} onchange="previewDocumentFile()"><div class="file-picker"><button type="button" class="file-picker-btn" onclick="$('documentFileInput').click()">Pilih File</button><span class="file-picker-name" id="documentFileName">Belum ada file dipilih</span></div><div id="documentFileInfo" class="upload-note">Tipe diizinkan: ${esc(type.allowedMimeTypes||'Semua tipe file')} · Maksimum ${esc(maxSizeMb)} MB</div></div><div class="modal-actions"><button id="documentUploadSubmitBtn" class="btn btn-primary" onclick='submitDocumentUpload(${JSON.stringify(type)})'>${old.fileId?'Ganti File':'Unggah Sekarang'}</button><button class="btn btn-secondary" onclick="closeDocumentUpload()">Batal</button></div></div></div>`);
+  const uploadInfo=allowed.length?'Tipe diizinkan: '+allowed.join(', ')+' · Maksimum '+maxSizeMb+' MB':'Konfigurasi tipe file belum didukung. Hubungi Admin PSB untuk memperbaiki Master Data.';
+  document.body.insertAdjacentHTML('beforeend',`<div class="modal-backdrop" id="documentUploadModal"><div class="modal"><h3>${old.fileId?'Ganti':'Unggah'} ${esc(type.name||'Dokumen')}</h3><p>Pilih file yang sesuai dengan aturan dokumen. File akan disimpan pada folder Google Drive pendaftaran ini.</p><div id="documentUploadMsg"></div><div class="upload-box"><input id="documentFileInput" type="file" ${accept?`accept="${esc(accept)}"`:''} ${disabledAttr} onchange="previewDocumentFile()"><div class="file-picker"><button type="button" class="file-picker-btn" ${disabledAttr} onclick="$('documentFileInput').click()">Pilih File</button><span class="file-picker-name" id="documentFileName">Belum ada file dipilih</span></div><div id="documentFileInfo" class="upload-note">${esc(uploadInfo)}</div></div><div class="modal-actions"><button id="documentUploadSubmitBtn" class="btn btn-primary" ${disabledAttr} onclick='submitDocumentUpload(${JSON.stringify(type)})'>${old.fileId?'Ganti File':'Unggah Sekarang'}</button><button class="btn btn-secondary" onclick="closeDocumentUpload()">Batal</button></div></div></div>`);
 }
 function previewDocumentFile(){const input=$('documentFileInput'),info=$('documentFileInfo'),name=$('documentFileName');const f=input?.files?.[0];if(!f||!info)return;if(name){name.textContent=f.name;name.classList.add('selected')}info.innerHTML=`<div class="file-name">${esc(f.name)}</div><div class="upload-note">${formatFileSize(f.size)} · ${esc(f.type||'Tipe tidak terdeteksi')}</div>`;}
 function closeDocumentUpload(){$('documentUploadModal')?.remove()}
@@ -1424,7 +1467,7 @@ async function submitDocumentUpload(type){
         const r=await server('uploadDocument',state.token,{registrationId:state.documentRegistrationId,documentTypeId:type.documentTypeId,fileName:prepared.fileName,mimeType:prepared.mimeType,fileSize:prepared.fileSize,base64});
         if(!r.success){msg.innerHTML=showMessage(r.message);return}
         closeDocumentUpload();showToast(r.message,'success');delete state.cache.documents[state.documentRegistrationId];await loadDocumentsForRegistration(state.documentRegistrationId);
-      }catch(e){if($('documentUploadMsg'))$('documentUploadMsg').innerHTML=showMessage('Gagal mengunggah dokumen. Silakan coba lagi.')}
+      }catch(e){if($('documentUploadMsg'))$('documentUploadMsg').innerHTML=showMessage('Koneksi terputus saat mengunggah. Tunggu sebentar, lalu periksa status dokumen sebelum mencoba unggah ulang.')}
       finally{loading(false);if(btn?.isConnected){btn.disabled=false;btn.textContent=type.document?.fileId?'Ganti File':'Unggah Sekarang'}if(input?.isConnected)input.disabled=false}
     };
     reader.onerror=()=>{if(msg)msg.innerHTML=showMessage('File tidak dapat dibaca. Silakan pilih file lain.','error');loading(false);if(btn?.isConnected){btn.disabled=false;btn.textContent=type.document?.fileId?'Ganti File':'Unggah Sekarang'}if(input?.isConnected)input.disabled=false};
@@ -1549,8 +1592,8 @@ function renderMore(){
     return;
   }
   const canPayment=hasAnyRole(['SUPERADMIN','ADMIN_PSB','KEUANGAN']);
-  const canSelection=hasAnyRole(['SUPERADMIN','ADMIN_PSB','SELEKSI']);
-  const canAnnouncement=hasAnyRole(['SUPERADMIN','ADMIN_PSB','SELEKSI']);
+  const canSelection=hasAnyRole(['SUPERADMIN','ADMIN_PSB','SELEKSI','VERIFIKATOR']);
+  const canAnnouncement=hasAnyRole(['SUPERADMIN','ADMIN_PSB','SELEKSI','VERIFIKATOR']);
   const canRereg=hasAnyRole(['WALI','SUPERADMIN','ADMIN_PSB','VERIFIKATOR','KEUANGAN']);
   const canReport=hasAnyRole(['SUPERADMIN','ADMIN_PSB','VERIFIKATOR','SELEKSI','KEUANGAN']);
   const isMaster=hasAnyRole(['SUPERADMIN','ADMIN_PSB']);
@@ -1585,7 +1628,7 @@ function renderPaymentContent(){
  const d=state.paymentData||{}, items=d.bills||[], isWali=hasAnyRole(['WALI']), canManage=hasAnyRole(['SUPERADMIN','ADMIN_PSB','KEUANGAN']);
  const list=items.length?items.map(b=>{const p=b.payment, st=String(b.status||'').toUpperCase();return `<article class="registration-item"><div class="registration-item-top"><div><div class="registration-name">${esc(b.paymentTypeName||'Tagihan')}</div><div class="registration-number">Rp ${Number(b.amount||0).toLocaleString('id-ID')}</div></div><span class="pill">${esc(st==='PAID'?'LUNAS':st==='PAYMENT_REVIEW'?'MENUNGGU VERIFIKASI':p?.status==='REJECTED'?'DITOLAK':'BELUM BAYAR')}</span></div><div class="registration-meta"><span>Jatuh tempo: ${esc(b.dueDate||'-')}</span>${p?.submittedAt?`<span>Dikirim: ${esc(String(p.submittedAt).substring(0,10))}</span>`:''}</div>${p?.status==='REJECTED'&&p?.verificationNote?`<div class="message warning" style="margin-top:8px">Alasan penolakan: ${esc(p.verificationNote)}</div>`:''}<div class="registration-actions">${p?.proofFileUrl?`<button class="btn btn-secondary" onclick="window.open('${esc(p.proofFileUrl)}','_blank')">Bukti</button>`:''}${isWali&&st!=='PAID'?`<button class="btn btn-primary" onclick="openPaymentUpload('${esc(b.billId)}')">${p?.status==='REJECTED'?'Upload Ulang':'Upload Bukti'}</button>`:''}${canManage&&p&&p.status==='SUBMITTED'?`<button class="btn btn-primary" onclick="verifyPaymentUI('${esc(p.paymentId)}','VERIFIED')">Verifikasi</button><button class="btn btn-danger" onclick="verifyPaymentUI('${esc(p.paymentId)}','REJECTED')">Tolak</button>`:''}</div></article>`}).join(''):`<div class="empty-state">${isWali?(d.autoBillMessage?'Tagihan formulir belum dapat dibuat: '+d.autoBillMessage:'Tagihan formulir akan dibuat otomatis setelah pendaftaran dikirim. Jika belum muncul, silakan hubungi Admin PSB.'):'Belum ada tagihan pembayaran.'}</div>`;
  const regOptions=(state.registrationList||[]).map(x=>`<option value="${esc(x.registrationId)}" ${String(x.registrationId)===String(state.paymentRegistrationId)?'selected':''}>${esc(x.candidateName||'-')} · ${esc(x.registrationNumber||'-')}</option>`).join('');
- const transferGuide=isWali?`<section class="status-card" style="margin-top:10px"><div class="status-row"><div><b>Petunjuk Pembayaran Uang Pendaftaran</b><div class="muted" style="font-size:11px;margin-top:5px">Silakan transfer melalui rekening resmi berikut:</div></div></div><div style="margin-top:12px;padding:12px;border-radius:12px;background:var(--surface-soft,rgba(120,100,160,.08))"><div class="muted" style="font-size:11px">Bank Mandiri</div><div style="font-size:20px;font-weight:800;letter-spacing:.5px;margin:3px 0">1330005698469</div><div style="font-size:13px">a.n. <b>Siti Makbulah</b></div><div style="font-size:13px;font-weight:700;margin-top:8px">Uang Pendaftaran Rp. 300.000</div></div></section>`:'';
+const transferGuide=isWali?`<section class="status-card" style="margin-top:10px"><div class="status-row"><div><b>Petunjuk Pembayaran Uang Pendaftaran</b><div class="muted" style="font-size:11px;margin-top:5px">Silakan transfer melalui rekening resmi berikut:</div></div></div><div style="margin-top:12px;padding:12px;border-radius:12px;background:var(--surface-soft,rgba(120,100,160,.08))"><div class="muted" style="font-size:11px">Bank Mandiri</div><div style="font-size:20px;font-weight:800;letter-spacing:.5px;margin:3px 0">1330005698469</div><div style="font-size:13px">a.n. <b>Siti Makbulah</b></div><div style="font-size:13px;font-weight:700;margin-top:8px">Uang Pendaftaran Rp. 300.000</div></div></section>`:'';
  $('paymentPanel').innerHTML=`<div class="status-card"><div class="status-row"><div><b>Pendaftaran</b><div class="muted" style="font-size:11px;margin-top:4px">Pilih santri untuk melihat tagihan.</div></div></div><select class="doc-select" onchange="renderPayments(this.value)">${regOptions}</select></div>${transferGuide}<div class="registration-list" style="margin-top:10px">${list}</div>`;
 }
 function openPaymentUpload(billId){document.body.insertAdjacentHTML('beforeend',`<div class="modal-backdrop" id="paymentUploadModal"><div class="modal"><h3>Upload Bukti Pembayaran</h3><p>File JPG, PNG, WEBP, atau PDF maksimal 5 MB.</p><div id="paymentUploadMsg"></div><div class="upload-box"><input id="paymentFileInput" type="file" accept="image/jpeg,image/png,image/webp,application/pdf" onchange="previewPaymentFile()"><div class="file-picker"><button type="button" class="file-picker-btn" onclick="$('paymentFileInput').click()">Pilih File</button><span class="file-picker-name" id="paymentFileName">Belum ada file dipilih</span></div><div class="upload-note" id="paymentFileInfo">JPG, PNG, WEBP, atau PDF · Maks. 5 MB</div></div><div class="modal-actions"><button class="btn btn-primary" onclick="submitPaymentUpload('${esc(billId)}')">Kirim Bukti</button><button class="btn btn-secondary" onclick="closePaymentUpload()">Batal</button></div></div></div>`)}

@@ -609,3 +609,15 @@ input:focus,select:focus,textarea:focus{background:#fff!important;box-shadow:0 0
 /* Required-field legend and red asterisks, scoped to the Wali registration form. */
 #registrationForm .registration-required-mark{color:#dc2626!important;font-weight:800;}
 #registrationForm .registration-required-note{display:flex;align-items:center;gap:5px;margin:0 0 14px;padding:9px 12px;border:1px solid #fecaca;border-radius:10px;background:#fff7f7;color:#7f1d1d;font-size:12px;font-weight:600;line-height:1.4;}
+
+
+/* Notification pop-up: closes from the bell button or any click outside the panel. */
+.notification-popover-backdrop{position:fixed;inset:0;z-index:1200;display:flex;align-items:flex-start;justify-content:flex-end;padding:76px 18px 18px;background:rgba(25,18,38,.16);backdrop-filter:blur(2px)}
+.notification-popover{width:min(430px,calc(100vw - 24px));max-height:min(76vh,680px);overflow:auto;border:1px solid var(--line);border-radius:20px;background:#fff;box-shadow:0 18px 55px rgba(32,20,52,.24);padding:15px;overscroll-behavior:contain;animation:notificationPopoverIn .16s ease-out}
+.notification-popover-head{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:14px;padding-bottom:12px;border-bottom:1px solid var(--line-soft)}
+.notification-popover-head>div{display:grid;gap:3px}.notification-popover-head b{font-size:15px;color:var(--text)}.notification-popover-head span{font-size:11px;color:var(--muted)}
+.notification-popover-close{flex:0 0 34px;width:34px;height:34px;border:0;border-radius:11px;background:var(--surface-soft,#f4f0fa);color:var(--text);font-size:23px;line-height:1;cursor:pointer}
+.notification-popover .notification-toolbar{font-size:12px;color:var(--muted)}.notification-popover .notification-list{gap:9px}.notification-popover .notification-card{padding:12px}
+@keyframes notificationPopoverIn{from{opacity:0;transform:translateY(-7px)}to{opacity:1;transform:translateY(0)}}
+@media(max-width:600px){.notification-popover-backdrop{padding:68px 10px 12px;justify-content:center}.notification-popover{width:100%;max-height:min(78vh,680px);border-radius:18px;padding:13px}}
+@media(prefers-reduced-motion:reduce){.notification-popover{animation:none}}

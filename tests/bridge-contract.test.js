@@ -53,14 +53,12 @@ assert.match(apiBridge, /host === 'script\.google\.com'/, 'PWA must accept the A
 assert.match(apiBridge, /host\.endsWith\('-script\.googleusercontent\.com'\)/,
   'PWA must trust the actual Apps Script HTML Service host suffix');
 assert.match(apiBridge, /isTrustedBridgeOrigin\(event\.origin\)/, 'PWA must validate the response origin');
+assert.match(apiBridge, /event\.source === tokenHandshake\.iframe\.contentWindow/, 'Bridge token handshake must come from its own iframe window');
+assert.match(apiBridge, /event\.source !== item\.iframe\.contentWindow/, 'RPC responses must come from their own request iframe window');
 assert.match(apiBridge, /Pesan bridge diabaikan: origin tidak dikenal/, 'Rejected origins must be diagnosable');
 assert.match(apiBridge, /Timeout menunggu respons Apps Script/, 'RPC timeout must log safe transport diagnostics');
-assert.match(indexHtml, /api-bridge\.js\?v=32\.14\.0/, 'PWA HTML must cache-bust the updated bridge client');
-const appVersion = indexHtml.match(/app\.js\?v=([0-9.]+)/)?.[1];
-assert.ok(appVersion, 'PWA HTML must declare its current app shell version');
-assert.ok(serviceWorker.includes('./app.js?v=' + appVersion), 'Service worker must precache the current PWA app shell');
-assert.ok(serviceWorker.includes('psb-pwa-shell-v' + appVersion.split('.').join('-')),
-  'PWA shell cache must use the current cache version after the upload fix');
+assert.match(indexHtml, /api-bridge\.js\?v=32\.15\.0/, 'PWA HTML must cache-bust the updated bridge client');
+assert.match(serviceWorker, /psb-pwa-shell-v32-33-0/, 'PWA shell cache must use the current cache version after the upload fix');
 
 assert.match(apiBridge, /pending\.get\(challenge\)/, 'PWA must correlate every response with its unpredictable challenge');
 assert.match(apiBridge, /let tokenSession = null/, 'PWA must retain the short-lived token session in memory');

@@ -52,10 +52,22 @@ jobs:
         run: node tests/document-upload-resilience.test.js
       - name: Test payment proof upload lock and commit resilience
         run: node tests/payment-upload-resilience.test.js
+      - name: Test ScriptLock timeout and batch-write safeguards
+        run: node tests/script-lock-safeguards.test.js
+      - name: Test incident mutation ScriptLock and batch-write safeguards
+        run: node tests/incident-lock-safeguards.test.js
+      - name: Test session maintenance batch-write safeguards
+        run: node tests/session-maintenance-batch-write.test.js
       - name: Test session restore and one-load-per-session menu navigation
         run: node tests/session-navigation-cache.test.js
       - name: Test Wali workflow navigation and notification badge safeguards
         run: node tests/wali-workflow-navigation.test.js
+      - name: Test role-based navigation consistency
+        run: node tests/role-menu-access.test.js
+      - name: Test Wali selection score and unpublished-result privacy
+        run: node tests/wali-selection-result-privacy.test.js
+      - name: Test registration payment and document status consistency
+        run: node tests/registration-status-consistency.test.js
       - name: Test Drive private document safeguards
         run: node tests/drive-gallery-security.test.js
       - name: Test GitHub-only public gallery assets and source
