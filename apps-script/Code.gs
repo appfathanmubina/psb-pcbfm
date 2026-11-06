@@ -806,6 +806,7 @@ function revokeOtherSessionsForUser_(userId, keepRowNumber) {
   const lastRow = sheet.getLastRow();
   const rows = sheet.getRange(2,1,lastRow-1,7).getValues();
   const statusValues = rows.map(row => [row[6]]);
+  const revokedHashes = [];
   const keep = Number(keepRowNumber || 0);
   let count = 0;
   for (let i=0;i<rows.length;i++) {
@@ -814,10 +815,14 @@ function revokeOtherSessionsForUser_(userId, keepRowNumber) {
     if (String(rows[i][1]||'')!==String(userId||'')) continue;
     if (String(rows[i][6]||'').toUpperCase()!=='ACTIVE') continue;
     statusValues[i][0]='REVOKED';
-    try { const h=String(rows[i][2]||''); if(h) CacheService.getScriptCache().remove('PSB_SESSION_'+h.substring(0,40)); } catch(e) {}
+    const hash=String(rows[i][2]||'');
+    if(hash) revokedHashes.push(hash);
     count++;
   }
-  if (count) sheet.getRange(2,7,statusValues.length,1).setValues(statusValues);
+  if (count) {
+    sheet.getRange(2,7,statusValues.length,1).setValues(statusValues);
+    revokedHashes.forEach(h=>{try{CacheService.getScriptCache().remove('PSB_SESSION_'+h.substring(0,40));}catch(e){}});
+  }
   return count;
 }
 
@@ -828,6 +833,7 @@ function cleanupPSBSessions_(limit) {
   const lastRow = sheet.getLastRow();
   const rows = sheet.getRange(2,1,lastRow-1,7).getValues();
   const statusValues = rows.map(row => [row[6]]);
+  const expiredHashes = [];
   const now = new Date();
   const idleMinutes = Number(getConfig_('SESSION_IDLE_MINUTES')) || PSB_AUTH.SESSION_IDLE_MINUTES;
   let processed=0, expired=0, idle=0;
@@ -841,11 +847,15 @@ function cleanupPSBSessions_(limit) {
     else if((now.getTime()-lastSeen.getTime())>idleMinutes*60000) { next='IDLE_TIMEOUT'; idle++; }
     if(next){
       statusValues[i][0]=next;
-      try { const h=String(rows[i][2]||''); if(h) CacheService.getScriptCache().remove('PSB_SESSION_'+h.substring(0,40)); } catch(e) {}
+      const hash=String(rows[i][2]||'');
+      if(hash) expiredHashes.push(hash);
       processed++;
     }
   }
-  if (processed) sheet.getRange(2,7,statusValues.length,1).setValues(statusValues);
+  if (processed) {
+    sheet.getRange(2,7,statusValues.length,1).setValues(statusValues);
+    expiredHashes.forEach(h=>{try{CacheService.getScriptCache().remove('PSB_SESSION_'+h.substring(0,40));}catch(e){}});
+  }
   return {processed:processed,expired:expired,idle:idle};
 }
 
