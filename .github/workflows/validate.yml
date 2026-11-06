@@ -125,7 +125,7 @@ jobs:
       - name: Test desktop public landing responsive safeguards
         run: node tests/public-home-responsive.test.js
       - name: Test isolated testing PWA environment
-        run: node tests/testing-pwa-isolation.test.js
+        run: node tests/production-pwa-config.test.js
       - name: Test PWA desktop cache refresh safeguards
         run: |
           node --check < frontend/sw.js
