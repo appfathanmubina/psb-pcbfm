@@ -14,7 +14,7 @@ function menuFor(...roles) {
   const context = { hasAnyRole: allowed => allowed.some(role => roles.includes(role)) };
   return vm.runInNewContext(implementation + '\nbuildRoleNav();', context);
 }
-function ids(menu) { return menu.map(item => item[0]); }
+function ids(menu) { return Array.from(menu, item => String(item[0])); }
 
 assert.deepEqual(ids(menuFor('KEUANGAN')), ['home','payments','reregistration','reports']);
 assert.deepEqual(ids(menuFor('SELEKSI')), ['home','selection','announcement','reports']);
