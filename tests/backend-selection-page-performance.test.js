@@ -35,10 +35,8 @@ assert.match(page, /const scoresByParticipant = \{\}/,
   'Scores must be indexed by participant');
 assert.match(page, /const resultsByRegistration = \{\}/,
   'Results must be indexed by registration');
-assert.match(page, /visibleParticipantIds\[String\(p\.participantId\)\] = true/,
-  'Visible participant membership must be indexed for Wali score filtering');
-assert.match(page, /scores\.filter\(x => visibleParticipantIds\[String\(x\.participantId\)\]\)/,
-  'Wali scores must remain limited to visible participants');
+assert.match(page, /const visibleScores = isWali \? \[\] : scores;/,
+  'Wali must not receive raw score records; staff may retain the indexed score collection');
 assert.match(page, /results\.filter\(x => regMap\[String\(x\.registrationId\)\]\)/,
   'Wali results must remain limited to visible registrations');
 assert.match(page, /const foundRegistration = registrationById\[selectedId\] \|\| null/,
