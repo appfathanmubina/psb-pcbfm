@@ -1,0 +1,43 @@
+{
+  "name": "PSB Fathan Mubina",
+  "short_name": "PSB FM",
+  "description": "Sistem Penerimaan Santri Baru Fathan Mubina",
+  "id": "./",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "display_override": [
+    "standalone"
+  ],
+  "background_color": "#eee7ff",
+  "theme_color": "#7c3aed",
+  "orientation": "portrait-primary",
+  "lang": "id-ID",
+  "icons": [
+    {
+      "src": "./assets/logo-fathan-mubina.png?v=32.7.0",
+      "sizes": "256x256",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "./icons/icon-512.svg?v=32.7.0",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    },
+    {
+      "src": "./icons/icon-maskable-512.svg?v=32.7.0",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "maskable"
+    }
+  ],
+  "related_applications": [
+    {
+      "platform": "webapp",
+      "url": "./manifest.webmanifest",
+      "id": "https://appfathanmubina.github.io/psb-pcbfm/"
+    }
+  ]
+}
