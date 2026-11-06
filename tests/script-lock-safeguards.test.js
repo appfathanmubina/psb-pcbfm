@@ -47,3 +47,36 @@ assert.doesNotMatch(activate, /rows\.forEach\([\s\S]*?getRange\([^\n]*\.setValue
   'Academic-year activation must not perform one Spreadsheet write per row while holding the global lock');
 
 console.log('ScriptLock timeout and batch-write safeguards passed.');
+
+function assertNotificationAfterLockRelease(name, notificationPattern) {
+  const body = functionSource(name);
+  const release = Math.max(body.lastIndexOf('finally { lock.releaseLock(); }'), body.lastIndexOf('}finally{lock.releaseLock()}'));
+  const notification = body.search(notificationPattern);
+  assert.notEqual(release, -1, name + ' must explicitly release its ScriptLock');
+  assert.ok(notification > release, name + ' must deliver notifications only after releasing ScriptLock');
+}
+
+for (const [name, pattern] of [
+  ['verifyPayment', /notifyUsersByRoles_|notifyRegistrationOwner_|createNotification_/],
+  ['addSelectionParticipantsBulk', /notifyRegistrationOwner_/],
+  ['publishAnnouncement', /createNotification_/],
+  ['openReregistration', /createNotification_/],
+  ['finalizeReregistration', /createNotification_/],
+  ['submitRegistration', /notifyUsersByRoles_|notifyRegistrationOwner_/]
+]) {
+  assertNotificationAfterLockRelease(name, pattern);
+}
+
+assert.match(functionSource('createBill'), /const result=withScriptLock_\([\s\S]*?\);\s*if\(result\?\.success[\s\S]*?notifyRegistrationOwner_/,
+  'Manual bill notification must be delivered after the withScriptLock callback completes');
+assert.match(functionSource('getPaymentPageData'), /ensureFormBillForRegistration_\(selected,paymentTypes,actor\.userId,true\)/,
+  'Automatic bill creation from payment page must suppress notification inside the lock');
+assert.match(functionSource('getPaymentPageData'), /if\(autoBillResult\?\.success && autoBillResult\.created\)[\s\S]*?notifyRegistrationOwner_/,
+  'Automatic bill notification must run after the lock callback completes');
+assert.match(functionSource('verifyPayment'), /syncReregistrationAfterPayment_\(String\(br\.object\.registrationId\),actor\.userId,true\)/,
+  'Payment verification must defer reregistration-completion notification');
+assert.match(functionSource('syncReregistrationAfterPayment_'), /if\(!deferNotification\)[\s\S]*?createNotification_/,
+  'Reregistration sync helper must preserve direct notification behavior for non-locked callers');
+
+console.log('ScriptLock notification fanout safeguards passed.');
+
