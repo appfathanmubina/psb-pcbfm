@@ -2348,8 +2348,7 @@ function getSelectionPageData(sessionToken, registrationId) {
       });
     });
 
-  // WALI only receives scores belonging to participants in their visible
-  // registration list; never return the complete scores table to Wali.
+  // WALI receives no raw score data; only officially published outcomes are exposed.
   // WALI may see the official selection outcome after publication, never raw scores.
   const visibleScores = isWali ? [] : scores;
   const visibleResults = isWali
