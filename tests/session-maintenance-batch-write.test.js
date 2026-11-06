@@ -11,16 +11,16 @@ function functionSource(name) {
   return source.slice(start, next < 0 ? source.length : next);
 }
 
-for (const name of ['revokeOtherSessionsForUser_', 'cleanupPSBSessions_']) {
-  const body = functionSource(name);
-  assert.match(body, /statusValues\s*=\s*rows\.map\(row\s*=>\s*\[row\[6\]\]\)/,
-    name + ' must preserve existing session states in a batch buffer');
-  assert.match(body, /statusValues\[[^\]]+\]\[0\]\s*=\s*['"](?:REVOKED|EXPIRED|IDLE_TIMEOUT)['"]/,
-    name + ' must update statuses in memory before writing');
-  assert.match(body, /getRange\(2,7,statusValues\.length,1\)\.setValues\(statusValues\)/,
-    name + ' must batch-write the session status column');
-  assert.doesNotMatch(body, /getRange\([^\n]*\)\.setValue\(/,
-    name + ' must not perform per-row status writes');
-}
+const revoke = functionSource('revokeOtherSessionsForUser_');
+assert.match(revoke, /statusValues\s*=\s*rows\.map\(row\s*=>\s*\[row\[6\]\]\)/);
+assert.match(revoke, /statusValues\[i\]\[0\]='REVOKED'/);
+assert.match(revoke, /getRange\(2,7,statusValues\.length,1\)\.setValues\(statusValues\)/);
+assert.doesNotMatch(revoke, /getRange\([^\n]*\)\.setValue\(/);
+
+const cleanup = functionSource('cleanupPSBSessions_');
+assert.match(cleanup, /statusValues\s*=\s*rows\.map\(row\s*=>\s*\[row\[6\]\]\)/);
+assert.match(cleanup, /statusValues\[i\]\[0\]=next/);
+assert.match(cleanup, /getRange\(2,7,statusValues\.length,1\)\.setValues\(statusValues\)/);
+assert.doesNotMatch(cleanup, /getRange\([^\n]*\)\.setValue\(/);
 
 console.log('Session maintenance batch-write safeguards passed.');
