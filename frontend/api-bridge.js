@@ -4,7 +4,7 @@
 (function () {
   'use strict';
 
-  const BRIDGE_URL = "https://script.google.com/macros/s/AKfycbxs1zVZdEFwbhHFVO5nGHHhEqHQDdjVOVjfnWc1Kc6mhD5t_n8VgrdUTKhAvg8JGiau/exec";
+  const BRIDGE_URL = "https://script.google.com/macros/s/AKfycbybY_5ALnk_UeKIE05BlXFM2AzvcXv9zUQrFD163k8NwCB8mDEbMhXfFSDKSeE9De6t/exec";
   const BRIDGE_ORIGIN = new URL(BRIDGE_URL).origin;
   const BRIDGE_SOURCE = 'psb-fm-api-bridge';
   const TIMEOUT_MS = 30000;

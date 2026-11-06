@@ -1,11 +1,12 @@
 // PSB PWA 32.33.0 — refresh same-origin assets from the network before using offline cache.
-const CACHE='psb-pwa-shell-v32-33-0';
+const CACHE='psb-pwa-testing-shell-v1';
 const ASSETS=[
   './',
   './index.html',
   './manifest.webmanifest?v=32.16.0',
   './styles.css?v=32.23.0',
   './api-bridge.js?v=32.15.0',
+  './testing-storage.js?v=1.0.0',
   './app.js?v=32.33.0',
   './assets/logo-fathanmubina.svg?v=32.7.0',
   './assets/logo-fathan-mubina.png?v=32.7.0',
@@ -21,7 +22,7 @@ self.addEventListener('install',event=>event.waitUntil(
 ));
 self.addEventListener('activate',event=>event.waitUntil(
   caches.keys()
-    .then(keys=>Promise.all(keys.filter(key=>key!==CACHE).map(key=>caches.delete(key))))
+    .then(keys=>Promise.all(keys.filter(key=>key.startsWith('psb-pwa-testing-')&&key!==CACHE).map(key=>caches.delete(key))))
     .then(()=>self.clients.claim())
 ));
 const CACHE_FIRST_ASSETS=new Set(ASSETS.filter(asset=>asset!=='./'&&asset!=='./index.html').map(asset=>new URL(asset,self.registration.scope).href));
