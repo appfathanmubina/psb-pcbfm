@@ -23,8 +23,16 @@ assert.match(source, /decodeAndValidateUpload_\(base64,mimeType,5\*1024\*1024\)/
 assert.match(source, /const configuredMaxSizeMb = Number\(type\.maxSizeMb\)/);
 assert.match(source, /const maxSizeMb = Number\.isFinite\(configuredMaxSizeMb\)/);
 assert.match(source, /decodeAndValidateUpload_\(base64, mimeType, maxBytes\)/);
-assert.doesNotMatch(source, /Math\.min\(configuredMaxSizeMb/);
+assert.match(source, /const PSB_DOCUMENT_UPLOAD_MAX_SIZE_MB = 14/);
+assert.match(source, /Math\.min\(configuredMaxSizeMb, PSB_DOCUMENT_UPLOAD_MAX_SIZE_MB\)/);
+assert.match(source, /maxSizeMb > PSB_DOCUMENT_UPLOAD_MAX_SIZE_MB/);
+assert.match(source, /configuredTypes\.some\(type => supportedTypes\.indexOf\(type\) < 0\)/);
 const frontend = fs.readFileSync('frontend/app.js', 'utf8');
+assert.match(frontend, /const DOCUMENT_UPLOAD_MAX_SIZE_MB=14/);
+assert.match(frontend, /Math\.min\(configured,DOCUMENT_UPLOAD_MAX_SIZE_MB\)/);
+assert.match(frontend, /function getSupportedDocumentMimeTypes\(rulesText\)/);
+assert.match(frontend, /SUPPORTED_UPLOAD_MIME_TYPES\.includes\(type\)/);
+assert.match(frontend, /getSupportedDocumentMimeTypes\(type\.allowedMimeTypes\)/);
 // Frontend image optimization must preserve server-side limits while validating
 // the actual payload that will be sent after optional client-side compression.
 assert.match(frontend, /const UPLOAD_IMAGE_MAX_SIDE=2000/);
@@ -39,7 +47,7 @@ assert.match(frontend, /if\(prepared\.fileSize>5\*1024\*1024\)/);
 assert.match(frontend, /fileName:prepared\.fileName,mimeType:prepared\.mimeType,fileSize:prepared\.fileSize,base64/);
 assert.match(frontend, /function getDocumentMaxSizeMb\(type\)/);
 assert.ok(frontend.includes('Maks. ${esc(getDocumentMaxSizeMb(x))} MB'));
-assert.ok(frontend.includes('Maksimum ${esc(maxSizeMb)} MB'));
+assert.ok(frontend.includes("' · Maksimum '+maxSizeMb+' MB"), 'Document upload guidance must display the effective capped size');
 assert.equal((source.match(/Utilities\.base64Decode\(/g) || []).length, 1,
   'raw Base64 decoding should be centralized in the bounded validation helper');
 

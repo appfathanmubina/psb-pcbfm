@@ -4,7 +4,7 @@
 (function () {
   'use strict';
 
-  const BRIDGE_URL = "https://script.google.com/macros/s/AKfycbxs1zVZdEFwbhHFVO5nGHHhEqHQDdjVOVjfnWc1Kc6mhD5t_n8VgrdUTKhAvg8JGiau/exec";
+  const BRIDGE_URL = "https://script.google.com/macros/s/AKfycbybY_5ALnk_UeKIE05BlXFM2AzvcXv9zUQrFD163k8NwCB8mDEbMhXfFSDKSeE9De6t/exec";
   const BRIDGE_ORIGIN = new URL(BRIDGE_URL).origin;
   const BRIDGE_SOURCE = 'psb-fm-api-bridge';
   const TIMEOUT_MS = 30000;
@@ -59,6 +59,7 @@
     }
 
     if (data.type === 'ready' && tokenHandshake &&
+        event.source === tokenHandshake.iframe.contentWindow &&
         String(data.challenge || '') === tokenHandshake.challenge) {
       const token = String(data.token || '');
       if (!/^[a-f0-9]{64}$/i.test(token)) {
@@ -86,6 +87,13 @@
     const item = pending.get(challenge);
     if (!item) {
       console.warn('[PSB Bridge] Respons diterima tetapi challenge tidak lagi terdaftar.', {
+        challenge: challenge.slice(0, 8),
+        origin: event.origin
+      });
+      return;
+    }
+    if (event.source !== item.iframe.contentWindow) {
+      console.warn('[PSB Bridge] Respons diabaikan: sumber frame tidak cocok.', {
         challenge: challenge.slice(0, 8),
         origin: event.origin
       });
@@ -194,7 +202,7 @@
       const item = { iframe: iframe, requestId: requestId, functionName: String(functionName || ''), startedAt: Date.now(), resolve: resolve, reject: reject, timer: null };
       pending.set(challenge, item);
       const requestTimeoutMs = item.functionName === 'login' ? LOGIN_TIMEOUT_MS :
-        item.functionName === 'uploadDocument' ? UPLOAD_TIMEOUT_MS : TIMEOUT_MS;
+        (item.functionName === 'uploadDocument' || item.functionName === 'submitPayment') ? UPLOAD_TIMEOUT_MS : TIMEOUT_MS;
       item.timer = setTimeout(() => {
         console.error('[PSB Bridge] Timeout menunggu respons Apps Script.', {
           functionName: item.functionName,

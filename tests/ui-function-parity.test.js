@@ -5,11 +5,11 @@ const appsSource = fs.readFileSync('apps-script/Index.html', 'utf8') + '\n' + fs
 const pwaSource = fs.readFileSync('frontend/app.js', 'utf8');
 
 const onlyInAppsScript = ['installStaticBrandIcons', 'renderPublicVideo'];
-const onlyInPwa = ['decodeUploadImage', 'goPublicVideo', 'prepareUploadFile', 'refreshPublicConfig', 'renderPublicVideoSection', 'updatePublicVideo', 'uploadMimeAllowed'];
+const onlyInPwa = ['closeNotificationPopup', 'decodeUploadImage', 'getSupportedDocumentMimeTypes', 'goPublicVideo', 'openNotificationPopup', 'prepareUploadFile', 'refreshNotificationPopup', 'refreshPublicConfig', 'renderPublicVideoSection', 'toggleNotificationPopup', 'updatePublicVideo', 'uploadMimeAllowed'];
 const intentionallyDifferentBodies = [
-  'appLogoMarkup', 'applyAppIcon', 'boot', 'configAssetSources', 'initializeAfterLogin', 'renderLogin',
-  'hydrateSplashLogo', 'movePublicVideo', 'renderPaymentContent',
-  'playPublicVideo', 'renderApp', 'renderPublicHome', 'renderApplicants', 'renderRegistrationList', 'renderVerificationList', 'renderWaliVerificationStatus', 'statusLabel', 'submitDocumentUpload', 'submitLogin', 'submitPaymentUpload'
+  'appLogoMarkup', 'applyAppIcon', 'boot', 'buildRoleNav', 'configAssetSources', 'initializeAfterLogin', 'markAllNotificationsReadUI', 'markNotificationReadUI', 'renderLogin', 'renderMore',
+  'getDocumentMaxSizeMb', 'hydrateSplashLogo', 'movePublicVideo', 'renderPaymentContent', 'openDocumentUpload',
+  'playPublicVideo', 'renderApp', 'renderPublicHome', 'renderSelectionDetail', 'renderApplicants', 'renderRegistrationList', 'renderVerificationList', 'renderWaliVerificationStatus', 'statusLabel', 'submitDocumentUpload', 'submitLogin', 'submitPaymentUpload'
 ];
 
 function extractFunctionBodies(source) {
