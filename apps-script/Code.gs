@@ -805,18 +805,19 @@ function revokeOtherSessionsForUser_(userId, keepRowNumber) {
   if (!sheet || sheet.getLastRow() < 2) return 0;
   const lastRow = sheet.getLastRow();
   const rows = sheet.getRange(2,1,lastRow-1,7).getValues();
+  const statusValues = rows.map(row => [row[6]]);
   const keep = Number(keepRowNumber || 0);
-  const now = new Date();
   let count = 0;
   for (let i=0;i<rows.length;i++) {
     const rowNumber=i+2;
     if (rowNumber===keep) continue;
     if (String(rows[i][1]||'')!==String(userId||'')) continue;
     if (String(rows[i][6]||'').toUpperCase()!=='ACTIVE') continue;
-    sheet.getRange(rowNumber,7).setValue('REVOKED');
+    statusValues[i][0]='REVOKED';
     try { const h=String(rows[i][2]||''); if(h) CacheService.getScriptCache().remove('PSB_SESSION_'+h.substring(0,40)); } catch(e) {}
     count++;
   }
+  if (count) sheet.getRange(2,7,statusValues.length,1).setValues(statusValues);
   return count;
 }
 
@@ -826,6 +827,7 @@ function cleanupPSBSessions_(limit) {
   const max = Math.max(1, Number(limit || getConfig_('SESSION_CLEANUP_BATCH') || 500));
   const lastRow = sheet.getLastRow();
   const rows = sheet.getRange(2,1,lastRow-1,7).getValues();
+  const statusValues = rows.map(row => [row[6]]);
   const now = new Date();
   const idleMinutes = Number(getConfig_('SESSION_IDLE_MINUTES')) || PSB_AUTH.SESSION_IDLE_MINUTES;
   let processed=0, expired=0, idle=0;
@@ -838,14 +840,14 @@ function cleanupPSBSessions_(limit) {
     if(expires && expires<=now) { next='EXPIRED'; expired++; }
     else if((now.getTime()-lastSeen.getTime())>idleMinutes*60000) { next='IDLE_TIMEOUT'; idle++; }
     if(next){
-      sheet.getRange(i+2,7).setValue(next);
+      statusValues[i][0]=next;
       try { const h=String(rows[i][2]||''); if(h) CacheService.getScriptCache().remove('PSB_SESSION_'+h.substring(0,40)); } catch(e) {}
       processed++;
     }
   }
+  if (processed) sheet.getRange(2,7,statusValues.length,1).setValues(statusValues);
   return {processed:processed,expired:expired,idle:idle};
 }
-
 
 function runSecurityMaintenance(sessionToken) {
   const actor=requireRole_(sessionToken, PSB_SECURITY_ADMIN_ROLES);
