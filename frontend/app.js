@@ -566,17 +566,27 @@ function buildRoleNav(){
   if(wali)return [
     ['home','Beranda','home'],['registration','Pendaftaran','clipboard'],['payments','Pembayaran','wallet'],['documents','Dokumen','file'],['selection','Tes','grad'],['announcement','Pengumuman','bell']
   ];
-  const finance=hasAnyRole(['KEUANGAN']);
-  const operational=hasAnyRole(['SUPERADMIN','ADMIN_PSB','VERIFIKATOR','SELEKSI']);
-  if(operational||finance){
+
+  const admin=hasAnyRole(['SUPERADMIN','ADMIN_PSB']);
+  if(admin){
     const items=[
       ['home','Dashboard','home'],['applicants','Pendaftar','users'],['verification','Verifikasi','check'],['payments','Pembayaran','wallet'],['selection','Tes','grad'],['announcement','Pengumuman','megaphone'],['reregistration','Daftar Ulang','refresh'],['reports','Laporan','chart'],['master','Data','database']
     ];
-    if(hasAnyRole(['SUPERADMIN','ADMIN_PSB']))items.push(['audit','Audit','shield']);
+    items.push(['audit','Audit','shield']);
     if(hasAnyRole(['SUPERADMIN']))items.push(['userManagement','Manajemen Pengguna','users']);
     return items;
   }
-  return [['home','Beranda','home']];
+
+  // Staff menus follow the same role gates as their page renderers.
+  // Build a union so accounts with multiple operational roles see only
+  // modules that at least one of their roles is authorized to open.
+  const items=[['home','Dashboard','home']];
+  if(hasAnyRole(['VERIFIKATOR']))items.push(['applicants','Pendaftar','users'],['verification','Verifikasi','check']);
+  if(hasAnyRole(['KEUANGAN']))items.push(['payments','Pembayaran','wallet']);
+  if(hasAnyRole(['SELEKSI','VERIFIKATOR']))items.push(['selection','Tes','grad'],['announcement','Pengumuman','megaphone']);
+  if(hasAnyRole(['VERIFIKATOR','KEUANGAN']))items.push(['reregistration','Daftar Ulang','refresh']);
+  if(hasAnyRole(['VERIFIKATOR','SELEKSI','KEUANGAN']))items.push(['reports','Laporan','chart']);
+  return items;
 }
 function buildMobileNav(){
   const all=buildRoleNav();
