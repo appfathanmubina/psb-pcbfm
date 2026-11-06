@@ -2350,8 +2350,6 @@ function getSelectionPageData(sessionToken, registrationId) {
 
   // WALI only receives scores belonging to participants in their visible
   // registration list; never return the complete scores table to Wali.
-  const visibleParticipantIds = {};
-  participantItems.forEach(p => { visibleParticipantIds[String(p.participantId)] = true; });
   // WALI may see the official selection outcome after publication, never raw scores.
   const visibleScores = isWali ? [] : scores;
   const visibleResults = isWali
