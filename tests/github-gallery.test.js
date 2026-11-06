@@ -22,7 +22,7 @@ assert.equal(pwaFiles.length, 21, 'Expected 21 approved gallery images');
 for (const file of pwaFiles) {
   assert.ok(fs.existsSync(path.join(galleryDir, file)), 'Gallery image must exist: ' + file);
 }
-assert.match(pwa, /https:\/\/appfathanmubina\.github\.io\/psb-pcbfm\/gallery\//);
+assert.match(pwa, /const PSB_PUBLIC_GALLERY_BASE_URL = '\.\/gallery\/'/, 'Testing PWA gallery must remain inside its testing subpath');
 assert.match(apps, /https:\/\/appfathanmubina\.github\.io\/psb-pcbfm\/gallery\//);
 assert.match(pwa, /encodeURIComponent\(file\)/);
 assert.match(apps, /encodeURIComponent\(file\)/);
