@@ -2348,15 +2348,11 @@ function getSelectionPageData(sessionToken, registrationId) {
       });
     });
 
-  // WALI only receives scores belonging to participants in their visible
-  // registration list; never return the complete scores table to Wali.
-  const visibleParticipantIds = {};
-  participantItems.forEach(p => { visibleParticipantIds[String(p.participantId)] = true; });
-  const visibleScores = isWali
-    ? scores.filter(x => visibleParticipantIds[String(x.participantId)])
-    : scores;
+  // WALI receives no raw score data; only officially published outcomes are exposed.
+  // WALI may see the official selection outcome after publication, never raw scores.
+  const visibleScores = isWali ? [] : scores;
   const visibleResults = isWali
-    ? results.filter(x => regMap[String(x.registrationId)])
+    ? results.filter(x => regMap[String(x.registrationId)] && String(x.announcementDate || '').trim() !== '')
     : results;
 
   const selectedId = String(registrationId||'');
@@ -2366,11 +2362,13 @@ function getSelectionPageData(sessionToken, registrationId) {
     if(!foundRegistration) return fail_('Pendaftaran tidak ditemukan.');
     if(!canAccessRegistration_(actor,foundRegistration) && !hasRoleDirect_(actor,PSB_SELECTION_ADMIN_ROLES)) return fail_('Anda tidak memiliki akses ke proses seleksi ini.');
     const participant = (participantsByRegistration[selectedId] || [])[0] || null;
+    const selectedResult = resultsByRegistration[selectedId] || null;
+    const resultIsPublished = !!(selectedResult && String(selectedResult.announcementDate || '').trim());
     detail = {
       registration: enrichRegistrationList_([foundRegistration], enrichmentMaps)[0],
       participant,
-      scores: participant ? (scoresByParticipant[String(participant.participantId)] || []) : [],
-      result: resultsByRegistration[selectedId] || null
+      scores: isWali ? [] : (participant ? (scoresByParticipant[String(participant.participantId)] || []) : []),
+      result: isWali && !resultIsPublished ? null : selectedResult
     };
   }
   return {success:true,registrations,schedules,participants:participantItems,scores:visibleScores,results:visibleResults,detail};
