@@ -3,7 +3,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const app = fs.readFileSync('frontend/app.js', 'utf8');
 
-assert.ok(app.includes("localStorage.getItem('psb_session_testing')"),
+assert.match(app, /localStorage\.getItem\('psb_session'\)/,
   'session token must survive a browser reload');
 assert.match(app, /sessionStorage\.getItem\('psb_current_page'\)/,
   'boot must restore the last opened menu in the current tab');
