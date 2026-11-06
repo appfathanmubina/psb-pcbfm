@@ -805,17 +805,23 @@ function revokeOtherSessionsForUser_(userId, keepRowNumber) {
   if (!sheet || sheet.getLastRow() < 2) return 0;
   const lastRow = sheet.getLastRow();
   const rows = sheet.getRange(2,1,lastRow-1,7).getValues();
+  const statusValues = rows.map(row => [row[6]]);
+  const revokedHashes = [];
   const keep = Number(keepRowNumber || 0);
-  const now = new Date();
   let count = 0;
   for (let i=0;i<rows.length;i++) {
     const rowNumber=i+2;
     if (rowNumber===keep) continue;
     if (String(rows[i][1]||'')!==String(userId||'')) continue;
     if (String(rows[i][6]||'').toUpperCase()!=='ACTIVE') continue;
-    sheet.getRange(rowNumber,7).setValue('REVOKED');
-    try { const h=String(rows[i][2]||''); if(h) CacheService.getScriptCache().remove('PSB_SESSION_'+h.substring(0,40)); } catch(e) {}
+    statusValues[i][0]='REVOKED';
+    const hash=String(rows[i][2]||'');
+    if(hash) revokedHashes.push(hash);
     count++;
+  }
+  if (count) {
+    sheet.getRange(2,7,statusValues.length,1).setValues(statusValues);
+    revokedHashes.forEach(h=>{try{CacheService.getScriptCache().remove('PSB_SESSION_'+h.substring(0,40));}catch(e){}});
   }
   return count;
 }
@@ -826,6 +832,8 @@ function cleanupPSBSessions_(limit) {
   const max = Math.max(1, Number(limit || getConfig_('SESSION_CLEANUP_BATCH') || 500));
   const lastRow = sheet.getLastRow();
   const rows = sheet.getRange(2,1,lastRow-1,7).getValues();
+  const statusValues = rows.map(row => [row[6]]);
+  const expiredHashes = [];
   const now = new Date();
   const idleMinutes = Number(getConfig_('SESSION_IDLE_MINUTES')) || PSB_AUTH.SESSION_IDLE_MINUTES;
   let processed=0, expired=0, idle=0;
@@ -838,14 +846,18 @@ function cleanupPSBSessions_(limit) {
     if(expires && expires<=now) { next='EXPIRED'; expired++; }
     else if((now.getTime()-lastSeen.getTime())>idleMinutes*60000) { next='IDLE_TIMEOUT'; idle++; }
     if(next){
-      sheet.getRange(i+2,7).setValue(next);
-      try { const h=String(rows[i][2]||''); if(h) CacheService.getScriptCache().remove('PSB_SESSION_'+h.substring(0,40)); } catch(e) {}
+      statusValues[i][0]=next;
+      const hash=String(rows[i][2]||'');
+      if(hash) expiredHashes.push(hash);
       processed++;
     }
   }
+  if (processed) {
+    sheet.getRange(2,7,statusValues.length,1).setValues(statusValues);
+    expiredHashes.forEach(h=>{try{CacheService.getScriptCache().remove('PSB_SESSION_'+h.substring(0,40));}catch(e){}});
+  }
   return {processed:processed,expired:expired,idle:idle};
 }
-
 
 function runSecurityMaintenance(sessionToken) {
   const actor=requireRole_(sessionToken, PSB_SECURITY_ADMIN_ROLES);
@@ -3372,23 +3384,31 @@ function saveIncident(sessionToken,payload){
   const title=String(payload.title||'').trim(), description=String(payload.description||'').trim(); if(!title)return fail_('Judul insiden wajib diisi.'); if(!description)return fail_('Deskripsi insiden wajib diisi.');
   const priority=String(payload.priority||'MEDIUM').toUpperCase(); if(PSB_INCIDENT_PRIORITIES.indexOf(priority)<0)return fail_('Prioritas insiden tidak valid.');
   const status=String(payload.status||'OPEN').toUpperCase(); if(PSB_INCIDENT_STATUSES.indexOf(status)<0)return fail_('Status insiden tidak valid.');
-  const sheet=getDatabaseSpreadsheet_().getSheetByName(PSB_SHEETS.INCIDENTS); if(!sheet)return fail_('Sheet INCIDENTS belum tersedia.');
-  const now=new Date(), existingId=String(payload.incidentId||'').trim(); let row=null, old=null;
-  if(existingId){const found=findRowById_(sheet,'incidentId',existingId); if(!found)return fail_('Insiden tidak ditemukan.'); row=found.rowNumber; old=found.object;}
-  const obj={incidentId:existingId||('INC-'+Utilities.formatDate(now,Session.getScriptTimeZone()||'Asia/Jakarta','yyyyMMdd-HHmmss')+'-'+Utilities.getUuid().slice(0,8)),category:String(payload.category||'GENERAL').trim().toUpperCase(),priority,status,title,description,relatedModule:String(payload.relatedModule||'').trim(),relatedRecordId:String(payload.relatedRecordId||'').trim(),reportedBy:old?.reportedBy||actor.userId,assignedTo:String(payload.assignedTo||old?.assignedTo||'').trim(),resolutionNote:String(payload.resolutionNote||'').trim(),createdAt:old?.createdAt||now,updatedAt:now,resolvedAt:status==='RESOLVED'||status==='CLOSED'?(old?.resolvedAt||now):'',closedAt:status==='CLOSED'?(old?.closedAt||now):''};
-  const headers=sheet.getRange(1,1,1,sheet.getLastColumn()).getValues()[0].map(String); const vals=headers.map(h=>obj[h]===undefined?'':obj[h]); if(row)sheet.getRange(row,1,1,headers.length).setValues([vals]); else sheet.appendRow(vals);
-  writeAudit_(actor.userId,old?'INCIDENT_UPDATE':'INCIDENT_CREATE','INCIDENT',obj.incidentId,old?JSON.stringify(old):'',JSON.stringify(obj),old?'Insiden diperbarui':'Insiden dibuat');
-  return {success:true,message:old?'Insiden diperbarui.':'Insiden dibuat.',item:rpcSafe_(obj)};
+  return withScriptLock_(10000,function(){
+    const sheet=getDatabaseSpreadsheet_().getSheetByName(PSB_SHEETS.INCIDENTS); if(!sheet)return fail_('Sheet INCIDENTS belum tersedia.');
+    const now=new Date(), existingId=String(payload.incidentId||'').trim(); let row=null, old=null;
+    if(existingId){const found=findRowById_(sheet,'incidentId',existingId); if(!found)return fail_('Insiden tidak ditemukan.'); row=found.rowNumber; old=found.object;}
+    const obj={incidentId:existingId||('INC-'+Utilities.formatDate(now,Session.getScriptTimeZone()||'Asia/Jakarta','yyyyMMdd-HHmmss')+'-'+Utilities.getUuid().slice(0,8)),category:String(payload.category||'GENERAL').trim().toUpperCase(),priority,status,title,description,relatedModule:String(payload.relatedModule||'').trim(),relatedRecordId:String(payload.relatedRecordId||'').trim(),reportedBy:old?.reportedBy||actor.userId,assignedTo:String(payload.assignedTo||old?.assignedTo||'').trim(),resolutionNote:String(payload.resolutionNote||'').trim(),createdAt:old?.createdAt||now,updatedAt:now,resolvedAt:status==='RESOLVED'||status==='CLOSED'?(old?.resolvedAt||now):'',closedAt:status==='CLOSED'?(old?.closedAt||now):''};
+    const headers=sheet.getRange(1,1,1,sheet.getLastColumn()).getValues()[0].map(String); const vals=headers.map(h=>obj[h]===undefined?'':obj[h]); if(row)sheet.getRange(row,1,1,headers.length).setValues([vals]); else sheet.appendRow(vals);
+    writeAudit_(actor.userId,old?'INCIDENT_UPDATE':'INCIDENT_CREATE','INCIDENT',obj.incidentId,old?JSON.stringify(old):'',JSON.stringify(obj),old?'Insiden diperbarui':'Insiden dibuat');
+    return {success:true,message:old?'Insiden diperbarui.':'Insiden dibuat.',item:rpcSafe_(obj)};
+  });
 }
 function closeIncident(sessionToken,incidentId,resolutionNote){
-  const actor=requireRole_(sessionToken,PSB_INCIDENT_ROLES); assertOperationalMutation_(actor); const sheet=getDatabaseSpreadsheet_().getSheetByName(PSB_SHEETS.INCIDENTS); if(!sheet)return fail_('Sheet INCIDENTS belum tersedia.');
-  const found=findRowById_(sheet,'incidentId',String(incidentId||'')); if(!found)return fail_('Insiden tidak ditemukan.'); const old=found.object; const now=new Date();
-  const headers=sheet.getRange(1,1,1,sheet.getLastColumn()).getValues()[0].map(String), set={status:'CLOSED',resolutionNote:String(resolutionNote||old.resolutionNote||'').trim(),updatedAt:now,closedAt:now,resolvedAt:old.resolvedAt||now};
-  headers.forEach((h,i)=>{if(Object.prototype.hasOwnProperty.call(set,h))sheet.getRange(found.rowNumber,i+1).setValue(set[h]);});
-  writeAudit_(actor.userId,'INCIDENT_CLOSE','INCIDENT',old.incidentId,JSON.stringify(old),JSON.stringify(Object.assign({},old,set)),'Insiden ditutup');
-  return {success:true,message:'Insiden ditutup.'};
+  const actor=requireRole_(sessionToken,PSB_INCIDENT_ROLES); assertOperationalMutation_(actor);
+  return withScriptLock_(10000,function(){
+    const sheet=getDatabaseSpreadsheet_().getSheetByName(PSB_SHEETS.INCIDENTS); if(!sheet)return fail_('Sheet INCIDENTS belum tersedia.');
+    const found=findRowById_(sheet,'incidentId',String(incidentId||'')); if(!found)return fail_('Insiden tidak ditemukan.');
+    const old=found.object, now=new Date();
+    const headers=sheet.getRange(1,1,1,sheet.getLastColumn()).getValues()[0].map(String);
+    const set={status:'CLOSED',resolutionNote:String(resolutionNote||old.resolutionNote||'').trim(),updatedAt:now,closedAt:now,resolvedAt:old.resolvedAt||now};
+    const current=sheet.getRange(found.rowNumber,1,1,headers.length).getValues()[0];
+    const values=current.map((value,index)=>Object.prototype.hasOwnProperty.call(set,headers[index])?set[headers[index]]:value);
+    sheet.getRange(found.rowNumber,1,1,headers.length).setValues([values]);
+    writeAudit_(actor.userId,'INCIDENT_CLOSE','INCIDENT',old.incidentId,JSON.stringify(old),JSON.stringify(Object.assign({},old,set)),'Insiden ditutup');
+    return {success:true,message:'Insiden ditutup.'};
+  });
 }
-
 function normalizeReportGender_(gender) {
   const g = String(gender || '').trim().toUpperCase();
   return g === 'L' || g === 'P' ? g : '';
