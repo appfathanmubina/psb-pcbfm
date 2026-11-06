@@ -124,7 +124,7 @@ jobs:
         run: node tests/registration-form-fields.test.js
       - name: Test desktop public landing responsive safeguards
         run: node tests/public-home-responsive.test.js
-      - name: Test isolated testing PWA environment
+      - name: Test production PWA endpoint and identity
         run: node tests/production-pwa-config.test.js
       - name: Test PWA desktop cache refresh safeguards
         run: |
