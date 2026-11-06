@@ -397,7 +397,7 @@ function registerWali(payload) {
   const passwordSalt = Utilities.getUuid().replace(/-/g,'').substring(0,32);
   const passwordHash = hashPassword_(input.password, passwordSalt);
   const lock = LockService.getScriptLock();
-  lock.waitLock(15000);
+  try { lock.waitLock(15000); } catch (lockError) { return fail_('Server sedang memproses permintaan lain. Silakan coba kembali beberapa saat lagi.'); }
   try {
     const usersSheet = getDatabaseSpreadsheet_().getSheetByName('USERS');
     if (!usersSheet) return fail_('Database pengguna belum tersedia.');
@@ -498,7 +498,7 @@ function changePassword(sessionToken, currentPassword, newPassword) {
   const hash = hashPassword_(newPasswordValue, salt);
 
   const lock = LockService.getScriptLock();
-  lock.waitLock(20000);
+  try { lock.waitLock(20000); } catch (lockError) { return fail_('Server sedang memproses permintaan lain. Silakan coba kembali beberapa saat lagi.'); }
   try {
     const current = findUserById_(result.user.userId, true);
     if (!current || String(current.status).toUpperCase() !== 'ACTIVE' ||
@@ -693,7 +693,7 @@ function assertRegistrationAccess_(actor, registration, adminRoles) {
 
 function withScriptLock_(timeoutMs, callback) {
   const lock = LockService.getScriptLock();
-  lock.waitLock(timeoutMs || 10000);
+  try { lock.waitLock(timeoutMs || 10000); } catch (lockError) { return fail_('Server sedang memproses permintaan lain. Silakan coba kembali beberapa saat lagi.'); }
   try { return callback(); } finally { lock.releaseLock(); }
 }
 
@@ -850,7 +850,7 @@ function cleanupPSBSessions_(limit) {
 function runSecurityMaintenance(sessionToken) {
   const actor=requireRole_(sessionToken, PSB_SECURITY_ADMIN_ROLES);
   const lock=LockService.getScriptLock();
-  lock.waitLock(10000);
+  try { lock.waitLock(10000); } catch (lockError) { return fail_('Server sedang memproses permintaan lain. Silakan coba kembali beberapa saat lagi.'); }
   let result;
   try { result=cleanupPSBSessions_(getConfig_('SESSION_CLEANUP_BATCH') || 500); }
   finally { lock.releaseLock(); }
@@ -999,7 +999,7 @@ function adminResetUserPassword(sessionToken, payload) {
   const salt = Utilities.getUuid().replace(/-/g, '').substring(0, 32);
   const hash = hashPassword_(newPassword, salt);
   const lock = LockService.getScriptLock();
-  lock.waitLock(20000);
+  try { lock.waitLock(20000); } catch (lockError) { return fail_('Server sedang memproses permintaan lain. Silakan coba kembali beberapa saat lagi.'); }
   try {
     const target = findUserById_(userId, true);
     if (!target || target.passwordHash !== targetBeforeLock.passwordHash || target.passwordSalt !== targetBeforeLock.passwordSalt || String(target.status).toUpperCase() !== String(targetBeforeLock.status).toUpperCase()) return fail_('Data pengguna telah berubah. Silakan ulangi reset password.');
@@ -1052,7 +1052,7 @@ function createManualUser(sessionToken, payload) {
   const salt = Utilities.getUuid().replace(/-/g, '').substring(0, 32);
   const hash = hashPassword_(password, salt);
   const lock = LockService.getScriptLock();
-  lock.waitLock(10000);
+  try { lock.waitLock(10000); } catch (lockError) { return fail_('Server sedang memproses permintaan lain. Silakan coba kembali beberapa saat lagi.'); }
   try {
     const sheet = getDatabaseSpreadsheet_().getSheetByName('USERS');
     if (!sheet) return fail_('Database USERS belum tersedia. Jalankan setupPSBDatabase() terlebih dahulu.');
@@ -1165,7 +1165,7 @@ function migrateLegacyPasswordToPbkdf2AfterLogin_(verifiedUser, password) {
   const salt = Utilities.getUuid().replace(/-/g, '').substring(0, 32);
   const hash = hashPassword_(String(password), salt);
   const lock = LockService.getScriptLock();
-  lock.waitLock(20000);
+  try { lock.waitLock(20000); } catch (lockError) { return false; }
   try {
     const current = findUserById_(verifiedUser.userId, true);
     if (!current || String(current.status).toUpperCase() !== 'ACTIVE' ||
@@ -1214,7 +1214,7 @@ function registerLoginFailure_(key) {
   // CacheService tidak menyediakan increment atomik. Script Lock mencegah
   // dua request login bersamaan menimpa penghitung percobaan satu sama lain.
   const guard = LockService.getScriptLock();
-  guard.waitLock(5000);
+  try { guard.waitLock(5000); } catch (lockError) { return { attempts: max, locked: true, contention: true }; }
   try {
     const current = Math.max(0, Number(cache.get(cacheKey) || 0)) + 1;
     cache.put(cacheKey, String(current), lockMin * 60);
@@ -1239,7 +1239,7 @@ function clearLoginFailure_(key) {
   const cache = CacheService.getScriptCache();
   const h = sha256Hex_(key).substring(0, 32);
   const guard = LockService.getScriptLock();
-  guard.waitLock(5000);
+  try { guard.waitLock(5000); } catch (lockError) { return false; }
   try {
     cache.remove('PSB_LOGIN_FAIL_V2_' + h);
     cache.remove('PSB_LOGIN_LOCK_V2_' + h);
@@ -1448,7 +1448,7 @@ function setActiveAcademicYear(sessionToken, tahunAjaranId) {
   const id = String(tahunAjaranId || '').trim();
   if (!id) return fail_('Tahun ajaran wajib dipilih.');
   const lock = LockService.getScriptLock();
-  lock.waitLock(10000);
+  try { lock.waitLock(10000); } catch (lockError) { return fail_('Server sedang memproses permintaan lain. Silakan coba kembali beberapa saat lagi.'); }
   try {
     const ss = getDatabaseSpreadsheet_();
     const sheet = ss.getSheetByName(PSB_SHEETS.MASTER_TAHUN_AJARAN);
@@ -1463,12 +1463,16 @@ function setActiveAcademicYear(sessionToken, tahunAjaranId) {
     const oldActive = getActiveAcademicYear_();
     const rows = sheet.getLastRow() >= 2 ? sheet.getRange(2,1,sheet.getLastRow()-1,sheet.getLastColumn()).getValues() : [];
     const idIdx = headers.indexOf('tahunAjaranId');
-    rows.forEach((row,i) => {
-      const rowId = String(row[idIdx] || '');
-      const shouldBeActive = rowId === id;
-      if (activeIdx >= 0) sheet.getRange(i+2,activeIdx+1).setValue(shouldBeActive);
-      if (updatedIdx >= 0 && (shouldBeActive || row[activeIdx] === true || String(row[activeIdx]).toUpperCase() === 'TRUE')) sheet.getRange(i+2,updatedIdx+1).setValue(new Date());
-    });
+    if (rows.length && idIdx >= 0 && activeIdx >= 0) {
+      const now = new Date();
+      const activeValues = rows.map(row => [String(row[idIdx] || '') === id]);
+      const updatedValues = rows.map((row,i) => {
+        const wasActive = row[activeIdx] === true || String(row[activeIdx]).toUpperCase() === 'TRUE';
+        return [activeValues[i][0] || wasActive ? now : (updatedIdx >= 0 ? row[updatedIdx] : '')];
+      });
+      sheet.getRange(2,activeIdx+1,rows.length,1).setValues(activeValues);
+      if (updatedIdx >= 0) sheet.getRange(2,updatedIdx+1,rows.length,1).setValues(updatedValues);
+    }
     setConfigValue_('ACTIVE_YEAR_ID', id);
     setConfigValue_('ACTIVE_YEAR', name);
     writeAudit_(actor.userId,'ACADEMIC_YEAR_ACTIVATE','MASTER_TAHUN_AJARAN',id,oldActive?JSON.stringify({tahunAjaranId:oldActive.tahunAjaranId,name:oldActive.name}):'',JSON.stringify({tahunAjaranId:id,name}), 'Tahun ajaran aktif diganti');
@@ -1577,7 +1581,7 @@ function saveMasterItem(sessionToken, masterKey, payload) {
   if (!validation.success) return validation;
 
   const lock = LockService.getScriptLock();
-  lock.waitLock(10000);
+  try { lock.waitLock(10000); } catch (lockError) { return fail_('Server sedang memproses permintaan lain. Silakan coba kembali beberapa saat lagi.'); }
   try {
     const sheet = getDatabaseSpreadsheet_().getSheetByName(def.sheet);
     if (!sheet) return fail_('Sheet master data belum tersedia.');
@@ -2249,7 +2253,7 @@ function verifyPayment(sessionToken,payload){
   if(!paymentId||['VERIFIED','REJECTED'].indexOf(status)<0) return fail_('Data verifikasi pembayaran tidak valid.');
   if(status==='REJECTED' && !note) return fail_('Alasan penolakan pembayaran wajib diisi agar Wali mengetahui perbaikan yang harus dilakukan.');
   if(note.length>500) return fail_('Alasan verifikasi maksimal 500 karakter.');
-  const lock=LockService.getScriptLock(); lock.waitLock(10000);
+  const lock=LockService.getScriptLock(); try { lock.waitLock(10000); } catch (lockError) { return fail_('Server sedang memproses permintaan lain. Silakan coba kembali beberapa saat lagi.'); }
   try {
   const sheet=getDatabaseSpreadsheet_().getSheetByName(PSB_SHEETS.PAYMENTS), found=findRowById_(sheet,'paymentId',paymentId); if(!found) return fail_('Pembayaran tidak ditemukan.');
   if (['VERIFIED','REJECTED'].indexOf(String(found.object.status||'').toUpperCase())>=0) return fail_('Pembayaran ini sudah diverifikasi sebelumnya.');
@@ -2421,7 +2425,7 @@ function addSelectionParticipant(sessionToken,payload){
   if(!schedule.object.isActive && String(schedule.object.isActive).toUpperCase()!=='TRUE')return fail_('Jadwal tes tidak aktif.');
   const sheet=getDatabaseSpreadsheet_().getSheetByName(PSB_SHEETS.SELECTION_PARTICIPANTS);
   if(!sheet)return fail_('Sheet peserta seleksi belum tersedia.');
-  const lock=LockService.getScriptLock(); lock.waitLock(15000);
+  const lock=LockService.getScriptLock(); try { lock.waitLock(15000); } catch (lockError) { return fail_('Server sedang memproses permintaan lain. Silakan coba kembali beberapa saat lagi.'); }
   let record;
   try {
     const duplicate=sheetRows_(sheet).find(x=>String(x.registrationId)===registrationId);
@@ -2451,7 +2455,7 @@ function addSelectionParticipantsBulk(sessionToken,payload){
   if(!schedule)return fail_('Jadwal tes tidak ditemukan.');
   if(!schedule.object.isActive && String(schedule.object.isActive).toUpperCase()!=='TRUE')return fail_('Jadwal tes tidak aktif.');
   const sheet=ss.getSheetByName(PSB_SHEETS.SELECTION_PARTICIPANTS); if(!sheet)return fail_('Sheet peserta seleksi belum tersedia.');
-  const lock=LockService.getScriptLock(); lock.waitLock(20000);
+  const lock=LockService.getScriptLock(); try { lock.waitLock(20000); } catch (lockError) { return fail_('Server sedang memproses permintaan lain. Silakan coba kembali beberapa saat lagi.'); }
   try{
     const headers=sheet.getRange(1,1,1,sheet.getLastColumn()).getValues()[0].map(String), rows=sheetRows_(sheet);
     const existing={}; rows.forEach(x=>{existing[String(x.registrationId)]=x});
@@ -2480,7 +2484,7 @@ function updateSelectionParticipantStatus(sessionToken,payload){
   assertOperationalMutation_(actor); payload=payload||{};
   const participantId=String(payload.participantId||'').trim(), status=String(payload.status||'').toUpperCase();
   if(!participantId || !['SCHEDULED','PRESENT','ABSENT','COMPLETED'].includes(status))return fail_('Peserta dan status peserta wajib dipilih.');
-  const lock=LockService.getScriptLock(); lock.waitLock(10000);
+  const lock=LockService.getScriptLock(); try { lock.waitLock(10000); } catch (lockError) { return fail_('Server sedang memproses permintaan lain. Silakan coba kembali beberapa saat lagi.'); }
   try {
     const sheet=getDatabaseSpreadsheet_().getSheetByName(PSB_SHEETS.SELECTION_PARTICIPANTS);
     const found=findRowById_(sheet,'participantId',participantId); if(!found)return fail_('Peserta tes tidak ditemukan.');
@@ -2497,7 +2501,7 @@ function saveSelectionScore(sessionToken,payload){
   const participantId=String(payload.participantId||'').trim(), component=clean_(payload.component), note=clean_(payload.note);
   const score=Number(payload.score);
   if(!participantId||!component||component.length>100||!Number.isFinite(score)||score<0||score>100)return fail_('Peserta, komponen nilai, dan nilai 0–100 wajib diisi.');
-  const lock=LockService.getScriptLock(); lock.waitLock(10000);
+  const lock=LockService.getScriptLock(); try { lock.waitLock(10000); } catch (lockError) { return fail_('Server sedang memproses permintaan lain. Silakan coba kembali beberapa saat lagi.'); }
   try {
     const ss=getDatabaseSpreadsheet_();
     const participant=findRowById_(ss.getSheetByName(PSB_SHEETS.SELECTION_PARTICIPANTS),'participantId',participantId);
@@ -2524,7 +2528,7 @@ function saveSelectionResult(sessionToken,payload){
   const participant=findRowById_(getDatabaseSpreadsheet_().getSheetByName(PSB_SHEETS.SELECTION_PARTICIPANTS),'registrationId',registrationId); if(!participant)return fail_('Pendaftar belum terdaftar sebagai peserta tes.');
 
   const lock=LockService.getScriptLock();
-  lock.waitLock(10000);
+  try { lock.waitLock(10000); } catch (lockError) { return fail_('Server sedang memproses permintaan lain. Silakan coba kembali beberapa saat lagi.'); }
   try{
     const sheet=getDatabaseSpreadsheet_().getSheetByName(PSB_SHEETS.SELECTION_RESULTS);
     if(!sheet)return fail_('Sheet hasil seleksi belum tersedia.');
@@ -2640,7 +2644,7 @@ function publishAnnouncement(sessionToken,payload) {
   if(dateIdx<0) return fail_('Kolom tanggal pengumuman belum tersedia.');
   const previous=found.object;
   if(String(previous.announcementDate||'').trim()!=='') return {success:true,message:'Pengumuman untuk pendaftar ini sudah dipublikasikan.',announcementDate:rpcSafe_(previous.announcementDate),result:rpcSafe_(previous),alreadyPublished:true};
-  const lock=LockService.getScriptLock(); lock.waitLock(10000);
+  const lock=LockService.getScriptLock(); try { lock.waitLock(10000); } catch (lockError) { return fail_('Server sedang memproses permintaan lain. Silakan coba kembali beberapa saat lagi.'); }
   try {
   const latest=findRowById_(resultSheet,'registrationId',registrationId);
   if(!latest) return fail_('Hasil seleksi belum tersedia.');
@@ -2947,7 +2951,7 @@ function openReregistration(sessionToken, registrationId) {
   if (hasRoleDirect_(actor,['WALI']) && String(found.registration.userId)!==String(actor.userId)) return fail_('Anda tidak memiliki akses ke pendaftaran ini.');
   const result=findRowById_(getDatabaseSpreadsheet_().getSheetByName(PSB_SHEETS.SELECTION_RESULTS),'registrationId',id);
   if(!result || String(result.object.status||'').toUpperCase()!=='PASSED' || !String(result.object.announcementDate||'').trim()) return fail_('Daftar ulang hanya dapat dibuka setelah hasil LULUS dipublikasikan.');
-  const lock=LockService.getScriptLock(); lock.waitLock(10000);
+  const lock=LockService.getScriptLock(); try { lock.waitLock(10000); } catch (lockError) { return fail_('Server sedang memproses permintaan lain. Silakan coba kembali beberapa saat lagi.'); }
   try {
     const rrSheet=getDatabaseSpreadsheet_().getSheetByName(PSB_SHEETS.REREGISTRATIONS);
     const current=findRowById_(rrSheet,'registrationId',id);
@@ -3002,7 +3006,7 @@ function finalizeReregistration(sessionToken, registrationId) {
   assertOperationalMutation_(actor);
   const id = String(registrationId || '').trim();
   if (!id) return fail_('Pendaftaran wajib dipilih.');
-  const lock=LockService.getScriptLock(); lock.waitLock(10000);
+  const lock=LockService.getScriptLock(); try { lock.waitLock(10000); } catch (lockError) { return fail_('Server sedang memproses permintaan lain. Silakan coba kembali beberapa saat lagi.'); }
   try {
     const rrSheet = getDatabaseSpreadsheet_().getSheetByName(PSB_SHEETS.REREGISTRATIONS);
     const rrFound = findRowById_(rrSheet, 'registrationId', id);
@@ -3641,7 +3645,7 @@ function verifyDocument(sessionToken, payload) {
   if(!documentId) return fail_('Dokumen belum dipilih.');
   if(['VERIFIED','REVISION'].indexOf(status)<0) return fail_('Status verifikasi dokumen tidak valid.');
   const lock=LockService.getScriptLock();
-  lock.waitLock(10000);
+  try { lock.waitLock(10000); } catch (lockError) { return fail_('Server sedang memproses permintaan lain. Silakan coba kembali beberapa saat lagi.'); }
   let registrationId='', documentTypeId='';
   try {
     const sheet=getDatabaseSpreadsheet_().getSheetByName(PSB_SHEETS.DOCUMENTS);
@@ -3680,7 +3684,7 @@ function finalizeVerification(sessionToken, payload) {
   if(!registrationId) return fail_('Pendaftaran belum dipilih.');
   if(['VERIFIED','REVISION'].indexOf(decision)<0) return fail_('Keputusan verifikasi tidak valid.');
   const lock=LockService.getScriptLock();
-  lock.waitLock(10000);
+  try { lock.waitLock(10000); } catch (lockError) { return fail_('Server sedang memproses permintaan lain. Silakan coba kembali beberapa saat lagi.'); }
   let result;
   try {
     const found=findRegistration_(registrationId);
@@ -4133,7 +4137,7 @@ function saveRegistration(sessionToken, payload) {
   assertOperationalMutation_(actor);
   payload = payload || {};
   const lock = LockService.getScriptLock();
-  lock.waitLock(10000);
+  try { lock.waitLock(10000); } catch (lockError) { return fail_('Server sedang memproses permintaan lain. Silakan coba kembali beberapa saat lagi.'); }
   try {
     const ss = getDatabaseSpreadsheet_();
     const regSheet = ss.getSheetByName(PSB_SHEETS.REGISTRATIONS);
@@ -4247,7 +4251,7 @@ function submitRegistration(sessionToken, registrationId) {
   if (PSB_REGISTRATION_EDITABLE_STATUSES.indexOf(String(found.registration.status)) < 0) return fail_('Pendaftaran tidak berada pada status yang dapat dikirim.');
   const validation = validateCompleteRegistration_(found);
   if (!validation.success) return validation;
-  const lock=LockService.getScriptLock(); lock.waitLock(10000);
+  const lock=LockService.getScriptLock(); try { lock.waitLock(10000); } catch (lockError) { return fail_('Server sedang memproses permintaan lain. Silakan coba kembali beberapa saat lagi.'); }
   try {
   const latest=findRegistration_(String(registrationId||''));
   if(!latest) return fail_('Pendaftaran tidak ditemukan.');
