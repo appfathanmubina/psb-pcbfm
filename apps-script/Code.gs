@@ -1974,24 +1974,12 @@ function getPaymentPageData(sessionToken, registrationId) {
   const paymentTypes = getActiveMasterItems_('MASTER_JENIS_PEMBAYARAN');
   let registrations = [];
   let registrationsById = Object.create(null);
-
   if (regSheet && regSheet.getLastRow() >= 2) {
     const headers = regSheet.getRange(1,1,1,regSheet.getLastColumn()).getValues()[0].map(String);
     const rows = regSheet.getRange(2,1,regSheet.getLastRow()-1,regSheet.getLastColumn()).getValues();
     let items = rows.map((r,i)=>rowObject_(headers,r,i+2));
-
-    // Simpan baris pertama dari seluruh sheet untuk mempertahankan perilaku
-    // helper pencarian lama jika terdapat registrationId duplikat.
-    items.forEach(item => {
-      const id = String(item.registrationId || '');
-      if (id && !Object.prototype.hasOwnProperty.call(registrationsById, id)) {
-        registrationsById[id] = item;
-      }
-    });
-
+    items.forEach(item => { const id=String(item.registrationId||''); if(id&&!Object.prototype.hasOwnProperty.call(registrationsById,id)) registrationsById[id]=item; });
     if (isWali) items = items.filter(x=>String(x.userId)===String(actor.userId));
-
-    // Semua master dan kandidat dibaca satu kali untuk kebutuhan halaman ini.
     const preloadedMaps = {
       candidates: sheetMapById_(ss.getSheetByName(PSB_SHEETS.CANDIDATES), 'candidateId'),
       years: sheetMapById_(ss.getSheetByName(PSB_SHEETS.MASTER_TAHUN_AJARAN), 'tahunAjaranId'),
@@ -2000,41 +1988,25 @@ function getPaymentPageData(sessionToken, registrationId) {
     };
     registrations = enrichRegistrationList_(items, preloadedMaps).slice(0,200);
   }
-
-  if (!registrations.length) {
-    return {success:true,registrations:[],paymentData:null,paymentTypes};
-  }
-
-  const selectedId = String(registrationId||'');
-  const selected = registrations.some(x=>String(x.registrationId)===selectedId)
-    ? selectedId
-    : String(registrations[0].registrationId);
-  const selectedRegistration = registrationsById[selected];
-
-  if (!selectedRegistration ||
-      !canAccessRegistration_(actor,selectedRegistration) &&
-      !hasRoleDirect_(actor,PSB_PAYMENT_MANAGE_ROLES)) {
-    return fail_('Anda tidak memiliki akses ke pembayaran ini.');
-  }
-
-  // Pemulihan otomatis untuk pendaftaran lama yang sudah dikirim tetapi
-  // belum memiliki tagihan formulir. Helper bersifat idempoten dan terkunci.
+  if (!registrations.length) return {success:true,registrations:[],paymentData:null,paymentTypes};
+  const selectedId=String(registrationId||'');
+  const selected=registrations.some(x=>String(x.registrationId)===selectedId)?selectedId:String(registrations[0].registrationId);
+  const selectedRegistration=registrationsById[selected];
+  if(!selectedRegistration || !canAccessRegistration_(actor,selectedRegistration) && !hasRoleDirect_(actor,PSB_PAYMENT_MANAGE_ROLES)) return fail_('Anda tidak memiliki akses ke pembayaran ini.');
   let autoBillResult=null;
   if(String(selectedRegistration.status||'').toUpperCase()!=='DRAFT'){
-    autoBillResult=withScriptLock_(10000,function(){
-      return ensureFormBillForRegistration_(selected,paymentTypes,actor.userId);
-    });
+    autoBillResult=withScriptLock_(10000,function(){return ensureFormBillForRegistration_(selected,paymentTypes,actor.userId,true);});
   }
   const paymentData=buildPaymentData_(selected,paymentTypes);
   if(autoBillResult&&!autoBillResult.success) paymentData.autoBillMessage=autoBillResult.message;
-
-  return {
-    success:true,
-    registrations,
-    paymentData,
-    paymentTypes
-  };
+  if(autoBillResult?.success && autoBillResult.created){
+    const formType=(paymentTypes||[]).find(x=>/formulir/i.test(String(x.name||'')));
+    try{notifyRegistrationOwner_(selected,'Tagihan Formulir Telah Tersedia','Tagihan biaya formulir sebesar Rp '+Number(formType?.amount||0).toLocaleString('id-ID')+' telah dibuat otomatis. Silakan buka menu Pembayaran untuk mengunggah bukti transfer. Menu Upload Dokumen akan aktif setelah pembayaran dikonfirmasi oleh Keuangan.','INFO');}
+    catch(notificationError){console.error('Auto form bill notification failed after bill creation: '+notificationError);}
+  }
+  return {success:true,registrations,paymentData,paymentTypes};
 }
+
 
 function getPaymentsForRegistration(sessionToken, registrationId) {
   const actor=requireRole_(sessionToken,PSB_PAYMENT_VIEW_ROLES);
@@ -2067,22 +2039,25 @@ function createBill(sessionToken,payload){
   if(!(amount>0) || !isFinite(amount)) return fail_('Nominal tagihan harus lebih dari 0.');
   const found=findRegistration_(registrationId); if(!found) return fail_('Pendaftaran tidak ditemukan.');
   const type=findMasterItemById_('MASTER_JENIS_PEMBAYARAN','paymentTypeId',paymentTypeId); if(!type||!type.isActive) return fail_('Jenis pembayaran tidak aktif.');
-  return withScriptLock_(10000, function(){
-  const sheet=getDatabaseSpreadsheet_().getSheetByName(PSB_SHEETS.BILLS); if(!sheet) return fail_('Sheet BILLS belum tersedia.');
-  const headers=sheet.getRange(1,1,1,sheet.getLastColumn()).getValues()[0].map(String);
-  const rows=sheet.getLastRow()<2?[]:sheet.getRange(2,1,sheet.getLastRow()-1,sheet.getLastColumn()).getValues();
-  const dup=rows.some(r=>String(r[headers.indexOf('registrationId')])===registrationId&&String(r[headers.indexOf('paymentTypeId')])===paymentTypeId&&String(r[headers.indexOf('status')])!=='CANCELLED');
-  if(dup) return fail_('Tagihan untuk jenis pembayaran ini sudah ada.');
-  const now=new Date(), billId=generateId_('BIL'), record={}; headers.forEach(h=>record[h]='');
-  Object.assign(record,{billId,registrationId,paymentTypeId,amount,dueDate,status:'UNPAID',createdAt:now,updatedAt:now});
-  sheet.appendRow(headers.map(h=>record[h]));
-  writeAudit_(actor.userId,'CREATE','PAYMENT',billId,'',JSON.stringify(record),'Tagihan pembayaran dibuat');
-  if(/formulir/i.test(String(type.name||''))) {
-    try { notifyRegistrationOwner_(registrationId,'Tagihan Formulir Telah Diterbitkan','Tagihan biaya formulir sebesar Rp '+amount.toLocaleString('id-ID')+' telah tersedia. Silakan buka menu Pembayaran untuk mengunggah bukti transfer. Menu Upload Dokumen akan aktif setelah pembayaran dikonfirmasi oleh Keuangan.','INFO'); } catch(notificationError) { console.error('Bill notification failed: '+notificationError); }
-  }
-  return {success:true,message:'Tagihan berhasil dibuat.',bill:JSON.parse(JSON.stringify(record))};
+  const result=withScriptLock_(10000, function(){
+    const sheet=getDatabaseSpreadsheet_().getSheetByName(PSB_SHEETS.BILLS); if(!sheet) return fail_('Sheet BILLS belum tersedia.');
+    const headers=sheet.getRange(1,1,1,sheet.getLastColumn()).getValues()[0].map(String);
+    const rows=sheet.getLastRow()<2?[]:sheet.getRange(2,1,sheet.getLastRow()-1,sheet.getLastColumn()).getValues();
+    const dup=rows.some(r=>String(r[headers.indexOf('registrationId')])===registrationId&&String(r[headers.indexOf('paymentTypeId')])===paymentTypeId&&String(r[headers.indexOf('status')])!=='CANCELLED');
+    if(dup) return fail_('Tagihan untuk jenis pembayaran ini sudah ada.');
+    const now=new Date(), billId=generateId_('BIL'), record={}; headers.forEach(h=>record[h]='');
+    Object.assign(record,{billId,registrationId,paymentTypeId,amount,dueDate,status:'UNPAID',createdAt:now,updatedAt:now});
+    sheet.appendRow(headers.map(h=>record[h]));
+    writeAudit_(actor.userId,'CREATE','PAYMENT',billId,'',JSON.stringify(record),'Tagihan pembayaran dibuat');
+    return {success:true,message:'Tagihan berhasil dibuat.',bill:JSON.parse(JSON.stringify(record))};
   });
+  if(result?.success && /formulir/i.test(String(type.name||''))){
+    try{notifyRegistrationOwner_(registrationId,'Tagihan Formulir Telah Diterbitkan','Tagihan biaya formulir sebesar Rp '+amount.toLocaleString('id-ID')+' telah tersedia. Silakan buka menu Pembayaran untuk mengunggah bukti transfer. Menu Upload Dokumen akan aktif setelah pembayaran dikonfirmasi oleh Keuangan.','INFO');}
+    catch(notificationError){console.error('Bill notification failed after bill creation: '+notificationError);}
+  }
+  return result;
 }
+
 
 function submitPayment(sessionToken,payload){
   const actor=requireRole_(sessionToken,['WALI','SUPERADMIN','ADMIN_PSB','KEUANGAN']);
@@ -2254,24 +2229,29 @@ function verifyPayment(sessionToken,payload){
   if(status==='REJECTED' && !note) return fail_('Alasan penolakan pembayaran wajib diisi agar Wali mengetahui perbaikan yang harus dilakukan.');
   if(note.length>500) return fail_('Alasan verifikasi maksimal 500 karakter.');
   const lock=LockService.getScriptLock(); try { lock.waitLock(10000); } catch (lockError) { return fail_('Server sedang memproses permintaan lain. Silakan coba kembali beberapa saat lagi.'); }
+  let notificationPayload=null, reregistrationNotification=null;
   try {
-  const sheet=getDatabaseSpreadsheet_().getSheetByName(PSB_SHEETS.PAYMENTS), found=findRowById_(sheet,'paymentId',paymentId); if(!found) return fail_('Pembayaran tidak ditemukan.');
-  if (['VERIFIED','REJECTED'].indexOf(String(found.object.status||'').toUpperCase())>=0) return fail_('Pembayaran ini sudah diverifikasi sebelumnya.');
-  const regFound=findRegistration_(String(found.object.registrationId||'')); if(!regFound) return fail_('Pendaftaran pembayaran tidak ditemukan.');
-  const now=new Date(), headers=sheet.getRange(1,1,1,sheet.getLastColumn()).getValues()[0].map(String); ['status','updatedAt'].forEach(k=>{const i=headers.indexOf(k);if(i>=0)sheet.getRange(found.rowNumber,i+1).setValue(k==='status'?status:now);});
-  const verSheet=getDatabaseSpreadsheet_().getSheetByName(PSB_SHEETS.PAYMENT_VERIFICATIONS); if(verSheet){const vh=verSheet.getRange(1,1,1,verSheet.getLastColumn()).getValues()[0].map(String);const rec={};vh.forEach(h=>rec[h]='');Object.assign(rec,{verificationId:generateId_('PVF'),paymentId,status,verifiedBy:actor.userId,verifiedAt:now,note});verSheet.appendRow(vh.map(h=>rec[h]));}
-  const bills=getDatabaseSpreadsheet_().getSheetByName(PSB_SHEETS.BILLS), br=findRowById_(bills,'billId',found.object.billId); if(br){const bh=bills.getRange(1,1,1,bills.getLastColumn()).getValues()[0].map(String);const i=bh.indexOf('status');if(i>=0)bills.getRange(br.rowNumber,i+1).setValue(status==='VERIFIED'?'PAID':'UNPAID'); if(status==='VERIFIED'){const type=findMasterItemById_('MASTER_JENIS_PEMBAYARAN','paymentTypeId',br.object.paymentTypeId); if(/formulir/i.test(String(type?.name||''))){const reg=findRegistration_(String(br.object.registrationId)); if(reg && String(reg.registration.status)==='VERIFIED'){setRegistrationStatus_(reg.registration,'PAYMENT_VERIFIED',actor.userId,'Pembayaran Formulir terverifikasi; pendaftar dapat mengikuti proses tes.');}} if(/daftar\s*ulang/i.test(String(type?.name||''))){syncReregistrationAfterPayment_(String(br.object.registrationId),actor.userId);}}}
-  writeAudit_(actor.userId,'PAYMENT_VERIFY','PAYMENT',paymentId,'',JSON.stringify({status,note}),'Pembayaran diverifikasi');
-  const paymentType=findMasterItemById_('MASTER_JENIS_PEMBAYARAN','paymentTypeId',String(br?.object?.paymentTypeId||''));
-  const paymentLabel=String(paymentType?.name||'pembayaran');
-  if(status==='VERIFIED' && /formulir/i.test(paymentLabel)) {
-    try { notifyUsersByRoles_(['SUPERADMIN','ADMIN_PSB','VERIFIKATOR'],'Pembayaran Formulir Terkonfirmasi',String(regFound.candidate?.fullName||'Calon santri')+' telah melunasi biaya formulir. Pendaftaran siap masuk antrean verifikasi PSB.','INFO'); } catch(notificationError) { console.error('Verification queue notification failed: '+notificationError); }
-  }
-  notifyRegistrationOwner_(String(regFound.registration.registrationId),'Pembayaran '+(status==='VERIFIED'?'Terverifikasi':'Ditolak'),status==='VERIFIED'?('Pembayaran '+paymentLabel+' telah terverifikasi.'):('Pembayaran '+paymentLabel+' ditolak.'+(note?' Catatan: '+note:'')),status==='VERIFIED'?'SUCCESS':'WARNING');
-  return {success:true,message:status==='VERIFIED'?'Pembayaran berhasil diverifikasi.':'Pembayaran ditolak dan dapat diunggah ulang.'};
+    const sheet=getDatabaseSpreadsheet_().getSheetByName(PSB_SHEETS.PAYMENTS), found=findRowById_(sheet,'paymentId',paymentId); if(!found) return fail_('Pembayaran tidak ditemukan.');
+    if (['VERIFIED','REJECTED'].indexOf(String(found.object.status||'').toUpperCase())>=0) return fail_('Pembayaran ini sudah diverifikasi sebelumnya.');
+    const regFound=findRegistration_(String(found.object.registrationId||'')); if(!regFound) return fail_('Pendaftaran pembayaran tidak ditemukan.');
+    const now=new Date(), headers=sheet.getRange(1,1,1,sheet.getLastColumn()).getValues()[0].map(String); ['status','updatedAt'].forEach(k=>{const i=headers.indexOf(k);if(i>=0)sheet.getRange(found.rowNumber,i+1).setValue(k==='status'?status:now);});
+    const verSheet=getDatabaseSpreadsheet_().getSheetByName(PSB_SHEETS.PAYMENT_VERIFICATIONS); if(verSheet){const vh=verSheet.getRange(1,1,1,verSheet.getLastColumn()).getValues()[0].map(String);const rec={};vh.forEach(h=>rec[h]='');Object.assign(rec,{verificationId:generateId_('PVF'),paymentId,status,verifiedBy:actor.userId,verifiedAt:now,note});verSheet.appendRow(vh.map(h=>rec[h]));}
+    const bills=getDatabaseSpreadsheet_().getSheetByName(PSB_SHEETS.BILLS), br=findRowById_(bills,'billId',found.object.billId); if(br){const bh=bills.getRange(1,1,1,bills.getLastColumn()).getValues()[0].map(String);const i=bh.indexOf('status');if(i>=0)bills.getRange(br.rowNumber,i+1).setValue(status==='VERIFIED'?'PAID':'UNPAID'); if(status==='VERIFIED'){const type=findMasterItemById_('MASTER_JENIS_PEMBAYARAN','paymentTypeId',br.object.paymentTypeId); if(/formulir/i.test(String(type?.name||''))){const reg=findRegistration_(String(br.object.registrationId)); if(reg && String(reg.registration.status)==='VERIFIED'){setRegistrationStatus_(reg.registration,'PAYMENT_VERIFIED',actor.userId,'Pembayaran Formulir terverifikasi; pendaftar dapat mengikuti proses tes.');}} if(/daftar\s*ulang/i.test(String(type?.name||''))){reregistrationNotification=syncReregistrationAfterPayment_(String(br.object.registrationId),actor.userId,true);}}}
+    writeAudit_(actor.userId,'PAYMENT_VERIFY','PAYMENT',paymentId,'',JSON.stringify({status,note}),'Pembayaran diverifikasi');
+    const paymentType=findMasterItemById_('MASTER_JENIS_PEMBAYARAN','paymentTypeId',String(br?.object?.paymentTypeId||''));
+    notificationPayload={registrationId:String(regFound.registration.registrationId),candidateName:String(regFound.candidate?.fullName||'Calon santri'),paymentLabel:String(paymentType?.name||'pembayaran'),status,note,reregistrationNotification};
   } finally { lock.releaseLock(); }
+  // Notification fanout is secondary work; do it after releasing the global lock.
+  if(notificationPayload){
+    const p=notificationPayload;
+    if(p.reregistrationNotification?.userId){try{createNotification_(p.reregistrationNotification.userId,'Daftar Ulang Selesai','Dokumen dan pembayaran daftar ulang telah lengkap.','SUCCESS');}catch(notificationError){console.error('Reregistration completion notification failed: '+notificationError);}}
+    if(p.status==='VERIFIED' && /formulir/i.test(p.paymentLabel)){
+      try { notifyUsersByRoles_(['SUPERADMIN','ADMIN_PSB','VERIFIKATOR'],'Pembayaran Formulir Terkonfirmasi',p.candidateName+' telah melunasi biaya formulir. Pendaftaran siap masuk antrean verifikasi PSB.','INFO'); } catch(notificationError) { console.error('Verification queue notification failed: '+notificationError); }
+    }
+    try { notifyRegistrationOwner_(p.registrationId,'Pembayaran '+(p.status==='VERIFIED'?'Terverifikasi':'Ditolak'),p.status==='VERIFIED'?('Pembayaran '+p.paymentLabel+' telah terverifikasi.'):('Pembayaran '+p.paymentLabel+' ditolak.'+(p.note?' Catatan: '+p.note:'')),p.status==='VERIFIED'?'SUCCESS':'WARNING'); } catch(notificationError) { console.error('Payment owner notification failed after verification: '+notificationError); }
+  }
+  return {success:true,message:status==='VERIFIED'?'Pembayaran berhasil diverifikasi.':'Pembayaran ditolak dan dapat diunggah ulang.'};
 }
-
 
 
 // =====================================================
@@ -2456,10 +2436,11 @@ function addSelectionParticipantsBulk(sessionToken,payload){
   if(!schedule.object.isActive && String(schedule.object.isActive).toUpperCase()!=='TRUE')return fail_('Jadwal tes tidak aktif.');
   const sheet=ss.getSheetByName(PSB_SHEETS.SELECTION_PARTICIPANTS); if(!sheet)return fail_('Sheet peserta seleksi belum tersedia.');
   const lock=LockService.getScriptLock(); try { lock.waitLock(20000); } catch (lockError) { return fail_('Server sedang memproses permintaan lain. Silakan coba kembali beberapa saat lagi.'); }
+  let added=[], result;
   try{
     const headers=sheet.getRange(1,1,1,sheet.getLastColumn()).getValues()[0].map(String), rows=sheetRows_(sheet);
     const existing={}; rows.forEach(x=>{existing[String(x.registrationId)]=x});
-    const added=[], skipped=[], failed=[];
+    const skipped=[], failed=[];
     registrationIds.forEach(registrationId=>{
       try{
         if(existing[registrationId]){skipped.push({registrationId,reason:String(existing[registrationId].scheduleId)===scheduleId?'Sudah terdaftar pada jadwal ini.':'Sudah memiliki jadwal tes.'});return}
@@ -2473,11 +2454,14 @@ function addSelectionParticipantsBulk(sessionToken,payload){
       }catch(e){failed.push({registrationId,reason:String(e&&e.message||e)})}
     });
     added.forEach(record=>writeAudit_(actor.userId,'CREATE','SELECTION_PARTICIPANT',record.participantId,'',JSON.stringify(record),'Peserta tes dibuat melalui Generate Tes Seleksi'));
-    const scheduleName=String(schedule.object.name||'Tes Seleksi'), selectionDate=String(schedule.object.selectionDate||'');
-    added.forEach(record=>notifyRegistrationOwner_(record.registrationId,'Jadwal Tes Seleksi Ditentukan','Anda terdaftar pada '+scheduleName+(selectionDate?' pada '+selectionDate:'')+(schedule.object.location?' di '+String(schedule.object.location):'')+'. Silakan buka menu Tes untuk detail.','INFO'));
-    return {success:true,message:`Generate selesai: ${added.length} peserta ditambahkan, ${skipped.length} dilewati, ${failed.length} gagal.`,addedCount:added.length,skippedCount:skipped.length,failedCount:failed.length,added:rpcSafe_(added),skipped:rpcSafe_(skipped),failed:rpcSafe_(failed)};
+    result={success:true,message:`Generate selesai: ${added.length} peserta ditambahkan, ${skipped.length} dilewati, ${failed.length} gagal.`,addedCount:added.length,skippedCount:skipped.length,failedCount:failed.length,added:rpcSafe_(added),skipped:rpcSafe_(skipped),failed:rpcSafe_(failed)};
   }finally{lock.releaseLock()}
+  // Notify owners only after the participant rows are committed and the lock is free.
+  const scheduleName=String(schedule.object.name||'Tes Seleksi'), selectionDate=String(schedule.object.selectionDate||'');
+  added.forEach(record=>{try{notifyRegistrationOwner_(record.registrationId,'Jadwal Tes Seleksi Ditentukan','Anda terdaftar pada '+scheduleName+(selectionDate?' pada '+selectionDate:'')+(schedule.object.location?' di '+String(schedule.object.location):'')+'. Silakan buka menu Tes untuk detail.','INFO');}catch(notificationError){console.error('Selection schedule notification failed: '+notificationError);}});
+  return result;
 }
+
 
 function updateSelectionParticipantStatus(sessionToken,payload){
   const actor=requireRole_(sessionToken,PSB_SELECTION_ADMIN_ROLES);
@@ -2626,62 +2610,56 @@ function getAnnouncementPageData(sessionToken) {
 }
 
 function publishAnnouncement(sessionToken,payload) {
-  const actor = requireRole_(sessionToken, PSB_ANNOUNCEMENT_ADMIN_ROLES);
+  const actor=requireRole_(sessionToken,PSB_ANNOUNCEMENT_ADMIN_ROLES);
   assertOperationalMutation_(actor); payload=payload||{};
   const registrationId=String(payload.registrationId||'').trim();
-  if(!registrationId) return fail_('Pendaftaran wajib dipilih.');
-  const ss=getDatabaseSpreadsheet_();
-  const resultSheet=ss.getSheetByName(PSB_SHEETS.SELECTION_RESULTS);
-  const found=findRowById_(resultSheet,'registrationId',registrationId);
-  if(!found) return fail_('Hasil seleksi belum tersedia.');
-  const status=String(found.object.status||'').toUpperCase();
-  if(!['PASSED','NOT_PASSED','WAITLIST'].includes(status)) return fail_('Hasil masih menunggu keputusan dan belum dapat diumumkan.');
-  const regFound=findRegistration_(registrationId); if(!regFound) return fail_('Pendaftaran tidak ditemukan.');
-  if(!['SELECTION','PASSED'].includes(String(regFound.registration.status||'').toUpperCase())) return fail_('Pendaftaran belum berada pada tahap yang dapat diumumkan.');
-  const now=new Date();
-  const headers=resultSheet.getRange(1,1,1,resultSheet.getLastColumn()).getValues()[0].map(String);
-  const dateIdx=headers.indexOf('announcementDate');
-  if(dateIdx<0) return fail_('Kolom tanggal pengumuman belum tersedia.');
-  const previous=found.object;
-  if(String(previous.announcementDate||'').trim()!=='') return {success:true,message:'Pengumuman untuk pendaftar ini sudah dipublikasikan.',announcementDate:rpcSafe_(previous.announcementDate),result:rpcSafe_(previous),alreadyPublished:true};
-  const lock=LockService.getScriptLock(); try { lock.waitLock(10000); } catch (lockError) { return fail_('Server sedang memproses permintaan lain. Silakan coba kembali beberapa saat lagi.'); }
-  try {
-  const latest=findRowById_(resultSheet,'registrationId',registrationId);
-  if(!latest) return fail_('Hasil seleksi belum tersedia.');
-  if(String(latest.object.announcementDate||'').trim()!=='') return {success:true,message:'Pengumuman untuk pendaftar ini sudah dipublikasikan.',announcementDate:rpcSafe_(latest.object.announcementDate),result:rpcSafe_(latest.object),alreadyPublished:true};
-  const latestReg=findRegistration_(registrationId);
-  if(!latestReg) return fail_('Pendaftaran tidak ditemukan.');
-  if(!['SELECTION','PASSED'].includes(String(latestReg.registration.status||'').toUpperCase())) return fail_('Pendaftaran sudah berpindah tahap dan tidak dapat diumumkan dari status saat ini.');
-  found=latest;
-  resultSheet.getRange(found.rowNumber,dateIdx+1).setValue(now);
-  const announcementDate=previous.announcementDate||now;
-
-  // Move the registration into the next workflow state when the result is published.
-  const regSheet=ss.getSheetByName(PSB_SHEETS.REGISTRATIONS);
-  const regRow=findRowById_(regSheet,'registrationId',registrationId);
-  if(regRow){
-    const regHeaders=regSheet.getRange(1,1,1,regSheet.getLastColumn()).getValues()[0].map(String);
-    const statusIdx=regHeaders.indexOf('status'), updatedIdx=regHeaders.indexOf('updatedAt');
-    if(statusIdx>=0){
-      const nextStatus=status==='PASSED'?'REREGISTRATION':status==='NOT_PASSED'?'NOT_PASSED':'SELECTION';
-      regSheet.getRange(regRow.rowNumber,statusIdx+1).setValue(nextStatus);
-      if(updatedIdx>=0)regSheet.getRange(regRow.rowNumber,updatedIdx+1).setValue(now);
+  if(!registrationId)return fail_('Pendaftaran wajib dipilih.');
+  const ss=getDatabaseSpreadsheet_(), resultSheet=ss.getSheetByName(PSB_SHEETS.SELECTION_RESULTS);
+  const initial=findRowById_(resultSheet,'registrationId',registrationId);
+  if(!initial)return fail_('Hasil seleksi belum tersedia.');
+  const status=String(initial.object.status||'').toUpperCase();
+  if(!['PASSED','NOT_PASSED','WAITLIST'].includes(status))return fail_('Hasil masih menunggu keputusan dan belum dapat diumumkan.');
+  const initialReg=findRegistration_(registrationId); if(!initialReg)return fail_('Pendaftaran tidak ditemukan.');
+  if(!['SELECTION','PASSED'].includes(String(initialReg.registration.status||'').toUpperCase()))return fail_('Pendaftaran belum berada pada tahap yang dapat diumumkan.');
+  const headers=resultSheet.getRange(1,1,1,resultSheet.getLastColumn()).getValues()[0].map(String), dateIdx=headers.indexOf('announcementDate');
+  if(dateIdx<0)return fail_('Kolom tanggal pengumuman belum tersedia.');
+  if(String(initial.object.announcementDate||'').trim()!=='')return {success:true,message:'Pengumuman untuk pendaftar ini sudah dipublikasikan.',announcementDate:rpcSafe_(initial.object.announcementDate),result:rpcSafe_(initial.object),alreadyPublished:true};
+  const lock=LockService.getScriptLock(); try{lock.waitLock(10000);}catch(lockError){return fail_('Server sedang memproses permintaan lain. Silakan coba kembali beberapa saat lagi.');}
+  let notificationPayload=null,response;
+  try{
+    const latest=findRowById_(resultSheet,'registrationId',registrationId);
+    if(!latest)return fail_('Hasil seleksi belum tersedia.');
+    if(String(latest.object.announcementDate||'').trim()!=='')return {success:true,message:'Pengumuman untuk pendaftar ini sudah dipublikasikan.',announcementDate:rpcSafe_(latest.object.announcementDate),result:rpcSafe_(latest.object),alreadyPublished:true};
+    const latestReg=findRegistration_(registrationId);
+    if(!latestReg)return fail_('Pendaftaran tidak ditemukan.');
+    if(!['SELECTION','PASSED'].includes(String(latestReg.registration.status||'').toUpperCase()))return fail_('Pendaftaran sudah berpindah tahap dan tidak dapat diumumkan dari status saat ini.');
+    const previous=latest.object, now=new Date();
+    resultSheet.getRange(latest.rowNumber,dateIdx+1).setValue(now);
+    const regSheet=ss.getSheetByName(PSB_SHEETS.REGISTRATIONS),regRow=findRowById_(regSheet,'registrationId',registrationId);
+    if(regRow){
+      const regHeaders=regSheet.getRange(1,1,1,regSheet.getLastColumn()).getValues()[0].map(String);
+      const statusIdx=regHeaders.indexOf('status'),updatedIdx=regHeaders.indexOf('updatedAt');
+      if(statusIdx>=0){const nextStatus=status==='PASSED'?'REREGISTRATION':status==='NOT_PASSED'?'NOT_PASSED':'SELECTION';regSheet.getRange(regRow.rowNumber,statusIdx+1).setValue(nextStatus);if(updatedIdx>=0)regSheet.getRange(regRow.rowNumber,updatedIdx+1).setValue(now);}
     }
+    if(status==='PASSED')ensureReregistration_(registrationId,actor.userId,true);
+    const userId=String(latestReg.registration.userId||'').trim(),candidateName=String(latestReg.candidate?.fullName||latestReg.candidate?.name||'Calon santri');
+    const title=status==='PASSED'?'Pengumuman Hasil Seleksi':status==='NOT_PASSED'?'Pengumuman Hasil Seleksi':'Informasi Hasil Seleksi';
+    const message=status==='PASSED'?`Hasil seleksi untuk ${candidateName}: LULUS. Silakan buka menu Pengumuman untuk melihat informasi selanjutnya.`:status==='NOT_PASSED'?`Hasil seleksi untuk ${candidateName}: TIDAK LULUS. Silakan buka menu Pengumuman untuk melihat detail hasil.`:`Hasil seleksi untuk ${candidateName}: CADANGAN. Silakan buka menu Pengumuman untuk melihat informasi selanjutnya.`;
+    notificationPayload={userId,status,title,message};
+    writeAudit_(actor.userId,'ANNOUNCEMENT','ANNOUNCEMENT',String(latest.object.resultId||registrationId),JSON.stringify(previous),JSON.stringify(Object.assign({},previous,{announcementDate:now})),`Pengumuman hasil seleksi dipublikasikan: ${status}`);
+    response={success:true,message:'Pengumuman berhasil dipublikasikan.',announcementDate:rpcSafe_(now),result:rpcSafe_(Object.assign({},previous,{announcementDate:now}))};
+  }finally{lock.releaseLock();}
+  // Fanout notification is deliberately outside the lock; announcement state is already committed.
+  if(notificationPayload?.userId){
+    const p=notificationPayload;
+    try{
+      createNotification_(p.userId,p.title,p.message,p.status==='PASSED'?'SUCCESS':p.status==='NOT_PASSED'?'INFO':'WARNING');
+      if(p.status==='PASSED')createNotification_(p.userId,'Daftar Ulang Dibuka','Karena hasil seleksi dinyatakan LULUS, tahap Daftar Ulang sudah dibuka. Silakan lengkapi dokumen dan pembayaran daftar ulang.','SUCCESS');
+    }catch(notificationError){console.error('Announcement notification failed after publish: '+notificationError);}
   }
-
-  const userId=String(regFound.registration.userId||'').trim();
-  const candidateName=String(regFound.candidate?.fullName||regFound.candidate?.name||'Calon santri');
-  const title=status==='PASSED'?'Pengumuman Hasil Seleksi':status==='NOT_PASSED'?'Pengumuman Hasil Seleksi':'Informasi Hasil Seleksi';
-  const message=status==='PASSED'?`Hasil seleksi untuk ${candidateName}: LULUS. Silakan buka menu Pengumuman untuk melihat informasi selanjutnya.`:status==='NOT_PASSED'?`Hasil seleksi untuk ${candidateName}: TIDAK LULUS. Silakan buka menu Pengumuman untuk melihat detail hasil.`:`Hasil seleksi untuk ${candidateName}: CADANGAN. Silakan buka menu Pengumuman untuk melihat informasi selanjutnya.`;
-  if(userId)createNotification_(userId,title,message,status==='PASSED'?'SUCCESS':status==='NOT_PASSED'?'INFO':'WARNING');
-  if(status==='PASSED'){
-    ensureReregistration_(registrationId, actor.userId, true);
-    createNotification_(userId,'Daftar Ulang Dibuka','Karena hasil seleksi dinyatakan LULUS, tahap Daftar Ulang sudah dibuka. Silakan lengkapi dokumen dan pembayaran daftar ulang.','SUCCESS');
-  }
-  writeAudit_(actor.userId,'ANNOUNCEMENT','ANNOUNCEMENT',String(found.object.resultId||registrationId),JSON.stringify(previous),JSON.stringify(Object.assign({},previous,{announcementDate})),`Pengumuman hasil seleksi dipublikasikan: ${status}`);
-  return {success:true,message:'Pengumuman berhasil dipublikasikan.',announcementDate:rpcSafe_(announcementDate),result:rpcSafe_(Object.assign({},previous,{announcementDate}))};
-  } finally { lock.releaseLock(); }
+  return response;
 }
+
 
 function getNotifications(sessionToken) {
   const actor=requireRole_(sessionToken,PSB_ANNOUNCEMENT_VIEW_ROLES);
@@ -2952,6 +2930,7 @@ function openReregistration(sessionToken, registrationId) {
   const result=findRowById_(getDatabaseSpreadsheet_().getSheetByName(PSB_SHEETS.SELECTION_RESULTS),'registrationId',id);
   if(!result || String(result.object.status||'').toUpperCase()!=='PASSED' || !String(result.object.announcementDate||'').trim()) return fail_('Daftar ulang hanya dapat dibuka setelah hasil LULUS dipublikasikan.');
   const lock=LockService.getScriptLock(); try { lock.waitLock(10000); } catch (lockError) { return fail_('Server sedang memproses permintaan lain. Silakan coba kembali beberapa saat lagi.'); }
+  let notificationUserId='', response;
   try {
     const rrSheet=getDatabaseSpreadsheet_().getSheetByName(PSB_SHEETS.REREGISTRATIONS);
     const current=findRowById_(rrSheet,'registrationId',id);
@@ -2959,10 +2938,13 @@ function openReregistration(sessionToken, registrationId) {
     const rr=ensureReregistration_(id,actor.userId,true); if(!rr) return fail_('Daftar ulang belum dapat dibuka.');
     const regNow=findRegistration_(id);
     if(regNow && ['PASSED','SELECTION'].includes(String(regNow.registration.status||'').toUpperCase())) setRegistrationStatus_(regNow.registration,'REREGISTRATION',actor.userId,'Daftar ulang dibuka.');
-    const userId=String(found.registration.userId||''); if(userId) createNotification_(userId,'Daftar Ulang Dibuka','Tahap Daftar Ulang sudah dibuka. Silakan lengkapi dokumen dan pembayaran daftar ulang.','SUCCESS');
-    return {success:true,message:'Daftar ulang berhasil dibuka.',reregistration:rr};
+    notificationUserId=String(found.registration.userId||'');
+    response={success:true,message:'Daftar ulang berhasil dibuka.',reregistration:rr};
   } finally { lock.releaseLock(); }
+  if(notificationUserId){try{createNotification_(notificationUserId,'Daftar Ulang Dibuka','Tahap Daftar Ulang sudah dibuka. Silakan lengkapi dokumen dan pembayaran daftar ulang.','SUCCESS');}catch(notificationError){console.error('Reregistration opened notification failed: '+notificationError);}}
+  return response;
 }
+
 
 function ensureReregistration_(registrationId, actorUserId, createBill) {
   const rrSheet = getDatabaseSpreadsheet_().getSheetByName(PSB_SHEETS.REREGISTRATIONS);
@@ -3007,6 +2989,7 @@ function finalizeReregistration(sessionToken, registrationId) {
   const id = String(registrationId || '').trim();
   if (!id) return fail_('Pendaftaran wajib dipilih.');
   const lock=LockService.getScriptLock(); try { lock.waitLock(10000); } catch (lockError) { return fail_('Server sedang memproses permintaan lain. Silakan coba kembali beberapa saat lagi.'); }
+  let notificationPayload=null;
   try {
     const rrSheet = getDatabaseSpreadsheet_().getSheetByName(PSB_SHEETS.REREGISTRATIONS);
     const rrFound = findRowById_(rrSheet, 'registrationId', id);
@@ -3029,31 +3012,37 @@ function finalizeReregistration(sessionToken, registrationId) {
     if(updatedIdx>=0) rrSheet.getRange(rrFound.rowNumber,updatedIdx+1).setValue(now);
     if(noteIdx>=0) rrSheet.getRange(rrFound.rowNumber,noteIdx+1).setValue('Daftar ulang selesai.');
     setRegistrationStatus_(regFound.registration,'COMPLETED',actor.userId,'Daftar ulang selesai.');
-    createNotification_(String(regFound.registration.userId),'Daftar Ulang Selesai','Proses daftar ulang untuk ' + String(regFound.candidate?.fullName || 'calon santri') + ' telah selesai.','SUCCESS');
     writeAudit_(actor.userId,'REREGISTRATION','REREGISTRATION',String(rrFound.object.reregistrationId),'',JSON.stringify({status:'COMPLETED'}),'Daftar ulang diselesaikan');
-    return {success:true,message:'Daftar ulang berhasil diselesaikan.',status:'COMPLETED'};
+    notificationPayload={userId:String(regFound.registration.userId||''),candidateName:String(regFound.candidate?.fullName||'calon santri')};
   } finally { lock.releaseLock(); }
+  if(notificationPayload?.userId){try{createNotification_(notificationPayload.userId,'Daftar Ulang Selesai','Proses daftar ulang untuk '+notificationPayload.candidateName+' telah selesai.','SUCCESS');}catch(notificationError){console.error('Reregistration completion notification failed: '+notificationError);}}
+  return {success:true,message:'Daftar ulang berhasil diselesaikan.',status:'COMPLETED'};
 }
 
-function syncReregistrationAfterPayment_(registrationId, actorUserId) {
-  const rrSheet = getDatabaseSpreadsheet_().getSheetByName(PSB_SHEETS.REREGISTRATIONS);
-  const rrFound = findRowById_(rrSheet, 'registrationId', String(registrationId));
-  if (!rrFound) return;
-  const docs = getCurrentDocuments_(String(registrationId));
-  const required = getActiveMasterItems_('MASTER_DOKUMEN').filter(x => x.required);
-  const docsReady = required.every(t => { const d=docs.find(x=>String(x.documentTypeId)===String(t.documentTypeId)); return d && String(d.status||'').toUpperCase()==='VERIFIED'; });
-  const payment = buildPaymentData_(String(registrationId)).bills.find(b=>/daftar\s*ulang/i.test(String(b.paymentTypeName||'')));
-  if (!payment || String(payment.status||'').toUpperCase() !== 'PAID') return;
-  const now=new Date(), headers=rrSheet.getRange(1,1,1,rrSheet.getLastColumn()).getValues()[0].map(String);
-  const statusIdx=headers.indexOf('status'), updatedIdx=headers.indexOf('updatedAt');
-  if(statusIdx>=0) rrSheet.getRange(rrFound.rowNumber,statusIdx+1).setValue(docsReady?'COMPLETED':'PAYMENT_VERIFIED');
-  if(updatedIdx>=0) rrSheet.getRange(rrFound.rowNumber,updatedIdx+1).setValue(now);
-  if(docsReady){
-    const reg=findRegistration_(String(registrationId));
-    if(reg && String(reg.registration.status)!=='COMPLETED') setRegistrationStatus_(reg.registration,'COMPLETED',actorUserId||'SYSTEM','Dokumen dan pembayaran Daftar Ulang lengkap.');
-    const userId=String(reg?.registration?.userId||''); if(userId) createNotification_(userId,'Daftar Ulang Selesai','Dokumen dan pembayaran daftar ulang telah lengkap.','SUCCESS');
-  }
+
+function syncReregistrationAfterPayment_(registrationId, actorUserId, deferNotification) {
+  const rrSheet=getDatabaseSpreadsheet_().getSheetByName(PSB_SHEETS.REREGISTRATIONS);
+  const rrFound=findRowById_(rrSheet,'registrationId',String(registrationId));
+  if(!rrFound)return null;
+  const docs=getCurrentDocuments_(String(registrationId));
+  const required=getActiveMasterItems_('MASTER_DOKUMEN').filter(x=>x.required);
+  const docsReady=required.every(t=>{const d=docs.find(x=>String(x.documentTypeId)===String(t.documentTypeId));return d&&String(d.status||'').toUpperCase()==='VERIFIED';});
+  const payment=buildPaymentData_(String(registrationId)).bills.find(b=>/daftar\s*ulang/i.test(String(b.paymentTypeName||'')));
+  if(!payment||String(payment.status||'').toUpperCase()!=='PAID')return null;
+  const now=new Date(),headers=rrSheet.getRange(1,1,1,rrSheet.getLastColumn()).getValues()[0].map(String);
+  const statusIdx=headers.indexOf('status'),updatedIdx=headers.indexOf('updatedAt');
+  if(statusIdx>=0)rrSheet.getRange(rrFound.rowNumber,statusIdx+1).setValue(docsReady?'COMPLETED':'PAYMENT_VERIFIED');
+  if(updatedIdx>=0)rrSheet.getRange(rrFound.rowNumber,updatedIdx+1).setValue(now);
+  if(!docsReady)return null;
+  const reg=findRegistration_(String(registrationId));
+  if(reg&&String(reg.registration.status)!=='COMPLETED')setRegistrationStatus_(reg.registration,'COMPLETED',actorUserId||'SYSTEM','Dokumen dan pembayaran Daftar Ulang lengkap.');
+  const userId=String(reg?.registration?.userId||'');
+  if(!userId)return null;
+  const payload={userId,candidateName:String(reg?.candidate?.fullName||'calon santri')};
+  if(!deferNotification){createNotification_(userId,'Daftar Ulang Selesai','Dokumen dan pembayaran daftar ulang telah lengkap.','SUCCESS');return null;}
+  return payload;
 }
+
 
 // =====================================================
 // STAGE 6 - VERIFIKASI
@@ -4252,32 +4241,39 @@ function submitRegistration(sessionToken, registrationId) {
   const validation = validateCompleteRegistration_(found);
   if (!validation.success) return validation;
   const lock=LockService.getScriptLock(); try { lock.waitLock(10000); } catch (lockError) { return fail_('Server sedang memproses permintaan lain. Silakan coba kembali beberapa saat lagi.'); }
+  let notificationPayload=null, response;
   try {
-  const latest=findRegistration_(String(registrationId||''));
-  if(!latest) return fail_('Pendaftaran tidak ditemukan.');
-  if(String(latest.registration.userId)!==String(actor.userId) && !hasRoleDirect_(actor,['SUPERADMIN','ADMIN_PSB'])) return fail_('Anda tidak memiliki akses untuk mengirim pendaftaran ini.');
-  if(PSB_REGISTRATION_EDITABLE_STATUSES.indexOf(String(latest.registration.status))<0) return fail_('Pendaftaran tidak berada pada status yang dapat dikirim.');
-  const latestValidation=validateCompleteRegistration_(latest); if(!latestValidation.success) return latestValidation;
-  found=latest;
-  const sheet = getDatabaseSpreadsheet_().getSheetByName(PSB_SHEETS.REGISTRATIONS);
-  const headers = sheet.getRange(1,1,1,sheet.getLastColumn()).getValues()[0].map(String);
-  const row = found.registration.rowNumber;
-  const statusIdx = headers.indexOf('status');
-  const submittedIdx = headers.indexOf('submittedAt');
-  const updatedIdx = headers.indexOf('updatedAt');
-  const now = new Date();
-  const autoBill=ensureFormBillForRegistration_(found.registration.registrationId,null,actor.userId,true);
-  if(!autoBill.success) return fail_('Tagihan formulir belum dapat dibuat otomatis: '+autoBill.message+' Hubungi Superadmin untuk memeriksa Master Data → Jenis Pembayaran.');
-  if (statusIdx >= 0) sheet.getRange(row,statusIdx+1).setValue('SUBMITTED');
-  if (submittedIdx >= 0) sheet.getRange(row,submittedIdx+1).setValue(now);
-  if (updatedIdx >= 0) sheet.getRange(row,updatedIdx+1).setValue(now);
-  writeAudit_(actor.userId, 'SUBMIT', 'REGISTRATION', found.registration.registrationId, JSON.stringify({status:found.registration.status}), JSON.stringify({status:'SUBMITTED'}), 'Pendaftaran dikirim dan tagihan formulir dibuat otomatis');
-  const candidateName=String(found.candidate?.fullName||'calon santri');
-  notifyUsersByRoles_(['SUPERADMIN','ADMIN_PSB','KEUANGAN'],'Pendaftaran Baru — Verifikasi Pembayaran Formulir',candidateName+' telah mengirim pendaftaran '+String(found.registration.registrationNumber||found.registration.registrationId)+'. Tagihan formulir telah dibuat otomatis. Silakan periksa bukti pembayaran dan verifikasi setelah Wali mengunggahnya.','INFO');
-  notifyRegistrationOwner_(found.registration.registrationId,'Pendaftaran Berhasil Dikirim','Formulir berhasil dikirim dan tagihan pembayaran formulir telah tersedia. Silakan unggah bukti pembayaran melalui menu Pembayaran. Menu Upload Dokumen akan aktif setelah pembayaran dikonfirmasi oleh Keuangan. Verifikasi PSB dimulai setelah pembayaran dikonfirmasi oleh bagian Keuangan.','SUCCESS');
-  return { success:true, message:'Pendaftaran berhasil dikirim. Tagihan formulir telah dibuat otomatis; silakan unggah bukti pembayaran terlebih dahulu. Menu Upload Dokumen akan aktif setelah pembayaran dikonfirmasi oleh Keuangan.', status:'SUBMITTED', bill:autoBill.bill };
+    const latest=findRegistration_(String(registrationId||''));
+    if(!latest) return fail_('Pendaftaran tidak ditemukan.');
+    if(String(latest.registration.userId)!==String(actor.userId) && !hasRoleDirect_(actor,['SUPERADMIN','ADMIN_PSB'])) return fail_('Anda tidak memiliki akses untuk mengirim pendaftaran ini.');
+    if(PSB_REGISTRATION_EDITABLE_STATUSES.indexOf(String(latest.registration.status))<0) return fail_('Pendaftaran tidak berada pada status yang dapat dikirim.');
+    const latestValidation=validateCompleteRegistration_(latest); if(!latestValidation.success) return latestValidation;
+    found=latest;
+    const sheet = getDatabaseSpreadsheet_().getSheetByName(PSB_SHEETS.REGISTRATIONS);
+    const headers = sheet.getRange(1,1,1,sheet.getLastColumn()).getValues()[0].map(String);
+    const row = found.registration.rowNumber;
+    const statusIdx = headers.indexOf('status'), submittedIdx = headers.indexOf('submittedAt'), updatedIdx = headers.indexOf('updatedAt');
+    const now = new Date();
+    const autoBill=ensureFormBillForRegistration_(found.registration.registrationId,null,actor.userId,true);
+    if(!autoBill.success) return fail_('Tagihan formulir belum dapat dibuat otomatis: '+autoBill.message+' Hubungi Superadmin untuk memeriksa Master Data → Jenis Pembayaran.');
+    if (statusIdx >= 0) sheet.getRange(row,statusIdx+1).setValue('SUBMITTED');
+    if (submittedIdx >= 0) sheet.getRange(row,submittedIdx+1).setValue(now);
+    if (updatedIdx >= 0) sheet.getRange(row,updatedIdx+1).setValue(now);
+    writeAudit_(actor.userId, 'SUBMIT', 'REGISTRATION', found.registration.registrationId, JSON.stringify({status:found.registration.status}), JSON.stringify({status:'SUBMITTED'}), 'Pendaftaran dikirim dan tagihan formulir dibuat otomatis');
+    notificationPayload={registrationId:found.registration.registrationId,candidateName:String(found.candidate?.fullName||'calon santri'),registrationNumber:String(found.registration.registrationNumber||found.registration.registrationId),bill:autoBill.bill};
+    response={success:true,message:'Pendaftaran berhasil dikirim. Tagihan formulir telah dibuat otomatis; silakan unggah bukti pembayaran terlebih dahulu. Menu Upload Dokumen akan aktif setelah pembayaran dikonfirmasi oleh Keuangan.',status:'SUBMITTED',bill:autoBill.bill};
   } finally { lock.releaseLock(); }
+  // Notification delivery is outside the critical section; saved registration and bill remain authoritative.
+  if(notificationPayload){
+    const p=notificationPayload;
+    try{
+      notifyUsersByRoles_(['SUPERADMIN','ADMIN_PSB','KEUANGAN'],'Pendaftaran Baru — Verifikasi Pembayaran Formulir',p.candidateName+' telah mengirim pendaftaran '+p.registrationNumber+'. Tagihan formulir telah dibuat otomatis. Silakan periksa bukti pembayaran dan verifikasi setelah Wali mengunggahnya.','INFO');
+      notifyRegistrationOwner_(p.registrationId,'Pendaftaran Berhasil Dikirim','Formulir berhasil dikirim dan tagihan pembayaran formulir telah tersedia. Silakan unggah bukti pembayaran melalui menu Pembayaran. Menu Upload Dokumen akan aktif setelah pembayaran dikonfirmasi oleh Keuangan. Verifikasi PSB dimulai setelah pembayaran dikonfirmasi oleh bagian Keuangan.','SUCCESS');
+    }catch(notificationError){console.error('Registration submission notifications failed after save: '+notificationError);}
+  }
+  return response;
 }
+
 
 function validateRegistrationPayload_(payload, strict) {
   const c = payload.candidate || {}, g = payload.guardian || {}, a = payload.address || {}, s = payload.school || {};
