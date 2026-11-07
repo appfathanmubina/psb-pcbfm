@@ -82,11 +82,11 @@ const context = {
   findParticipantRegistration_: participant => participant && participant.registrationId ? participant.registrationId : '',
   sortCountMap_: obj => Object.keys(obj || {}).map(name => ({ name, count: Number(obj[name] || 0) })).sort((a,b) => b.count-a.count || a.name.localeCompare(b.name))
 };
-const selectionAdminRolesDeclaration = code.match(/^const PSB_SELECTION_ADMIN_ROLES = \\[[^\\n]+\\];$/m);
+const selectionAdminRolesDeclaration = code.match(/^const PSB_SELECTION_ADMIN_ROLES = \[[^\n]+\];$/m);
 assert.ok(selectionAdminRolesDeclaration,
   'Production backend must declare the selection admin role allowlist used by Dashboard');
 vm.createContext(context);
-vm.runInContext(selectionAdminRolesDeclaration[0] + '\\n' + page, context);
+vm.runInContext(selectionAdminRolesDeclaration[0] + '\n' + page, context);
 
 function response(role) {
   return JSON.parse(JSON.stringify(context.getDashboardPageData(role)));
