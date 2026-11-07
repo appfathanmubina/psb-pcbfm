@@ -2982,41 +2982,49 @@ function publishAnnouncement(sessionToken,payload) {
   const registrationId=String(payload.registrationId||'').trim();
   if(!registrationId)return fail_('Pendaftaran wajib dipilih.');
   const ss=getDatabaseSpreadsheet_(), resultSheet=ss.getSheetByName(PSB_SHEETS.SELECTION_RESULTS);
-  const initial=findRowById_(resultSheet,'registrationId',registrationId);
-  if(!initial)return fail_('Hasil seleksi belum tersedia.');
-  const status=String(initial.object.status||'').toUpperCase();
-  if(!['PASSED','NOT_PASSED','WAITLIST'].includes(status))return fail_('Hasil masih menunggu keputusan dan belum dapat diumumkan.');
-  const initialReg=findRegistration_(registrationId); if(!initialReg)return fail_('Pendaftaran tidak ditemukan.');
-  if(!['SELECTION','PASSED'].includes(String(initialReg.registration.status||'').toUpperCase()))return fail_('Pendaftaran belum berada pada tahap yang dapat diumumkan.');
+  if(!resultSheet)return fail_('Sheet hasil seleksi belum tersedia.');
   const headers=resultSheet.getRange(1,1,1,resultSheet.getLastColumn()).getValues()[0].map(String), dateIdx=headers.indexOf('announcementDate');
   if(dateIdx<0)return fail_('Kolom tanggal pengumuman belum tersedia.');
-  if(String(initial.object.announcementDate||'').trim()!=='')return {success:true,message:'Pengumuman untuk pendaftar ini sudah dipublikasikan.',announcementDate:rpcSafe_(initial.object.announcementDate),result:rpcSafe_(initial.object),alreadyPublished:true};
   const lock=LockService.getScriptLock(); try{lock.waitLock(10000);}catch(lockError){return fail_('Server sedang memproses permintaan lain. Silakan coba kembali beberapa saat lagi.');}
   let notificationPayload=null,response;
   try{
     const latest=findRowById_(resultSheet,'registrationId',registrationId);
     if(!latest)return fail_('Hasil seleksi belum tersedia.');
-    if(String(latest.object.announcementDate||'').trim()!=='')return {success:true,message:'Pengumuman untuk pendaftar ini sudah dipublikasikan.',announcementDate:rpcSafe_(latest.object.announcementDate),result:rpcSafe_(latest.object),alreadyPublished:true};
+    const latestStatus=String(latest.object.status||'').toUpperCase();
+    if(!['PASSED','NOT_PASSED','WAITLIST'].includes(latestStatus))return fail_('Hasil seleksi belum dapat diumumkan.');
     const latestReg=findRegistration_(registrationId);
     if(!latestReg)return fail_('Pendaftaran tidak ditemukan.');
-    if(!['SELECTION','PASSED'].includes(String(latestReg.registration.status||'').toUpperCase()))return fail_('Pendaftaran sudah berpindah tahap dan tidak dapat diumumkan dari status saat ini.');
-    const previous=latest.object, now=new Date();
-    resultSheet.getRange(latest.rowNumber,dateIdx+1).setValue(now);
-    const regSheet=ss.getSheetByName(PSB_SHEETS.REGISTRATIONS),regRow=findRowById_(regSheet,'registrationId',registrationId);
-    if(regRow){
-      const regHeaders=regSheet.getRange(1,1,1,regSheet.getLastColumn()).getValues()[0].map(String);
-      const statusIdx=regHeaders.indexOf('status'),updatedIdx=regHeaders.indexOf('updatedAt');
-      if(statusIdx>=0){const nextStatus=status==='PASSED'?'REREGISTRATION':status==='NOT_PASSED'?'NOT_PASSED':'SELECTION';regSheet.getRange(regRow.rowNumber,statusIdx+1).setValue(nextStatus);if(updatedIdx>=0)regSheet.getRange(regRow.rowNumber,updatedIdx+1).setValue(now);}
+    const currentRegStatus=String(latestReg.registration.status||'').toUpperCase();
+    const alreadyPublished=String(latest.object.announcementDate||'').trim()!=='';
+    if(!alreadyPublished && !['SELECTION','PASSED'].includes(currentRegStatus))return fail_('Pendaftaran sudah berpindah tahap dan tidak dapat diumumkan dari status saat ini.');
+
+    // Prepare required follow-up data before committing the announcement marker.
+    if(latestStatus==='PASSED'){
+      const rr=ensureReregistration_(registrationId,actor.userId,true);
+      if(!rr)return fail_('Pengumuman belum dapat dipublikasikan karena daftar ulang atau tagihannya belum dapat disiapkan. Periksa master jenis pembayaran dan sheet tagihan.');
     }
-    if(status==='PASSED')ensureReregistration_(registrationId,actor.userId,true);
-    const userId=String(latestReg.registration.userId||'').trim(),candidateName=String(latestReg.candidate?.fullName||latestReg.candidate?.name||'Calon santri');
-    const title=status==='PASSED'?'Pengumuman Hasil Seleksi':status==='NOT_PASSED'?'Pengumuman Hasil Seleksi':'Informasi Hasil Seleksi';
-    const message=status==='PASSED'?`Hasil seleksi untuk ${candidateName}: LULUS. Silakan buka menu Pengumuman untuk melihat informasi selanjutnya.`:status==='NOT_PASSED'?`Hasil seleksi untuk ${candidateName}: TIDAK LULUS. Silakan buka menu Pengumuman untuk melihat detail hasil.`:`Hasil seleksi untuk ${candidateName}: CADANGAN. Silakan buka menu Pengumuman untuk melihat informasi selanjutnya.`;
-    notificationPayload={userId,status,title,message};
-    writeAudit_(actor.userId,'ANNOUNCEMENT','ANNOUNCEMENT',String(latest.object.resultId||registrationId),JSON.stringify(previous),JSON.stringify(Object.assign({},previous,{announcementDate:now})),`Pengumuman hasil seleksi dipublikasikan: ${status}`);
-    response={success:true,message:'Pengumuman berhasil dipublikasikan.',announcementDate:rpcSafe_(now),result:rpcSafe_(Object.assign({},previous,{announcementDate:now}))};
+
+    const nextStatus=latestStatus==='PASSED'?'REREGISTRATION':latestStatus==='NOT_PASSED'?'NOT_PASSED':'SELECTION';
+    if(currentRegStatus!==nextStatus){
+      const moved=setRegistrationStatus_(latestReg.registration,nextStatus,actor.userId,alreadyPublished?'Pemulihan status setelah pengumuman hasil seleksi.':'Status pendaftaran diperbarui saat pengumuman hasil seleksi.');
+      if(!moved?.success)return moved;
+    }
+
+    if(alreadyPublished){
+      response={success:true,message:'Pengumuman sudah dipublikasikan dan data tindak lanjut telah dipastikan.',announcementDate:rpcSafe_(latest.object.announcementDate),result:rpcSafe_(latest.object),alreadyPublished:true};
+    } else {
+      const previous=latest.object, now=new Date();
+      // announcementDate is the commit marker; write it after follow-up data is ready.
+      resultSheet.getRange(latest.rowNumber,dateIdx+1).setValue(now);
+      const userId=String(latestReg.registration.userId||'').trim(),candidateName=String(latestReg.candidate?.fullName||latestReg.candidate?.name||'Calon santri');
+      const title=latestStatus==='PASSED'?'Pengumuman Hasil Seleksi':latestStatus==='NOT_PASSED'?'Pengumuman Hasil Seleksi':'Informasi Hasil Seleksi';
+      const message=latestStatus==='PASSED'?'Hasil seleksi untuk '+candidateName+': LULUS. Silakan buka menu Pengumuman untuk melihat informasi selanjutnya.':latestStatus==='NOT_PASSED'?'Hasil seleksi untuk '+candidateName+': TIDAK LULUS. Silakan buka menu Pengumuman untuk melihat detail hasil.':'Hasil seleksi untuk '+candidateName+': CADANGAN. Silakan buka menu Pengumuman untuk melihat informasi selanjutnya.';
+      notificationPayload={userId,status:latestStatus,title,message};
+      writeAudit_(actor.userId,'ANNOUNCEMENT','ANNOUNCEMENT',String(latest.object.resultId||registrationId),JSON.stringify(previous),JSON.stringify(Object.assign({},previous,{announcementDate:now})),'Pengumuman hasil seleksi dipublikasikan: '+latestStatus);
+      response={success:true,message:'Pengumuman berhasil dipublikasikan.',announcementDate:rpcSafe_(now),result:rpcSafe_(Object.assign({},previous,{announcementDate:now}))};
+    }
   }finally{lock.releaseLock();}
-  // Fanout notification is deliberately outside the lock; announcement state is already committed.
+  // Fanout notification is deliberately outside the lock; state is committed.
   if(notificationPayload?.userId){
     const p=notificationPayload;
     try{
@@ -3026,7 +3034,6 @@ function publishAnnouncement(sessionToken,payload) {
   }
   return response;
 }
-
 
 function getNotifications(sessionToken) {
   const actor=requireRole_(sessionToken,PSB_ANNOUNCEMENT_VIEW_ROLES);
