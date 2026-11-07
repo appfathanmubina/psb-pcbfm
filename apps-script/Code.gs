@@ -3324,20 +3324,22 @@ function getDashboardPageData(sessionToken) {
   }
   const ss = getDatabaseSpreadsheet_();
   const activeYear = String(getConfig_('ACTIVE_YEAR') || '2027/2028');
-  const regs = sheetRows_(ss.getSheetByName(PSB_SHEETS.REGISTRATIONS));
+  const yearMasters = sheetRows_(ss.getSheetByName(PSB_SHEETS.MASTER_TAHUN_AJARAN));
+  const activeYearId = yearMasters.find(x => String(x.name || '') === activeYear)?.tahunAjaranId || '';
+  // Resolve the active year before reading registrations so historical rows
+  // are not transferred when the active-year master record is available.
+  const registrationSheet = ss.getSheetByName(PSB_SHEETS.REGISTRATIONS);
+  const periodRegs = activeYearId
+    ? sheetRowsMatchingValues_(registrationSheet, 'tahunAjaranId', [activeYearId])
+    : sheetRows_(registrationSheet);
   const users = canMonitoring ? sheetRows_(ss.getSheetByName(PSB_SHEETS.USERS)) : [];
   const schedules = canSelection ? sheetRows_(ss.getSheetByName(PSB_SHEETS.SELECTION_SCHEDULE)) : [];
-  const yearMasters = sheetRows_(ss.getSheetByName(PSB_SHEETS.MASTER_TAHUN_AJARAN));
   const jenjangMasters = sheetRows_(ss.getSheetByName(PSB_SHEETS.MASTER_JENJANG));
   const gelombangMasters = sheetRows_(ss.getSheetByName(PSB_SHEETS.MASTER_GELOMBANG));
   const jenjangMap = {};
   jenjangMasters.forEach(x => jenjangMap[String(x.jenjangId)] = x);
   const gelombangMap = {};
   gelombangMasters.forEach(x => gelombangMap[String(x.gelombangId)] = x);
-
-  // Dashboard hanya menghitung periode aktif agar angka operasional tidak tercampur tahun ajaran lama.
-  const activeYearId = yearMasters.find(x => String(x.name || '') === activeYear)?.tahunAjaranId || '';
-  const periodRegs = activeYearId ? regs.filter(x => String(x.tahunAjaranId) === String(activeYearId)) : regs;
   const periodRegistrationIds = periodRegs.map(x => String(x.registrationId || '')).filter(Boolean);
   const periodCandidateIds = periodRegs.map(x => String(x.candidateId || '')).filter(Boolean);
   // Read only records linked to the active academic year. The shared helper
