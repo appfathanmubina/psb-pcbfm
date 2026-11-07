@@ -420,12 +420,10 @@ function registerWali(payload) {
     const usersSheet = getDatabaseSpreadsheet_().getSheetByName('USERS');
     if (!usersSheet) return fail_('Database pengguna belum tersedia.');
 
-    const users = usersSheet.getLastRow() >= 2
-      ? usersSheet.getRange(2,1,usersSheet.getLastRow()-1,15).getValues()
-      : [];
+    const users = sheetRowsByFields_(usersSheet, ['phone','phoneNormalized','email','emailNormalized']);
     const duplicate = users.some(function(r) {
-      const existingPhone = String(r[3] || '').trim() || (r[2] ? normalizePhone_(r[2]) : '');
-      const existingEmail = String(r[5] || '').trim().toLowerCase() || String(r[4] || '').trim().toLowerCase();
+      const existingPhone = String(r.phoneNormalized || '').trim() || (r.phone ? normalizePhone_(r.phone) : '');
+      const existingEmail = String(r.emailNormalized || '').trim().toLowerCase() || String(r.email || '').trim().toLowerCase();
       return (input.phoneNormalized && existingPhone === input.phoneNormalized) ||
         (input.emailNormalized && existingEmail === input.emailNormalized);
     });
@@ -1110,13 +1108,11 @@ function createManualUser(sessionToken, payload) {
   try {
     const sheet = getDatabaseSpreadsheet_().getSheetByName('USERS');
     if (!sheet) return fail_('Database USERS belum tersedia. Jalankan setupPSBDatabase() terlebih dahulu.');
-    const lastRow = sheet.getLastRow();
-    const width = Math.max(15, sheet.getLastColumn());
-    const rows = lastRow >= 2 ? sheet.getRange(2, 1, lastRow - 1, width).getValues() : [];
+    const rows = sheetRowsByFields_(sheet, ['phoneNormalized','emailNormalized']);
     for (let i = 0; i < rows.length; i++) {
       const r = rows[i];
-      if (phoneNormalized && String(r[3] || '').toLowerCase() === phoneNormalized.toLowerCase()) return fail_('No. HP sudah terdaftar.');
-      if (emailNormalized && String(r[5] || '').toLowerCase() === emailNormalized) return fail_('Email sudah terdaftar.');
+      if (phoneNormalized && String(r.phoneNormalized || '').toLowerCase() === phoneNormalized.toLowerCase()) return fail_('No. HP sudah terdaftar.');
+      if (emailNormalized && String(r.emailNormalized || '').toLowerCase() === emailNormalized) return fail_('Email sudah terdaftar.');
     }
 
     const now = new Date();
