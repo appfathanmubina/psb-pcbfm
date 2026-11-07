@@ -13,12 +13,14 @@ assert.match(page, /requireRole_\(sessionToken, PSB_SELECTION_VIEW_ROLES\)/,
   'Selection view role gate must remain');
 assert.ok(page.indexOf('requireRole_(') < page.indexOf('getDatabaseSpreadsheet_('),
   'Authorization must happen before database access');
-assert.match(page, /const registrationRows = sheetRows_\(regSheet\)/,
-  'Registrations must be read once');
+assert.match(page, /const registrationRows = isWali\s*\?\s*sheetRowsMatchingValues_\(regSheet, 'userId', \[actor\.userId\]\)\s*:\s*sheetRowsByFields_\(regSheet,/,
+  'Wali registrations must be owner-filtered and staff registration reads must be column-scoped');
 assert.match(page, /registrationById\[key\] = r/,
   'A complete first-match registration lookup index must be built');
-assert.match(page, /const candidateMap = sheetMapById_\(ss\.getSheetByName\(PSB_SHEETS\.CANDIDATES\), 'candidateId'\)/,
-  'Candidate map must be loaded once');
+assert.match(page, /const candidateRows = isWali\s*\?\s*sheetRowsMatchingValues_\(candidateSheet, 'candidateId', candidateIds\)\s*:\s*sheetRowsByFields_\(candidateSheet,/,
+  'Wali candidate reads must be restricted to owned registrations and staff candidate reads must be column-scoped');
+assert.match(page, /const candidateMap = \{\}/,
+  'Candidate lookup map must be built once from the preloaded candidate rows');
 assert.match(page, /enrichRegistrationList_\(registrationItems, enrichmentMaps\)\.slice\(0, 300\)/,
   'Registration enrichment must reuse preloaded maps and preserve the 300-item cap');
 assert.match(page, /years: sheetMapById_/,
@@ -47,8 +49,8 @@ assert.match(page, /scores: isWali \? \[\] : \(participant \? \(scoresByParticip
   'Detail response must hide all scores from Wali and use the participant index for staff');
 assert.match(page, /result: isWali && !resultIsPublished \? null : selectedResult/,
   'Detail response must hide unpublished results from Wali while preserving staff detail');
-assert.doesNotMatch(page, /findRegistration_\(/,
-  'Selection page must not reread registration-related sheets through findRegistration_');
+assert.match(page, /registrationById\[selectedId\] \|\| \(!isWali \? null : findRegistration_\(selectedId\)\?\.registration\)/,
+  'Only Wali detail outside the visible registration index may use the ownership-checked fallback lookup');
 assert.doesNotMatch(page, /participantItems\.some\(/,
   'Wali score filtering must not scan participants for every score');
 assert.doesNotMatch(page, /scores\.filter\(x => String\(x\.participantId\) === String\(participant\.participantId\)\)/,
