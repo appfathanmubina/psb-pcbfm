@@ -4138,6 +4138,7 @@ function getDocumentPageData(sessionToken, registrationId) {
     return fail_('Anda tidak memiliki akses ke dokumen pendaftaran ini.');
   }
 
+  const candidateId = String(registration.candidateId || '');
   const relatedRowsByCandidate = field => {
     const rows = sheetRowsMatchingValues_(ss.getSheetByName(field.sheet), 'candidateId', [candidateId]);
     const firstByCandidate = Object.create(null);
@@ -4157,7 +4158,6 @@ function getDocumentPageData(sessionToken, registrationId) {
   const guardians = relatedRowsByCandidate({sheet:PSB_SHEETS.GUARDIANS});
   const addresses = relatedRowsByCandidate({sheet:PSB_SHEETS.ADDRESSES});
   const schools = relatedRowsByCandidate({sheet:PSB_SHEETS.SCHOOLS});
-  const candidateId = String(registration.candidateId || '');
   const candidate = candidatesForDetail[candidateId] || null;
   const guardian = guardians[candidateId] || null;
   const address = addresses[candidateId] || null;
