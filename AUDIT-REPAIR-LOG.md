@@ -430,3 +430,20 @@ Branch: `perf/dashboard-role-scoped-queues`
 - Dashboard summary and KPI fields are unchanged; this batch scopes operational task queues and selection schedule details only.
 - No Spreadsheet schema, stored data, or production deployment changed.
 - Apps Script staging-runtime validation remains pending; CI adds a role-by-role backend fixture regression test.
+
+## Repair batch 13 — idempotent new-registration persistence
+
+Branch: `fix/registration-idempotent-save`
+
+| ID | Finding | Change | Status |
+|---|---|---|---|
+| REG-002 | A new form's client-generated registration ID was ignored by the backend. Related-sheet writes occurred before the registration row, so a partial failure followed by retry could create a second registration and duplicate related records. | Reuse the supplied registration ID; derive bounded deterministic candidate/guardian/address/school IDs from it; write the registration ownership/status row first as a durable retry anchor; then upsert related rows. A retry rechecks owner and editable status before completing missing related rows. | Implemented; regression test added; CI pending; Apps Script staging/runtime test pending |
+
+### Scope and safety
+
+- Existing registration IDs and related IDs are preserved when present; the change only supplies deterministic IDs when creating a new registration or recovering a missing related row.
+- Registration number generation remains inside the existing ScriptLock.
+- Existing role checks, ownership checks, editable-status checks, operational mutation guard, master-data validation, field validation, audit behavior, and response shape remain unchanged.
+- No Spreadsheet schema, frontend form, payment rule, status transition, or production data was changed.
+- The registration row is written before related rows so a partial failure is discoverable on retry; subsequent retries reuse the same registration and child keys.
+- No Apps Script deployment or production data mutation was performed.
