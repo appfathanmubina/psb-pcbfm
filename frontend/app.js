@@ -257,6 +257,11 @@ function scheduleWarmNavigationData(){
 }
 async function boot(){
   hydrateSplashLogo();
+  // Establish the Apps Script bridge in the background before the user submits
+  // the login form. Login will reuse this token instead of waiting for a GET handshake.
+  if(window.PSBBridge&&typeof window.PSBBridge.prepare==='function'){
+    window.PSBBridge.prepare().catch(error=>console.warn('PSB bridge warm-up skipped:',error));
+  }
   loading(true,'Memeriksa aplikasi...');
   const configTask=refreshPublicConfig();
   try{
