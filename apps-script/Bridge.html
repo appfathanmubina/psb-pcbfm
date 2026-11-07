@@ -13,27 +13,38 @@
   (function () {
     'use strict';
     const SOURCE = 'psb-fm-api-bridge';
-    const VERSION = '32.5.0';
+    const VERSION = '32.6.0';
     const TARGET_ORIGIN = '<?= bridgeOrigin ?>';
     const CHALLENGE = '<?= bridgeChallenge ?>';
     const TOKEN = '<?= bridgeToken ?>';
+    const BRIDGE_ERROR = '<?= bridgeError ?>';
 
     // This is an outbound-only handshake. The PWA does not postMessage into
     // this HTML Service frame because Apps Script Warden may drop that traffic.
-    if (!TARGET_ORIGIN || !/^[a-f0-9]{32}$/i.test(CHALLENGE) ||
-        !/^[a-f0-9]{64}$/i.test(TOKEN)) return;
+    if (!TARGET_ORIGIN || !/^[a-f0-9]{32}$/i.test(CHALLENGE)) return;
 
     try {
-      window.top.postMessage({
-        source: SOURCE,
-        type: 'ready',
-        version: VERSION,
-        challenge: CHALLENGE,
-        token: TOKEN
-      }, TARGET_ORIGIN);
+      if (/^[a-f0-9]{64}$/i.test(TOKEN)) {
+        window.top.postMessage({
+          source: SOURCE,
+          type: 'ready',
+          version: VERSION,
+          challenge: CHALLENGE,
+          token: TOKEN
+        }, TARGET_ORIGIN);
+      } else {
+        window.top.postMessage({
+          source: SOURCE,
+          type: 'error',
+          version: VERSION,
+          challenge: CHALLENGE,
+          code: 'BRIDGE_TOKEN_ISSUE_FAILED',
+          message: 'Apps Script tidak dapat menerbitkan token koneksi (' +
+            String(BRIDGE_ERROR || 'TOKEN_ISSUE_FAILED') + ').'
+        }, TARGET_ORIGIN);
+      }
     } catch (error) {
-      // The parent transport will report a bounded timeout if the message
-      // cannot be delivered. Do not expose internal frame details.
+      // The parent transport reports a bounded timeout if postMessage is blocked.
     }
   })();
   </script>
