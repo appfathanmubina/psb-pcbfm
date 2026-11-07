@@ -27,7 +27,7 @@ for (const [name, timeout] of [
   ['submitRegistration', 10000]
 ]) {
   const body = functionSource(name);
-  assert.match(body, new RegExp('try \\{ (?:lock|guard)\\.waitLock\\(' + timeout + '\\); \\} catch \\(lockError\\) \\{ return fail_\\('),
+  assert.match(body, new RegExp('try\\s*\\{\\s*(?:lock|guard)\\.waitLock\\(' + timeout + '\\);\\s*\\}\\s*catch\\s*\\(lockError\\)\\s*\\{\\s*return fail_\\('),
     name + ' must handle ScriptLock contention without leaking an uncaught timeout');
 }
 
