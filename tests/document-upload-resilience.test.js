@@ -41,7 +41,7 @@ assert.match(bridge, /MAX_PAYLOAD_CHARS = 20 \* 1024 \* 1024/,
   'the existing bounded request payload limit must remain in place');
 assert.match(html, /api-bridge\.js\?v=32\.17\.0/,
   'PWA must load the updated upload transport');
-assert.match(serviceWorker, /api-bridge\.js\?v=32\.16\.0/,
+assert.match(serviceWorker, /api-bridge\.js\?v=32\.17\.0/,
   'service worker must precache the updated upload transport');
 assert.match(serviceWorker, /psb-pwa-shell-v32-35-0/,
   'PWA shell cache must be versioned for the upload transport change');
