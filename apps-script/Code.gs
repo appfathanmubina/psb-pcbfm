@@ -2876,7 +2876,6 @@ function getSelectionPageData(sessionToken, registrationId) {
     ? results.filter(x => regMap[String(x.registrationId)] && String(x.announcementDate || '').trim() !== '')
     : results;
 
-  const selectedId = String(registrationId||'');
   let detail = null;
   if(selectedId){
     const foundRegistration = registrationById[selectedId] || (!isWali ? null : findRegistration_(selectedId)?.registration) || null;
