@@ -3218,13 +3218,13 @@ function getDashboardPageData(sessionToken) {
   const activeYear = String(getConfig_('ACTIVE_YEAR') || '2027/2028');
   const regs = sheetRows_(ss.getSheetByName(PSB_SHEETS.REGISTRATIONS));
   const candidates = sheetRows_(ss.getSheetByName(PSB_SHEETS.CANDIDATES));
-  const users = sheetRows_(ss.getSheetByName(PSB_SHEETS.USERS));
+  const users = canMonitoring ? sheetRows_(ss.getSheetByName(PSB_SHEETS.USERS)) : [];
   const bills = sheetRows_(ss.getSheetByName(PSB_SHEETS.BILLS));
   const payments = sheetRows_(ss.getSheetByName(PSB_SHEETS.PAYMENTS));
   const participants = sheetRows_(ss.getSheetByName(PSB_SHEETS.SELECTION_PARTICIPANTS));
   const results = sheetRows_(ss.getSheetByName(PSB_SHEETS.SELECTION_RESULTS));
   const reregistrations = sheetRows_(ss.getSheetByName(PSB_SHEETS.REREGISTRATIONS));
-  const schedules = sheetRows_(ss.getSheetByName(PSB_SHEETS.SELECTION_SCHEDULE));
+  const schedules = canSelection ? sheetRows_(ss.getSheetByName(PSB_SHEETS.SELECTION_SCHEDULE)) : [];
   const yearMasters = sheetRows_(ss.getSheetByName(PSB_SHEETS.MASTER_TAHUN_AJARAN));
   const jenjangMasters = sheetRows_(ss.getSheetByName(PSB_SHEETS.MASTER_JENJANG));
   const gelombangMasters = sheetRows_(ss.getSheetByName(PSB_SHEETS.MASTER_GELOMBANG));
