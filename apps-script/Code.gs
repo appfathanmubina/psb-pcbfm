@@ -2492,17 +2492,27 @@ function getSelectionPageData(sessionToken, registrationId) {
   const isWali = hasRoleDirect_(actor, ['WALI']);
   const ss = getDatabaseSpreadsheet_();
 
-  // Read registrations once. Keep both the complete lookup index and the
-  // capped/authorized list used by the existing response contract.
+  // Wali only needs their own registrations; administrative roles retain
+  // the complete registration index and existing list scope.
   const regSheet = ss.getSheetByName(PSB_SHEETS.REGISTRATIONS);
-  const registrationRows = sheetRows_(regSheet);
+  const registrationRows = isWali
+    ? sheetRowsMatchingValues_(regSheet, 'userId', [actor.userId])
+    : sheetRows_(regSheet);
   const registrationById = {};
   registrationRows.forEach(r => {
     const key = String(r.registrationId || '');
     if (key && !Object.prototype.hasOwnProperty.call(registrationById, key)) registrationById[key] = r;
   });
 
-  const candidateMap = sheetMapById_(ss.getSheetByName(PSB_SHEETS.CANDIDATES), 'candidateId');
+  const candidateIds = registrationRows.map(r => String(r.candidateId || '')).filter(Boolean);
+  const candidateRows = isWali
+    ? sheetRowsMatchingValues_(ss.getSheetByName(PSB_SHEETS.CANDIDATES), 'candidateId', candidateIds)
+    : sheetRows_(ss.getSheetByName(PSB_SHEETS.CANDIDATES));
+  const candidateMap = {};
+  candidateRows.forEach(r => {
+    const key = String(r.candidateId || '');
+    if (key && !Object.prototype.hasOwnProperty.call(candidateMap, key)) candidateMap[key] = r;
+  });
   const enrichmentMaps = {
     candidates: candidateMap,
     years: sheetMapById_(ss.getSheetByName(PSB_SHEETS.MASTER_TAHUN_AJARAN), 'tahunAjaranId'),
@@ -2527,9 +2537,14 @@ function getSelectionPageData(sessionToken, registrationId) {
     .filter(x=>!yearId || String(x.tahunAjaranId)===yearId)
     .sort((a,b)=>String(a.selectionDate||'').localeCompare(String(b.selectionDate||'')));
 
-  const participants = sheetRows_(ss.getSheetByName(PSB_SHEETS.SELECTION_PARTICIPANTS));
-  const scores = sheetRows_(ss.getSheetByName(PSB_SHEETS.SELECTION_SCORES));
-  const results = sheetRows_(ss.getSheetByName(PSB_SHEETS.SELECTION_RESULTS));
+  const visibleRegistrationIds = registrationRows.map(r => String(r.registrationId || '')).filter(Boolean);
+  const participants = isWali
+    ? sheetRowsMatchingValues_(ss.getSheetByName(PSB_SHEETS.SELECTION_PARTICIPANTS), 'registrationId', visibleRegistrationIds)
+    : sheetRows_(ss.getSheetByName(PSB_SHEETS.SELECTION_PARTICIPANTS));
+  const scores = isWali ? [] : sheetRows_(ss.getSheetByName(PSB_SHEETS.SELECTION_SCORES));
+  const results = isWali
+    ? sheetRowsMatchingValues_(ss.getSheetByName(PSB_SHEETS.SELECTION_RESULTS), 'registrationId', visibleRegistrationIds)
+    : sheetRows_(ss.getSheetByName(PSB_SHEETS.SELECTION_RESULTS));
 
   // Request-local indexes avoid repeated full-array scans and per-participant
   // related-sheet lookups. Arrays retain sheet order and first-match behavior.
@@ -2573,7 +2588,7 @@ function getSelectionPageData(sessionToken, registrationId) {
   const selectedId = String(registrationId||'');
   let detail = null;
   if(selectedId){
-    const foundRegistration = registrationById[selectedId] || null;
+    const foundRegistration = registrationById[selectedId] || (!isWali ? null : findRegistration_(selectedId)?.registration) || null;
     if(!foundRegistration) return fail_('Pendaftaran tidak ditemukan.');
     if(!canAccessRegistration_(actor,foundRegistration) && !hasRoleDirect_(actor,PSB_SELECTION_ADMIN_ROLES)) return fail_('Anda tidak memiliki akses ke proses seleksi ini.');
     const participant = (participantsByRegistration[selectedId] || [])[0] || null;
