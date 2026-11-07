@@ -596,7 +596,6 @@ function buildMobileNav(){
   const all=buildRoleNav();
   const role=hasAnyRole(['SUPERADMIN'])?'SUPERADMIN':hasAnyRole(['ADMIN_PSB'])?'ADMIN_PSB':hasAnyRole(['WALI'])?'WALI':'';
   if(role==='WALI'){
-    // Lima menu utama Wali ditampilkan langsung tanpa tombol Lainnya.
     const waliIds=['home','registration','payments','documents','announcement'];
     return waliIds.map(id=>all.find(x=>x[0]===id)).filter(Boolean);
   }
