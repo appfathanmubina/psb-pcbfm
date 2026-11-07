@@ -10,14 +10,18 @@ assert.ok(queueEnd > queueStart, 'Verification queue backend boundary exists');
 const queue = code.slice(queueStart, queueEnd);
 assert.match(queue, /sheetRowsByFields_\(sheet,\s*\[/,
   'Queue must project filter and sort fields before loading complete rows');
-assert.match(queue, /const selected = projected\.filter\(/,
-  'Queue status/search filtering must happen on projected rows');
+assert.match(queue, /let selected = projected\.filter\(/,
+  'Queue status/payment eligibility filtering must happen on projected rows before candidate-name search');
 assert.match(queue, /sheetRowsAtRowNumbers_\(sheet,\s*rowNumbers\)/,
   'Only the capped matching queue rows should be converted to complete objects');
 assert.match(queue, /registrationNumber.*registrationId|registrationId.*registrationNumber/s,
   'Search must continue checking registration number and ID');
-assert.match(queue, /selected\.slice\(0,200\)\.map\(item => item\.rowNumber\)/,
-  'Queue must apply the 200-row cap before full-row reads and enrichment');
+assert.match(queue, /pageSize = Math\.min\(100, Math\.max\(1/,
+  'Queue page size must remain bounded');
+assert.match(queue, /selected\.slice\(\(page - 1\) \* pageSize, page \* pageSize\)\.map\(item => item\.rowNumber\)/,
+  'Queue must select only the requested page before full-row reads and enrichment');
+assert.match(queue, /candidate\.fullName, candidate\.name/,
+  'Queue search must include candidate names without loading full registration rows');
 assert.match(queue, /enrichRegistrationList_\(limitedItems\)/,
   'Only capped queue records should be enriched');
 
