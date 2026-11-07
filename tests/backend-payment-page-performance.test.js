@@ -44,11 +44,11 @@ assert.ok(queueEnd > queueStart, 'Staff payment queue backend boundary exists');
 const queue = code.slice(queueStart, queueEnd);
 assert.match(queue, /requireRole_\(sessionToken, PSB_PAYMENT_MANAGE_ROLES\)/,
   'Only payment-managing staff roles may read the global payment queue');
-assert.match(queue, /sheetRowsByFields_\\(billSheet, \\['status','createdAt'\\]\\)/,
+assert.match(queue, /sheetRowsByFields_\(billSheet, \['status','createdAt'\]\)/,
   'Queue must scan only status and createdAt columns for counting and ordering');
-assert.match(queue, /sheetRowsAtRowNumbers_\\(billSheet,pageBillRefs\\.map\\(x=>x\\.rowNumber\\)\\)/,
+assert.match(queue, /sheetRowsAtRowNumbers_\(billSheet,pageBillRefs\.map\(x=>x\.rowNumber\)\)/,
   'Queue must fetch full bill rows only for the requested page');
-assert.doesNotMatch(queue, /sheetRowsByFields_\\(billSheet,\\s*\\['billId','registrationId','paymentTypeId','amount','dueDate','status','createdAt'\\]\\)/,
+assert.doesNotMatch(queue, /sheetRowsByFields_\(billSheet,\s*\['billId','registrationId','paymentTypeId','amount','dueDate','status','createdAt'\]\)/,
   'Queue must not project every bill field across the full sheet');
 assert.match(queue, /pageSize = 50/,
   'Queue must return a bounded page size');
