@@ -768,14 +768,18 @@ function getSessionUser_(token, touch) {
   if (!found) {
     const lastRow = sheet.getLastRow();
     if (lastRow >= 2) {
-    const rows = sheet.getRange(2, 1, lastRow - 1, 7).getValues();
-    for (let i = rows.length - 1; i >= 0; i--) {
-      if (constantTimeEqual_(String(rows[i][2] || ''), tokenHash)) {
-        found = { rowNumber: i + 2, row: rows[i] };
-        try { cache.put(sessionCacheKey, String(found.rowNumber), 21600); } catch (e) {}
-        break;
+      // Token hash is column C. Scan this narrow column from newest to oldest
+      // (same precedence as before), then fetch the complete row only on match.
+      const tokenHashes = sheet.getRange(2, 3, lastRow - 1, 1).getValues();
+      for (let i = tokenHashes.length - 1; i >= 0; i--) {
+        if (constantTimeEqual_(String(tokenHashes[i][0] || ''), tokenHash)) {
+          const rowNumber = i + 2;
+          const row = sheet.getRange(rowNumber, 1, 1, 7).getValues()[0];
+          found = { rowNumber: rowNumber, row: row };
+          try { cache.put(sessionCacheKey, String(found.rowNumber), 21600); } catch (e) {}
+          break;
+        }
       }
-    }
     }
   }
   if (!found) return fail_('Session tidak valid. Silakan login kembali.');
@@ -938,14 +942,23 @@ function findUser_(key) {
 
   const lastRow = sheet.getLastRow();
   if (lastRow < 2) return null;
-  const rows = sheet.getRange(2, 1, lastRow - 1, 15).getValues();
-  for (let i = 0; i < rows.length; i++) {
-    if (matches(rows[i])) {
+  // Identity lookup only needs USERS columns C:F (phone, normalized phone,
+  // email, normalized email). Fetch the complete account row only on a match.
+  const identities = sheet.getRange(2, 3, lastRow - 1, 4).getValues();
+  for (let i = 0; i < identities.length; i++) {
+    const identity = identities[i];
+    const normalizedMatch = String(identity[1] || '').trim().toLowerCase() === normalized ||
+      String(identity[3] || '').trim().toLowerCase() === normalized;
+    const legacyMatch = String(identity[0] || '').trim().toLowerCase() === normalized ||
+      String(identity[2] || '').trim().toLowerCase() === normalized;
+    if (normalizedMatch || legacyMatch) {
+      const rowNumber = i + 2;
+      const row = sheet.getRange(rowNumber, 1, 1, 15).getValues()[0];
       try {
-        cache.put(cacheKey, String(i + 2), 21600);
-        cache.put('PSB_USER_ROW_ID_V1_' + sha256Hex_(String(rows[i][0] || '')).substring(0, 32), String(i + 2), 21600);
+        cache.put(cacheKey, String(rowNumber), 21600);
+        cache.put('PSB_USER_ROW_ID_V1_' + sha256Hex_(String(row[0] || '')).substring(0, 32), String(rowNumber), 21600);
       } catch (e) {}
-      return userFromRow_(rows[i], i + 2);
+      return userFromRow_(row, rowNumber);
     }
   }
   return null;
@@ -974,11 +987,14 @@ function findUserById_(id, bypassCache) {
 
   const lastRow = sheet.getLastRow();
   if (lastRow < 2) return null;
-  const rows = sheet.getRange(2, 1, lastRow - 1, 15).getValues();
-  for (let i = 0; i < rows.length; i++) {
-    if (String(rows[i][0] || '') === value) {
-      try { cache.put(cacheKey, String(i + 2), 21600); } catch (e) {}
-      return userFromRow_(rows[i], i + 2);
+  // USER ID is column A; avoid transferring all 15 account columns on a cache miss.
+  const ids = sheet.getRange(2, 1, lastRow - 1, 1).getValues();
+  for (let i = 0; i < ids.length; i++) {
+    if (String(ids[i][0] || '') === value) {
+      const rowNumber = i + 2;
+      const row = sheet.getRange(rowNumber, 1, 1, 15).getValues()[0];
+      try { cache.put(cacheKey, String(rowNumber), 21600); } catch (e) {}
+      return userFromRow_(row, rowNumber);
     }
   }
   return null;
@@ -4563,14 +4579,53 @@ function findRegistrationBatch_(ss, registrationId) {
   };
 }
 
+function findFirstIndexedRow_(sheet, idField, id, preferPrimary) {
+  if (!sheet || sheet.getLastRow() < 2) return null;
+  const lastRow = sheet.getLastRow();
+  const lastColumn = sheet.getLastColumn();
+  if (lastColumn < 1) return null;
+  const headers = sheet.getRange(1, 1, 1, lastColumn).getValues()[0].map(String);
+  const idIndex = headers.indexOf(String(idField));
+  if (idIndex < 0) return null;
+
+  // Scan only the lookup column. If a primary row is preferred, inspect only
+  // the isPrimary column before fetching the selected complete record.
+  const keys = sheet.getRange(2, idIndex + 1, lastRow - 1, 1).getValues();
+  let firstMatch = 0;
+  const matches = [];
+  for (let i = 0; i < keys.length; i++) {
+    if (String(keys[i][0] || '') !== String(id || '')) continue;
+    const rowNumber = i + 2;
+    if (!firstMatch) firstMatch = rowNumber;
+    matches.push(rowNumber);
+  }
+  if (!firstMatch) return null;
+
+  let selectedRow = firstMatch;
+  const primaryIndex = preferPrimary ? headers.indexOf('isPrimary') : -1;
+  if (primaryIndex >= 0 && matches.length > 1) {
+    const primaryValues = sheet.getRange(2, primaryIndex + 1, lastRow - 1, 1).getValues();
+    for (let i = 0; i < matches.length; i++) {
+      const rowNumber = matches[i];
+      const value = primaryValues[rowNumber - 2][0];
+      if (value === true || String(value).toUpperCase() === 'TRUE') {
+        selectedRow = rowNumber;
+        break;
+      }
+    }
+  }
+  const row = sheet.getRange(selectedRow, 1, 1, lastColumn).getValues()[0];
+  return { rowNumber: selectedRow, object: rowObject_(headers, row, selectedRow) };
+}
+
 function findRegistration_(registrationId) {
   const ss = getDatabaseSpreadsheet_();
-  const reg = findRowById_(ss.getSheetByName(PSB_SHEETS.REGISTRATIONS), 'registrationId', registrationId);
+  const reg = findFirstIndexedRow_(ss.getSheetByName(PSB_SHEETS.REGISTRATIONS), 'registrationId', registrationId, false);
   if (!reg) return null;
-  const candidate = findRowById_(ss.getSheetByName(PSB_SHEETS.CANDIDATES), 'candidateId', reg.object.candidateId);
-  const guardian = findFirstBy_(ss.getSheetByName(PSB_SHEETS.GUARDIANS), 'candidateId', reg.object.candidateId, true);
-  const address = findFirstBy_(ss.getSheetByName(PSB_SHEETS.ADDRESSES), 'candidateId', reg.object.candidateId, true);
-  const school = findFirstBy_(ss.getSheetByName(PSB_SHEETS.SCHOOLS), 'candidateId', reg.object.candidateId, true);
+  const candidate = findFirstIndexedRow_(ss.getSheetByName(PSB_SHEETS.CANDIDATES), 'candidateId', reg.object.candidateId, false);
+  const guardian = findFirstIndexedRow_(ss.getSheetByName(PSB_SHEETS.GUARDIANS), 'candidateId', reg.object.candidateId, true);
+  const address = findFirstIndexedRow_(ss.getSheetByName(PSB_SHEETS.ADDRESSES), 'candidateId', reg.object.candidateId, true);
+  const school = findFirstIndexedRow_(ss.getSheetByName(PSB_SHEETS.SCHOOLS), 'candidateId', reg.object.candidateId, true);
   return {registration:reg.object,candidate:candidate?.object||null,guardian:guardian?.object||null,address:address?.object||null,school:school?.object||null};
 }
 
