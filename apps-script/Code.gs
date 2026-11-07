@@ -4768,13 +4768,18 @@ function safeSheetCell_(value) {
 function safeSheetRow_(row) { return row.map(safeSheetCell_); }
 
 function upsertById_(sheet, idField, id, object) {
-  const headers = sheet.getRange(1,1,1,sheet.getLastColumn()).getValues()[0].map(String);
+  const lastColumn = sheet.getLastColumn();
+  const headers = sheet.getRange(1,1,1,lastColumn).getValues()[0].map(String);
   const idIdx = headers.indexOf(idField);
   if (idIdx < 0) throw new Error('Kolom kunci ' + idField + ' tidak ditemukan.');
   let rowNumber = 0;
-  if (sheet.getLastRow() >= 2) {
-    const rows = sheet.getRange(2,1,sheet.getLastRow()-1,sheet.getLastColumn()).getValues();
-    for (let i=0;i<rows.length;i++) if (String(rows[i][idIdx]||'')===String(id)) { rowNumber=i+2; break; }
+  const lastRow = sheet.getLastRow();
+  if (lastRow >= 2) {
+    // Only scan the key column; preserve the original first-match behavior.
+    const keys = sheet.getRange(2,idIdx+1,lastRow-1,1).getValues();
+    for (let i=0;i<keys.length;i++) {
+      if (String(keys[i][0]||'')===String(id)) { rowNumber=i+2; break; }
+    }
   }
   const row = safeSheetRow_(headers.map(h=>object[h] === undefined ? '' : object[h]));
   if (rowNumber) sheet.getRange(rowNumber,1,1,headers.length).setValues([row]); else sheet.appendRow(row);
