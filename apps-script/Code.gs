@@ -3295,12 +3295,18 @@ function openReregistration(sessionToken, registrationId) {
   try {
     const rrSheet=getDatabaseSpreadsheet_().getSheetByName(PSB_SHEETS.REREGISTRATIONS);
     const current=findRowById_(rrSheet,'registrationId',id);
-    if(current) return {success:true,message:'Daftar ulang sudah terbuka.',reregistration:current.object,alreadyOpen:true};
-    const rr=ensureReregistration_(id,actor.userId,true); if(!rr) return fail_('Daftar ulang belum dapat dibuka.');
+    // Always run the idempotent helper, even when the reregistration row
+    // already exists. This repairs a missing bill after an earlier partial
+    // attempt instead of returning a misleading "already open" response.
+    const rr=ensureReregistration_(id,actor.userId,true);
+    if(!rr) return fail_('Daftar ulang atau tagihan belum dapat disiapkan. Periksa master jenis pembayaran dan sheet tagihan.');
     const regNow=findRegistration_(id);
-    if(regNow && ['PASSED','SELECTION'].includes(String(regNow.registration.status||'').toUpperCase())) setRegistrationStatus_(regNow.registration,'REREGISTRATION',actor.userId,'Daftar ulang dibuka.');
-    notificationUserId=String(found.registration.userId||'');
-    response={success:true,message:'Daftar ulang berhasil dibuka.',reregistration:rr};
+    if(regNow && ['PASSED','SELECTION'].includes(String(regNow.registration.status||'').toUpperCase())) {
+      const moved=setRegistrationStatus_(regNow.registration,'REREGISTRATION',actor.userId,'Daftar ulang dibuka.');
+      if(!moved?.success) return moved;
+    }
+    if(!current) notificationUserId=String(found.registration.userId||'');
+    response={success:true,message:current?'Daftar ulang sudah terbuka dan tagihan telah dipastikan tersedia.':'Daftar ulang berhasil dibuka.',reregistration:rr,alreadyOpen:!!current};
   } finally { lock.releaseLock(); }
   if(notificationUserId){try{createNotification_(notificationUserId,'Daftar Ulang Dibuka','Tahap Daftar Ulang sudah dibuka. Silakan lengkapi dokumen dan pembayaran daftar ulang.','SUCCESS');}catch(notificationError){console.error('Reregistration opened notification failed: '+notificationError);}}
   return response;
