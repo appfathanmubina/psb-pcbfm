@@ -3308,12 +3308,27 @@ function openReregistration(sessionToken, registrationId) {
 
 
 function ensureReregistration_(registrationId, actorUserId, createBill) {
-  const rrSheet = getDatabaseSpreadsheet_().getSheetByName(PSB_SHEETS.REREGISTRATIONS);
+  const ss = getDatabaseSpreadsheet_();
+  const rrSheet = ss.getSheetByName(PSB_SHEETS.REREGISTRATIONS);
   if (!rrSheet) return null;
-  const existing = findRowById_(rrSheet, 'registrationId', registrationId);
-  if (existing) return existing.object;
   const found = findRegistration_(registrationId);
   if (!found) return null;
+
+  // Make bill creation idempotent and repairable. A prior attempt may have
+  // created the reregistration row but failed before its bill was committed.
+  // Validate bill prerequisites before creating a new reregistration record.
+  if (createBill) {
+    const paymentType = getActiveMasterItems_('MASTER_JENIS_PEMBAYARAN')
+      .find(x => /daftar\\s*ulang/i.test(String(x.name || '')));
+    const billSheet = ss.getSheetByName(PSB_SHEETS.BILLS);
+    if (!paymentType || !billSheet) return null;
+    const bill = ensureReregistrationBill_(found, actorUserId || 'SYSTEM');
+    if (!bill) return null;
+  }
+
+  const existing = findRowById_(rrSheet, 'registrationId', registrationId);
+  if (existing) return existing.object;
+
   const now = new Date();
   const record = {
     reregistrationId: generateId_('RRG'), registrationId:String(registrationId), status:'PENDING', completedAt:'',
@@ -3322,7 +3337,6 @@ function ensureReregistration_(registrationId, actorUserId, createBill) {
   const headers = rrSheet.getRange(1,1,1,rrSheet.getLastColumn()).getValues()[0].map(String);
   rrSheet.appendRow(headers.map(h => record[h] == null ? '' : record[h]));
   try { writeAudit_(actorUserId || 'SYSTEM','REREGISTRATION','REREGISTRATION',record.reregistrationId,'',JSON.stringify(record),'Daftar ulang dibuka'); } catch(e) {}
-  if (createBill) ensureReregistrationBill_(found, actorUserId || 'SYSTEM');
   return record;
 }
 
