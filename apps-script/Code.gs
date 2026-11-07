@@ -4673,7 +4673,7 @@ function getRegistrationPaymentDocumentStatusMap_(items) {
   // Strictly-greater comparison preserves the first sheet row on equal timestamps,
   // matching the stable descending sort used by the previous implementation.
   const billIds=Object.create(null),billByReg=Object.create(null),billStampByReg=Object.create(null);
-  sheetRows_(ss.getSheetByName(PSB_SHEETS.BILLS)).forEach(x=>{
+  sheetRowsMatchingValues_(ss.getSheetByName(PSB_SHEETS.BILLS),'registrationId',Object.keys(ids)).forEach(x=>{
     const id=String(x.registrationId||''),billId=String(x.billId||'');
     if(!ids[id]||!formTypeIds[String(x.paymentTypeId||'')]||String(x.status||'').toUpperCase()==='CANCELLED')return;
     billIds[billId]=true;
@@ -4683,7 +4683,7 @@ function getRegistrationPaymentDocumentStatusMap_(items) {
 
   // Latest payment per relevant bill, without sorting the full payment table.
   const latest=Object.create(null),paymentStampByBill=Object.create(null);
-  sheetRows_(ss.getSheetByName(PSB_SHEETS.PAYMENTS)).forEach(x=>{
+  sheetRowsMatchingValues_(ss.getSheetByName(PSB_SHEETS.PAYMENTS),'billId',Object.keys(billIds)).forEach(x=>{
     const billId=String(x.billId||'');
     if(!billIds[billId])return;
     const stamp=String(x.createdAt||'');
@@ -4695,7 +4695,7 @@ function getRegistrationPaymentDocumentStatusMap_(items) {
 
   // Latest non-replaced required document per registration/type in one pass.
   const byDoc=Object.create(null),docStamp=Object.create(null);
-  sheetRows_(ss.getSheetByName(PSB_SHEETS.DOCUMENTS)).forEach(x=>{
+  sheetRowsMatchingValues_(ss.getSheetByName(PSB_SHEETS.DOCUMENTS),'registrationId',Object.keys(ids)).forEach(x=>{
     const id=String(x.registrationId||''),typeId=String(x.documentTypeId||'');
     if(!ids[id]||!req[typeId]||String(x.status||'').toUpperCase()==='REPLACED')return;
     const key=id+'|'+typeId,stamp=String(x.uploadedAt||'');
