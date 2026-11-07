@@ -3805,7 +3805,12 @@ function getAdvancedReportingData(sessionToken, filters) {
   const toDate = filters.toDate ? new Date(filters.toDate + 'T23:59:59') : null;
   const rows = name => sheetRows_(ss.getSheetByName(PSB_SHEETS[name]));
   const years=rows('MASTER_TAHUN_AJARAN'), gels=rows('MASTER_GELOMBANG'), jins=rows('MASTER_JENJANG');
-  const regs=rows('REGISTRATIONS');
+  // Reporting only consumes these registration fields; avoid transferring every
+  // column from REGISTRATIONS while retaining all rows for accurate aggregates.
+  const regs=sheetRowsByFields_(ss.getSheetByName(PSB_SHEETS.REGISTRATIONS), [
+    'registrationId','tahunAjaranId','candidateId','gelombangId','jenjangId',
+    'status','createdAt','submittedAt','verifiedAt'
+  ]);
   const activeYearId=years.find(x=>String(x.name||'')===activeYear)?.tahunAjaranId||'';
   const yearId=selectedYear||activeYearId;
   const ym={},gm={},jm={}; years.forEach(x=>ym[String(x.tahunAjaranId)]=x); gels.forEach(x=>gm[String(x.gelombangId)]=x); jins.forEach(x=>jm[String(x.jenjangId)]=x);
