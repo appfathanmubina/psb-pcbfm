@@ -58,7 +58,7 @@ assert.match(apiBridge, /event\.source !== item\.iframe\.contentWindow/, 'RPC re
 assert.match(apiBridge, /Pesan bridge diabaikan: origin tidak dikenal/, 'Rejected origins must be diagnosable');
 assert.match(apiBridge, /Timeout menunggu respons Apps Script/, 'RPC timeout must log safe transport diagnostics');
 assert.match(indexHtml, /api-bridge\.js\?v=32\.15\.0/, 'PWA HTML must cache-bust the updated bridge client');
-assert.match(serviceWorker, /psb-pwa-shell-v32-33-0/, 'PWA shell cache must use the current cache version after the upload fix');
+assert.match(serviceWorker, /psb-pwa-shell-v32-34-0/, 'PWA shell cache must use the current cache version after the upload fix');
 
 assert.match(apiBridge, /pending\.get\(challenge\)/, 'PWA must correlate every response with its unpredictable challenge');
 assert.match(apiBridge, /let tokenSession = null/, 'PWA must retain the short-lived token session in memory');
