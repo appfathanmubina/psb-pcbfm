@@ -3,6 +3,9 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 
 const html = fs.readFileSync('frontend/index.html', 'utf8');
+const styles = fs.readFileSync('frontend/styles.css', 'utf8');
+const appsScriptHtml = fs.readFileSync('apps-script/Index.html', 'utf8');
+const maskableIcon = fs.readFileSync('frontend/icons/icon-maskable-512.svg', 'utf8');
 const manifest = JSON.parse(fs.readFileSync('frontend/manifest.webmanifest', 'utf8'));
 const sw = fs.readFileSync('frontend/sw.js', 'utf8');
 
@@ -28,6 +31,14 @@ assert.match(html, /menu tiga titik/, 'Android fallback guide must explain brows
 assert.match(html, /Install app atau Tambahkan ke layar utama/, 'Android fallback must not depend on beforeinstallprompt');
 assert.match(html, /serviceWorker\.register\('\.\/sw\.js\?v=[0-9.]+'/, 'HTML must register a versioned service worker');
 assert.doesNotMatch(html, /if\(!installMode\)return/, 'installation guidance must not be restricted to ?install');
+assert.match(styles, /--primary:#800080/i, 'PWA primary theme must use the approved purple');
+assert.match(styles, /--primary-dark:#520052/i, 'PWA dark primary must retain readable contrast');
+assert.match(appsScriptHtml, /--primary:#800080/i, 'Apps Script UI must use the same approved primary purple');
+assert.match(appsScriptHtml, /<meta name="theme-color" content="#800080">/, 'Apps Script browser chrome must use the approved purple');
+assert.match(html, /<meta name="theme-color" content="#800080">/, 'PWA browser chrome must use the approved purple');
+assert.equal(manifest.theme_color, '#800080', 'installed PWA theme color must use the approved purple');
+assert.equal(manifest.background_color, '#f7f7fa', 'installed PWA splash background must remain neutral');
+assert.match(maskableIcon, /<rect width="512" height="512" fill="#800080"\/>/, 'maskable icon background must use the approved purple');
 assert.equal(manifest.id, './', 'manifest app identity must remain stable');
 assert.equal(manifest.start_url, './', 'manifest start URL must remain stable');
 assert.equal(manifest.scope, './', 'manifest scope must remain stable');
@@ -37,6 +48,6 @@ assert.ok(manifest.icons.some(icon => icon.type === 'image/png' && icon.purpose 
 assert.ok(manifest.icons.some(icon => icon.type === 'image/svg+xml' && icon.purpose === 'any'), 'manifest must retain a scalable standard icon');
 assert.ok(manifest.icons.some(icon => icon.type === 'image/svg+xml' && icon.purpose === 'maskable'), 'manifest must retain a maskable icon');
 assert.match(sw, /const CACHE='psb-pwa-shell-v[0-9-]+'/, 'service worker cache namespace must be versioned');
-assert.match(sw, /manifest\.webmanifest\?v=32\.16\.0/, 'service worker must precache the current manifest');
+assert.match(sw, /manifest\.webmanifest\?v=32\.17\.0/, 'service worker must precache the current manifest');
 assert.match(sw, /icon-maskable-512\.svg/, 'service worker must continue precaching the maskable icon');
 console.log('PWA mobile installation experience safeguards: OK');

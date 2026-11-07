@@ -30,6 +30,6 @@ for (const icon of icons) {
   }
 }
 const maskSvgText = fs.readFileSync('frontend/icons/icon-maskable-512.svg', 'utf8');
-assert.match(maskSvgText, /<rect[^>]+fill="#7c3aed"/, 'maskable icon must provide a full-bleed background');
+assert.match(maskSvgText, /<rect[^>]+fill="#800080"/, 'maskable icon must provide a full-bleed background');
 assert.match(fs.readFileSync('frontend/index.html', 'utf8'), /apple-touch-icon" sizes="256x256"/, 'Apple touch icon dimensions must match the actual source PNG');
 console.log('PWA icon metadata and image dimensions: OK');

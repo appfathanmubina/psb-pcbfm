@@ -9,8 +9,8 @@
   "display_override": [
     "standalone"
   ],
-  "background_color": "#eee7ff",
-  "theme_color": "#7c3aed",
+  "background_color": "#f7f7fa",
+  "theme_color": "#800080",
   "orientation": "portrait-primary",
   "lang": "id-ID",
   "icons": [
