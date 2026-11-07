@@ -41,8 +41,8 @@ assert.match(page, /const visibleScores = isWali \? \[\] : scores;/,
   'Wali must not receive raw score records; staff may retain the indexed score collection');
 assert.match(page, /results\.filter\(x => regMap\[String\(x\.registrationId\)\] && String\(x\.announcementDate \|\| ''\)\.trim\(\) !== ''\)/,
   'Wali results must be limited to owned registrations and official publication');
-assert.match(page, /const foundRegistration = registrationById\[selectedId\] \|\| null/,
-  'Detail lookup must use the shared registration index');
+assert.match(page, /const foundRegistration = registrationById\[selectedId\] \|\| \(!isWali \? null : findRegistration_\(selectedId\)\?\.registration\) \|\| null/,
+  'Detail lookup must use the shared index, with the owner-checked Wali fallback for records outside the visible list');
 assert.match(page, /canAccessRegistration_\(actor,foundRegistration\)/,
   'Detail ownership authorization must remain');
 assert.match(page, /scores: isWali \? \[\] : \(participant \? \(scoresByParticipant\[String\(participant\.participantId\)\] \|\| \[\]\) : \[\]\)/,
