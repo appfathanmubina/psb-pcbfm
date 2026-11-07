@@ -1235,7 +1235,7 @@ function renderStaffDataTable(rows, columns, emptyMessage){
   const items=Array.isArray(rows)?rows:[];
   if(!items.length)return `<div class="empty-state">${esc(emptyMessage||'Tidak ada data untuk ditampilkan.')}</div>`;
   const heads=columns.map(col=>`<th scope="col" class="${esc(col.className||'')}">${esc(col.label||'')}</th>`).join('');
-  const body=items.map(row=>`<tr>${columns.map(col=>`<td class="${esc(col.className||'')}">${typeof col.render==='function'?col.render(row):esc(row?.[col.key]??'-')}</td>`).join('')}</tr>`).join('');
+  const body=items.map((row,rowIndex)=>`<tr>${columns.map(col=>`<td class="${esc(col.className||'')}">${typeof col.render==='function'?col.render(row,rowIndex):esc(row?.[col.key]??'-')}</td>`).join('')}</tr>`).join('');
   return `<div class="staff-table-scroll" role="region" aria-label="Tabel data" tabindex="0"><table class="staff-data-table"><thead><tr>${heads}</tr></thead><tbody>${body}</tbody></table></div>`;
 }
 function renderVerificationQueue(items){
