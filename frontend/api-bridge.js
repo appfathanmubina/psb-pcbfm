@@ -136,45 +136,79 @@
 
   function openTokenSession() {
     return new Promise((resolve, reject) => {
-      let challenge;
-      try {
-        challenge = randomHex(16);
-      } catch (error) {
-        reject(error);
-        return;
+      let settled = false;
+      let attempt = 0;
+
+      function startAttempt() {
+        attempt += 1;
+        let challenge;
+        try {
+          challenge = randomHex(16);
+        } catch (error) {
+          settled = true;
+          reject(error);
+          return;
+        }
+
+        const iframe = document.createElement('iframe');
+        iframe.name = 'psb_bridge_bootstrap_' + challenge;
+        iframe.title = 'PSB API Bridge bootstrap';
+        iframe.setAttribute('aria-hidden', 'true');
+        iframe.tabIndex = -1;
+        iframe.style.cssText = 'position:fixed;left:-10000px;top:-10000px;width:1px;height:1px;border:0;opacity:0;pointer-events:none;';
+        const handshake = {
+          challenge: challenge,
+          iframe: iframe,
+          resolve: session => {
+            if (settled) return;
+            settled = true;
+            clearTimeout(handshake.timer);
+            removeFrame(iframe);
+            if (tokenHandshake === handshake) tokenHandshake = null;
+            resolve(session);
+          },
+          reject: error => {
+            if (settled) return;
+            clearTimeout(handshake.timer);
+            removeFrame(iframe);
+            if (tokenHandshake === handshake) tokenHandshake = null;
+            if (attempt < 2 && (!error || error.code === 'BRIDGE_HANDSHAKE_TIMEOUT')) {
+              // Retry the bootstrap GET once with a fresh challenge. This helps
+              // recover from transient Apps Script redirects/edge-cache misses.
+              setTimeout(startAttempt, 500);
+              return;
+            }
+            settled = true;
+            reject(error);
+          },
+          timer: null,
+          loaded: false
+        };
+        tokenHandshake = handshake;
+        iframe.onload = () => { handshake.loaded = true; };
+        iframe.onerror = () => {
+          const error = new Error('Browser gagal memuat iframe API Bridge Apps Script.');
+          error.code = 'BRIDGE_IFRAME_LOAD_FAILED';
+          handshake.reject(error);
+        };
+        handshake.timer = setTimeout(() => {
+          const error = new Error(
+            handshake.loaded
+              ? 'Iframe API Bridge termuat, tetapi tidak mengirim pesan token. Periksa doGet, Bridge.html, dan izin deployment Apps Script.'
+              : 'Iframe API Bridge tidak selesai dimuat. Periksa URL deployment, akses Web App, dan koneksi ke Apps Script.'
+          );
+          error.code = 'BRIDGE_HANDSHAKE_TIMEOUT';
+          error.iframeLoaded = handshake.loaded;
+          handshake.reject(error);
+        }, TIMEOUT_MS);
+
+        iframe.src = BRIDGE_URL + '?bridge=1&origin=' +
+          encodeURIComponent(location.origin) + '&challenge=' +
+          encodeURIComponent(challenge) + '&v=32.17.0&cb=' + Date.now();
+        document.body.appendChild(iframe);
       }
 
-      const iframe = document.createElement('iframe');
-      iframe.name = 'psb_bridge_bootstrap_' + challenge;
-      iframe.title = 'PSB API Bridge bootstrap';
-      iframe.setAttribute('aria-hidden', 'true');
-      iframe.tabIndex = -1;
-      iframe.style.cssText = 'position:fixed;left:-10000px;top:-10000px;width:1px;height:1px;border:0;opacity:0;pointer-events:none;';
-
-      const handshake = { challenge: challenge, iframe: iframe, resolve: resolve, reject: reject, timer: null };
-      tokenHandshake = handshake;
-      handshake.timer = setTimeout(() => {
-        if (tokenHandshake !== handshake) return;
-        tokenHandshake = null;
-        removeFrame(iframe);
-        reject(new Error('API Bridge belum siap. Apps Script tidak mengirim token koneksi.'));
-      }, TIMEOUT_MS);
-
-      const finishResolve = handshake.resolve;
-      handshake.resolve = session => {
-        clearTimeout(handshake.timer);
-        finishResolve(session);
-      };
-      const finishReject = handshake.reject;
-      handshake.reject = error => {
-        clearTimeout(handshake.timer);
-        finishReject(error);
-      };
-
-      iframe.src = BRIDGE_URL + '?bridge=1&origin=' +
-        encodeURIComponent(location.origin) + '&challenge=' +
-        encodeURIComponent(challenge) + '&v=32.16.0';
-      document.body.appendChild(iframe);
+      startAttempt();
     });
   }
 
