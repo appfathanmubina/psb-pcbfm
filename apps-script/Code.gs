@@ -290,12 +290,14 @@ function login(identifier, password) {
       }
     }
 
-    enterTimingStage_('clearLoginFailure');
-    clearLoginFailure_(key);
-    // Hanya operasi yang wajib untuk menyelesaikan login dilakukan sebelum response.
-    // LastLogin dan audit dipindahkan ke best-effort call setelah UI sudah tampil.
+    // Buat sesi lebih dahulu. Kegagalan membersihkan penghitung percobaan
+    // tidak boleh membatalkan login yang sesinya sudah berhasil dibuat.
     enterTimingStage_('sessionCreation');
     const session = createSession_(user.userId);
+    enterTimingStage_('clearLoginFailure');
+    try { clearLoginFailure_(key); } catch (clearError) {
+      console.warn('AUTH_LOGIN_FAILURE_COUNTER_CLEAR_FAILED');
+    }
 
     return finishLoginTiming_({
       success: true,
@@ -735,17 +737,20 @@ function getSessionUser_(token, touch) {
   // Cache hanya menyimpan nomor baris, bukan status sesi. Status, expiry, dan
   // aktivitas tetap dibaca langsung dari Spreadsheet agar logout/revoke berlaku segera.
   let found = null;
-  const cachedRowNumber = Number(cache.get(sessionCacheKey) || 0);
+  // Indeks cache bukan sumber kebenaran sesi. Jika cache gagal dibaca,
+  // lakukan fallback ke Spreadsheet seperti pada cache miss biasa.
+  let cachedRowNumber = 0;
+  try { cachedRowNumber = Number(cache.get(sessionCacheKey) || 0); } catch (cacheReadError) {}
   if (cachedRowNumber >= 2) {
     try {
       const cachedRow = sheet.getRange(cachedRowNumber, 1, 1, 7).getValues()[0];
       if (constantTimeEqual_(String(cachedRow[2] || ''), tokenHash)) {
         found = { rowNumber: cachedRowNumber, row: cachedRow };
       } else {
-        cache.remove(sessionCacheKey);
+        try { cache.remove(sessionCacheKey); } catch (cacheRemoveError) {}
       }
     } catch (e) {
-      cache.remove(sessionCacheKey);
+      try { cache.remove(sessionCacheKey); } catch (cacheRemoveError) {}
     }
   }
 
@@ -906,7 +911,10 @@ function findUser_(key) {
 
   // Cache hanya menyimpan lokasi baris. Data akun selalu dibaca fresh agar
   // perubahan status/password tidak tertahan oleh cache objek pengguna.
-  const cachedRowNumber = Number(cache.get(cacheKey) || 0);
+  // Cache hanya indeks. Jika CacheService sementara tidak tersedia,
+  // lanjutkan pencarian langsung ke USERS agar login tetap dapat diproses.
+  let cachedRowNumber = 0;
+  try { cachedRowNumber = Number(cache.get(cacheKey) || 0); } catch (cacheReadError) {}
   if (cachedRowNumber >= 2) {
     try {
       const row = sheet.getRange(cachedRowNumber, 1, 1, 15).getValues()[0];
@@ -915,7 +923,7 @@ function findUser_(key) {
         return userFromRow_(row, cachedRowNumber);
       }
     } catch (e) {}
-    cache.remove(cacheKey);
+    try { cache.remove(cacheKey); } catch (cacheRemoveError) {}
   }
 
   const lastRow = sheet.getLastRow();
@@ -949,7 +957,7 @@ function findUserById_(id, bypassCache) {
       const row = sheet.getRange(cachedRowNumber, 1, 1, 15).getValues()[0];
       if (String(row[0] || '') === value) return userFromRow_(row, cachedRowNumber);
     } catch (e) {}
-    cache.remove(cacheKey);
+    try { cache.remove(cacheKey); } catch (cacheRemoveError) {}
   }
 
   const lastRow = sheet.getLastRow();
@@ -1232,7 +1240,12 @@ function registerLoginFailure_(key) {
   // CacheService tidak menyediakan increment atomik. Script Lock mencegah
   // dua request login bersamaan menimpa penghitung percobaan satu sama lain.
   const guard = LockService.getScriptLock();
-  try { guard.waitLock(5000); } catch (lockError) { return { attempts: max, locked: true, contention: true }; }
+  try { guard.waitLock(5000); } catch (lockError) {
+    // Fail closed saat penghitung tidak bisa diperbarui karena lock contention.
+    // Marker sementara mencegah percobaan berulang melewati proteksi.
+    try { cache.put('PSB_LOGIN_LOCK_V2_' + hash, String(Date.now() + 60000), 60); } catch (cacheError) {}
+    return { attempts: max, locked: true, contention: true };
+  }
   try {
     const current = Math.max(0, Number(cache.get(cacheKey) || 0)) + 1;
     cache.put(cacheKey, String(current), lockMin * 60);
@@ -1261,6 +1274,7 @@ function clearLoginFailure_(key) {
   try {
     cache.remove('PSB_LOGIN_FAIL_V2_' + h);
     cache.remove('PSB_LOGIN_LOCK_V2_' + h);
+    return true;
   } finally {
     guard.releaseLock();
   }
