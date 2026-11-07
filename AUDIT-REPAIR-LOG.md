@@ -481,3 +481,19 @@ Branch: `fix/payment-reregistration-sync-recovery`
 - If the registration write succeeds but a later step fails, a retry recognizes the already-completed registration and continues synchronization without repeating the status transition.
 - If required documents are incomplete, the re-registration status remains `PAYMENT_VERIFIED`; the registration is not prematurely marked `COMPLETED`.
 - No Spreadsheet schema, frontend behavior, production data, or Apps Script deployment was changed.
+
+## Repair batch 16 — payment verification and rejection recovery
+
+Branch: `fix/payment-verification-rejection-recovery`
+
+| ID | Finding | Change | Status |
+|---|---|---|---|
+| PAY-003 | Payment decisions could proceed without a usable `PAYMENT_VERIFICATIONS` sheet; bill status writes were not confirmed before the payment status commit; and a failed re-registration synchronization result could be ignored by the verification caller. | Require and validate the verification-history schema before writes; reuse an existing same-decision history row on retry and reject conflicting decisions; re-read and confirm the linked bill status before committing `PAYMENTS.status`; propagate failed re-registration synchronization results. | Implemented; regression test added; CI pending; Apps Script staging/runtime test pending |
+
+### Scope and safety
+
+- The payment row remains the final decision marker: history, linked bill status, and required registration synchronization are confirmed first.
+- A retry reuses the existing history row for the same payment and decision; it does not append a duplicate history row or overwrite a conflicting decision.
+- Rejected payments continue to set the linked bill to `UNPAID`, allowing the existing Wali upload-again flow to submit a new payment record.
+- Existing role checks, ownership checks, ScriptLock, required rejection reason, 500-character note limit, upload validation, and notification behavior remain unchanged.
+- No Spreadsheet schema, frontend behavior, production data, or Apps Script deployment was changed.
