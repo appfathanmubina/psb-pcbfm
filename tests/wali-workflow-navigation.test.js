@@ -20,8 +20,11 @@ for (const [name, source] of [['PWA', app], ['Apps Script shell', shell]]) {
     name + ': Wali needs a separate verification-status page');
   assert.match(source, /server\('getWaliHomeData',state\.token\)/,
     name + ': Wali verification status must use Wali-scoped data');
-  assert.match(source, /const items=\[\s*\['verificationStatus','Verifikasi'/,
-    name + ': Wali More menu must begin with Verifikasi');
+  const moreStart = source.indexOf('function renderMore(){');
+  const moreEnd = source.indexOf('\nfunction ', moreStart + 10);
+  const moreMenu = source.slice(moreStart, moreEnd < 0 ? undefined : moreEnd);
+  assert.doesNotMatch(moreMenu, /\['verificationStatus','Verifikasi'/,
+    name + ': Wali More menu must not expose Verifikasi');
   assert.match(source, /\['selection','Tes'/,
     name + ': Wali More menu must include Tes');
   assert.match(source, /\['announcement','Pengumuman'/,
