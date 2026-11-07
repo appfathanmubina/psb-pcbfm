@@ -25,7 +25,7 @@ assert.match(statusMap, /String\(x\.status\|\|''\)\.toUpperCase\(\)==='CANCELLED
   'cancelled bills must be excluded before payment status aggregation');
 assert.match(statusMap, /const stamp=String\(x\.createdAt\|\|''\);/);
 assert.match(statusMap, /stamp\.localeCompare\(billStampByReg\[id\]\)>0/);
-assert.match(statusMap, /billByReg\[id\]\)\s*billByReg\[id\]=x/);
+assert.match(statusMap, /if\(!billByReg\[id\]\|\|stamp\.localeCompare\(billStampByReg\[id\]\)>0\)\{billByReg\[id\]=x/);
 assert.match(statusMap, /status\s*\|\|\s*''\)\.toUpperCase\(\)!=='REPLACED'/);
 assert.match(statusMap, /uploadedAt\|\|\s*''\)\.localeCompare/);
 
