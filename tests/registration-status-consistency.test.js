@@ -28,7 +28,8 @@ assert.match(statusMap, /stamp\.localeCompare\(billStampByReg\[id\]\)>0/);
 assert.match(statusMap, /if\(!billByReg\[id\]\|\|stamp\.localeCompare\(billStampByReg\[id\]\)>0\)\{billByReg\[id\]=x/);
 assert.match(statusMap, /String\(x\.status\|\|''\)\.toUpperCase\(\)==='REPLACED'\)return/,
   'replaced documents must be excluded from the latest required-document aggregation');
-assert.match(statusMap, /uploadedAt\|\|\s*''\)\.localeCompare/);
+assert.match(statusMap, /const key=id\+'\|'\+typeId,stamp=String\(x\.uploadedAt\|\|''\);/);
+assert.match(statusMap, /stamp\.localeCompare\(docStamp\[key\]\)>0/);
 
 const wali = section('getWaliHomeData');
 assert.match(wali, /status\|\|''\)\.toUpperCase\(\)!=='CANCELLED'/);
