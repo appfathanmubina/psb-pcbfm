@@ -447,3 +447,20 @@ Branch: `fix/registration-idempotent-save`
 - No Spreadsheet schema, frontend form, payment rule, status transition, or production data was changed.
 - The registration row is written before related rows so a partial failure is discoverable on retry; subsequent retries reuse the same registration and child keys.
 - No Apps Script deployment or production data mutation was performed.
+
+## Repair batch 14 — payment submission partial-write recovery
+
+Branch: `fix/payment-submission-recovery`
+
+| ID | Finding | Change | Status |
+|---|---|---|---|
+| PAY-001 | A payment row could be committed as `SUBMITTED` while the linked bill remained `UNPAID` if the bill-status write failed. The dashboard queue only used bill status, and the Wali UI could offer another upload despite an existing submission. | On post-payment-write errors, best-effort repair the bill status under ScriptLock; independently include bills whose latest payment is `SUBMITTED` in the verification queue; render such payments as awaiting verification and suppress duplicate Wali upload. | Implemented; regression test added; CI pending; Apps Script staging/runtime test pending |
+
+### Scope and safety
+
+- The payment row remains the durable submission record; no second payment row is created by recovery.
+- Dashboard role checks and active-year scoping remain unchanged.
+- `PAID` bill status is never downgraded by recovery.
+- Rejected payments remain eligible for a new upload under the existing rules.
+- Verification decisions, amounts, payment methods, proof-file handling, role definitions, and spreadsheet schema remain unchanged.
+- No production data or Apps Script deployment was changed.
