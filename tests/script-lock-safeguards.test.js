@@ -33,8 +33,8 @@ for (const [name, timeout] of [
 
 assert.match(functionSource('withScriptLock_'), /try \{ lock\.waitLock\(timeoutMs \|\| 10000\); \} catch \(lockError\) \{ return fail_\(/,
   'Shared ScriptLock helper must convert lock timeout into a safe API failure');
-assert.match(functionSource('registerLoginFailure_'), /catch \(lockError\) \{ return \{ attempts: max, locked: true, contention: true \}; \}/,
-  'Login failure counter must fail closed when its atomic lock is unavailable');
+assert.match(functionSource('registerLoginFailure_'), /catch \(lockError\)[\s\S]*?PSB_LOGIN_LOCK_V2_[\s\S]*?Date\.now\(\) \+ 60000[\s\S]*?contention: true/,
+  'Login failure counter must set a short fail-closed lock marker when its atomic lock is unavailable');
 assert.match(functionSource('clearLoginFailure_'), /catch \(lockError\) \{ return false; \}/,
   'Login success must not fail just because the failure-counter lock is contended');
 

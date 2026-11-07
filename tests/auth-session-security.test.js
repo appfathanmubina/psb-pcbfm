@@ -72,6 +72,25 @@ assert.match(userByLogin, /getRange\(cachedRowNumber,\s*1,\s*1,\s*15\)/,
 const createSeed = fn('createSession_');
 assert.match(createSeed, /PSB_SESSION_ROW_V1_/,
   'New sessions must seed their row index immediately');
+
+const loginLookup = fn('findUser_');
+assert.match(loginLookup, /try\s*\{\s*cachedRowNumber = Number\(cache\.get\(cacheKey\)/,
+  'Login user lookup must fall back to USERS when the optional row-index cache is unavailable');
+assert.match(loginLookup, /getRange\(2,\s*1,\s*lastRow\s*-\s*1,\s*15\)/,
+  'Login user lookup must retain the authoritative Spreadsheet fallback');
+const userIdLookup = fn('findUserById_');
+assert.match(userIdLookup, /try\s*\{\s*cachedRowNumber = Number\(cache\.get\(cacheKey\)/,
+  'Session user lookup must fall back to USERS when the optional row-index cache is unavailable');
+const sessionCacheRead = session.match(/try\s*\{\s*cachedRowNumber = Number\(cache\.get\(sessionCacheKey\)/);
+assert.ok(sessionCacheRead, 'Session validation must treat the row-index cache as optional');
+const clearFailures = fn('clearLoginFailure_');
+assert.match(clearFailures, /return true/);
+const loginSessionOrder = login.indexOf('createSession_(user.userId)');
+assert.ok(loginSessionOrder >= 0 && login.indexOf('clearLoginFailure_(key)') > loginSessionOrder,
+  'A successful session must be created before best-effort failure-counter cleanup');
+const failureContention = fn('registerLoginFailure_');
+assert.match(failureContention, /PSB_LOGIN_LOCK_V2_[\s\S]*Date\.now\(\) \+ 60000/,
+  'Login failure counter lock contention must create a short fail-closed lock marker');
 const migration = fn('migrateLegacyPasswordToPbkdf2AfterLogin_');
 assert.ok(migration.indexOf('hashPassword_(') < migration.indexOf('lock.waitLock(20000)'),
   'Legacy password migration must derive the hash before taking the global lock');
