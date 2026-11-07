@@ -3735,20 +3735,32 @@ function getAdvancedReportingData(sessionToken, filters) {
   const fromDate = filters.fromDate ? new Date(filters.fromDate + 'T00:00:00') : null;
   const toDate = filters.toDate ? new Date(filters.toDate + 'T23:59:59') : null;
   const rows = name => sheetRows_(ss.getSheetByName(PSB_SHEETS[name]));
-  const regs=rows('REGISTRATIONS'), candidates=rows('CANDIDATES'), bills=rows('BILLS'), payments=rows('PAYMENTS'), participants=rows('SELECTION_PARTICIPANTS'), results=rows('SELECTION_RESULTS'), rereg=rows('REREGISTRATIONS');
   const years=rows('MASTER_TAHUN_AJARAN'), gels=rows('MASTER_GELOMBANG'), jins=rows('MASTER_JENJANG');
+  const regs=rows('REGISTRATIONS');
   const activeYearId=years.find(x=>String(x.name||'')===activeYear)?.tahunAjaranId||'';
   const yearId=selectedYear||activeYearId;
-  const ym={},gm={},jm={},cm={}; years.forEach(x=>ym[String(x.tahunAjaranId)]=x); gels.forEach(x=>gm[String(x.gelombangId)]=x); jins.forEach(x=>jm[String(x.jenjangId)]=x); candidates.forEach(x=>cm[String(x.candidateId)]=x);
-  let filtered=regs.filter(r=>String(r.tahunAjaranId||'')===String(yearId));
+  const ym={},gm={},jm={}; years.forEach(x=>ym[String(x.tahunAjaranId)]=x); gels.forEach(x=>gm[String(x.gelombangId)]=x); jins.forEach(x=>jm[String(x.jenjangId)]=x);
+
+  // Narrow candidate reads to registrations in the requested academic year.
+  // Keep last-row-wins candidate mapping, matching the previous full-sheet map.
+  const yearRegistrations=regs.filter(r=>String(r.tahunAjaranId||'')===String(yearId));
+  const candidateIds=yearRegistrations.map(r=>String(r.candidateId||'')).filter(Boolean);
+  const candidates=sheetRowsMatchingValues_(ss.getSheetByName(PSB_SHEETS.CANDIDATES),'candidateId',candidateIds);
+  const cm={}; candidates.forEach(x=>cm[String(x.candidateId)]=x);
+
+  let filtered=yearRegistrations;
   if(gelombangId) filtered=filtered.filter(r=>String(r.gelombangId||'')===gelombangId);
   if(jenjangId) filtered=filtered.filter(r=>String(r.jenjangId||'')===jenjangId);
   if(gender) filtered=filtered.filter(r=>normalizeReportGender_(cm[String(r.candidateId)]?.gender)===gender);
   if(status) filtered=filtered.filter(r=>String(r.status||'').toUpperCase()===status);
   if(fromDate||toDate) filtered=filtered.filter(r=>{const d=new Date(r.createdAt||r.submittedAt||0); return (!fromDate||d>=fromDate)&&(!toDate||d<=toDate);});
-  const regIds={}; filtered.forEach(r=>regIds[String(r.registrationId)]=true);
-  const inScope=a=>a.filter(x=>regIds[String(x.registrationId||'')]);
-  const scopedBills=inScope(bills), scopedPayments=inScope(payments), scopedParticipants=inScope(participants), scopedResults=inScope(results), scopedRereg=inScope(rereg);
+
+  const registrationIds=filtered.map(r=>String(r.registrationId||'')).filter(Boolean);
+  const scopedBills=sheetRowsMatchingValues_(ss.getSheetByName(PSB_SHEETS.BILLS),'registrationId',registrationIds);
+  const scopedPayments=sheetRowsMatchingValues_(ss.getSheetByName(PSB_SHEETS.PAYMENTS),'registrationId',registrationIds);
+  const scopedParticipants=sheetRowsMatchingValues_(ss.getSheetByName(PSB_SHEETS.SELECTION_PARTICIPANTS),'registrationId',registrationIds);
+  const scopedResults=sheetRowsMatchingValues_(ss.getSheetByName(PSB_SHEETS.SELECTION_RESULTS),'registrationId',registrationIds);
+  const scopedRereg=sheetRowsMatchingValues_(ss.getSheetByName(PSB_SHEETS.REREGISTRATIONS),'registrationId',registrationIds);
   const verifiedPayments=scopedPayments.filter(p=>String(p.status||'').toUpperCase()==='VERIFIED');
   const paidBills=scopedBills.filter(b=>String(b.status||'').toUpperCase()==='PAID');
   const passed=scopedResults.filter(r=>String(r.status||'').toUpperCase()==='PASSED');
@@ -3787,7 +3799,6 @@ function getAdvancedReportingData(sessionToken, filters) {
   writeAudit_(actor.userId,'ADVANCED_REPORT_VIEW','REPORTING','', '', JSON.stringify({yearId,gelombangId,jenjangId,gender,fromDate:filters.fromDate||'',toDate:filters.toDate||''}), 'Advanced Reporting & Analytics dijalankan');
   return {success:true,activeYear,filters:{tahunAjaranId:yearId,gelombangId,jenjangId,gender,status,fromDate:filters.fromDate||'',toDate:filters.toDate||''},funnel,conversion,trends,breakdowns:{jenjang:byJenjang.slice(0,20),kelompok:byKelompok.slice(0,20),gelombang:byGelombang.slice(0,20),status:byStatus.slice(0,20)},outcome,finance:{paidAmount:paymentAmount,paidBills:paidBills.length,byPaymentType:byPaymentType.slice(0,20)},processing,last30,generatedAt:new Date().toISOString()};
 }
-
 function exportAdvancedReportingCsv(sessionToken, filters) {
   const actor=requireRole_(sessionToken,PSB_REPORT_ROLES);
   const data=getAdvancedReportingData(sessionToken, filters||{});
