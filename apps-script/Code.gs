@@ -2121,10 +2121,10 @@ function ensureFormBillForRegistration_(registrationId, paymentTypes, actorUserI
   const headers=sheet.getRange(1,1,1,sheet.getLastColumn()).getValues()[0].map(String);
   const registrationIdx=headers.indexOf('registrationId'),typeIdx=headers.indexOf('paymentTypeId'),statusIdx=headers.indexOf('status');
   if(registrationIdx<0||typeIdx<0||statusIdx<0) return fail_('Struktur kolom tagihan belum sesuai.');
-  const rows=sheet.getLastRow()<2?[]:sheet.getRange(2,1,sheet.getLastRow()-1,sheet.getLastColumn()).getValues();
-  const existing=rows.find(r=>String(r[registrationIdx])===id&&String(r[typeIdx])===String(formType.paymentTypeId)&&String(r[statusIdx]).toUpperCase()!=='CANCELLED');
+  const rows=sheetRowsMatchingValues_(sheet,'registrationId',[id]);
+  const existing=rows.find(r=>String(r.paymentTypeId)===String(formType.paymentTypeId)&&String(r.status).toUpperCase()!=='CANCELLED');
   if(existing){
-    const record={};headers.forEach((h,i)=>record[h]=existing[i]);
+    const record={};headers.forEach(h=>record[h]=existing[h]);
     return {success:true,created:false,bill:record};
   }
   const now=new Date(),billId=generateId_('BIL'),record={};
@@ -2265,9 +2265,8 @@ function createBill(sessionToken,payload){
   const type=findMasterItemById_('MASTER_JENIS_PEMBAYARAN','paymentTypeId',paymentTypeId); if(!type||!type.isActive) return fail_('Jenis pembayaran tidak aktif.');
   const result=withScriptLock_(10000, function(){
     const sheet=getDatabaseSpreadsheet_().getSheetByName(PSB_SHEETS.BILLS); if(!sheet) return fail_('Sheet BILLS belum tersedia.');
-    const headers=sheet.getRange(1,1,1,sheet.getLastColumn()).getValues()[0].map(String);
-    const rows=sheet.getLastRow()<2?[]:sheet.getRange(2,1,sheet.getLastRow()-1,sheet.getLastColumn()).getValues();
-    const dup=rows.some(r=>String(r[headers.indexOf('registrationId')])===registrationId&&String(r[headers.indexOf('paymentTypeId')])===paymentTypeId&&String(r[headers.indexOf('status')])!=='CANCELLED');
+    const rows=sheetRowsMatchingValues_(sheet,'registrationId',[registrationId]);
+    const dup=rows.some(r=>String(r.paymentTypeId)===paymentTypeId&&String(r.status)!=='CANCELLED');
     if(dup) return fail_('Tagihan untuk jenis pembayaran ini sudah ada.');
     const now=new Date(), billId=generateId_('BIL'), record={}; headers.forEach(h=>record[h]='');
     Object.assign(record,{billId,registrationId,paymentTypeId,amount,dueDate,status:'UNPAID',createdAt:now,updatedAt:now});
