@@ -4579,54 +4579,10 @@ function findRegistrationBatch_(ss, registrationId) {
   };
 }
 
-function findFirstIndexedRow_(sheet, idField, id, preferPrimary) {
-  if (!sheet || sheet.getLastRow() < 2) return null;
-  const lastRow = sheet.getLastRow();
-  const lastColumn = sheet.getLastColumn();
-  if (lastColumn < 1) return null;
-  const headers = sheet.getRange(1, 1, 1, lastColumn).getValues()[0].map(String);
-  const idIndex = headers.indexOf(String(idField));
-  if (idIndex < 0) return null;
-
-  // Scan only the lookup column. If a primary row is preferred, inspect only
-  // the isPrimary column before fetching the selected complete record.
-  const keys = sheet.getRange(2, idIndex + 1, lastRow - 1, 1).getValues();
-  let firstMatch = 0;
-  const matches = [];
-  for (let i = 0; i < keys.length; i++) {
-    if (String(keys[i][0] || '') !== String(id || '')) continue;
-    const rowNumber = i + 2;
-    if (!firstMatch) firstMatch = rowNumber;
-    matches.push(rowNumber);
-  }
-  if (!firstMatch) return null;
-
-  let selectedRow = firstMatch;
-  const primaryIndex = preferPrimary ? headers.indexOf('isPrimary') : -1;
-  if (primaryIndex >= 0 && matches.length > 1) {
-    const primaryValues = sheet.getRange(2, primaryIndex + 1, lastRow - 1, 1).getValues();
-    for (let i = 0; i < matches.length; i++) {
-      const rowNumber = matches[i];
-      const value = primaryValues[rowNumber - 2][0];
-      if (value === true || String(value).toUpperCase() === 'TRUE') {
-        selectedRow = rowNumber;
-        break;
-      }
-    }
-  }
-  const row = sheet.getRange(selectedRow, 1, 1, lastColumn).getValues()[0];
-  return { rowNumber: selectedRow, object: rowObject_(headers, row, selectedRow) };
-}
-
 function findRegistration_(registrationId) {
-  const ss = getDatabaseSpreadsheet_();
-  const reg = findFirstIndexedRow_(ss.getSheetByName(PSB_SHEETS.REGISTRATIONS), 'registrationId', registrationId, false);
-  if (!reg) return null;
-  const candidate = findFirstIndexedRow_(ss.getSheetByName(PSB_SHEETS.CANDIDATES), 'candidateId', reg.object.candidateId, false);
-  const guardian = findFirstIndexedRow_(ss.getSheetByName(PSB_SHEETS.GUARDIANS), 'candidateId', reg.object.candidateId, true);
-  const address = findFirstIndexedRow_(ss.getSheetByName(PSB_SHEETS.ADDRESSES), 'candidateId', reg.object.candidateId, true);
-  const school = findFirstIndexedRow_(ss.getSheetByName(PSB_SHEETS.SCHOOLS), 'candidateId', reg.object.candidateId, true);
-  return {registration:reg.object,candidate:candidate?.object||null,guardian:guardian?.object||null,address:address?.object||null,school:school?.object||null};
+  // Reuse the batch reader already used by registration workflows. It reads
+  // each related sheet once, instead of separate header/body lookups per table.
+  return findRegistrationBatch_(getDatabaseSpreadsheet_(), registrationId);
 }
 
 function getRegistrationPaymentDocumentStatusMap_(items) {
