@@ -2073,15 +2073,29 @@ function getRegistrationList(sessionToken, filters) {
   const user = requireRole_(sessionToken, PSB_REGISTRATION_ADMIN_ROLES);
   const sheet = getDatabaseSpreadsheet_().getSheetByName(PSB_SHEETS.REGISTRATIONS);
   if (!sheet || sheet.getLastRow() < 2) return { success:true, registrations:[] };
-  const headers = sheet.getRange(1,1,1,sheet.getLastColumn()).getValues()[0].map(String);
-  const rows = sheet.getRange(2,1,sheet.getLastRow()-1,sheet.getLastColumn()).getValues();
-  let items = rows.map((r,i) => rowObject_(headers,r,i+2));
   filters = filters || {};
-  if (filters.status) items = items.filter(x => String(x.status) === String(filters.status));
-  if (filters.tahunAjaranId) items = items.filter(x => String(x.tahunAjaranId) === String(filters.tahunAjaranId));
-  // Sort and cap before loading related payment/document status tables.
-  items.sort((a,b)=>String(b.updatedAt||'').localeCompare(String(a.updatedAt||'')));
-  items=items.slice(0,200);
+
+  // Project only the filter/sort columns, then fetch complete rows for the
+  // newest 200 matches. Keep row numbers so duplicate or blank IDs remain safe.
+  const projected = sheetRowsByFields_(sheet, [
+    'registrationId', 'status', 'tahunAjaranId', 'updatedAt'
+  ]);
+  let selected = projected.filter(item =>
+    (!filters.status || String(item.status) === String(filters.status)) &&
+    (!filters.tahunAjaranId || String(item.tahunAjaranId) === String(filters.tahunAjaranId))
+  );
+  selected.sort((a, b) => {
+    const aUpdated = a.updatedAt instanceof Date
+      ? Utilities.formatDate(a.updatedAt, getConfig_('TIMEZONE') || 'Asia/Jakarta', "yyyy-MM-dd'T'HH:mm:ss")
+      : String(a.updatedAt || '');
+    const bUpdated = b.updatedAt instanceof Date
+      ? Utilities.formatDate(b.updatedAt, getConfig_('TIMEZONE') || 'Asia/Jakarta', "yyyy-MM-dd'T'HH:mm:ss")
+      : String(b.updatedAt || '');
+    return bUpdated.localeCompare(aUpdated);
+  });
+  const rowNumbers = selected.slice(0, 200).map(item => item.rowNumber);
+  const items = sheetRowsAtRowNumbers_(sheet, rowNumbers);
+  items.sort((a, b) => String(b.updatedAt || '').localeCompare(String(a.updatedAt || '')));
   return { success:true, registrations: enrichRegistrationList_(items) };
 }
 
@@ -2203,6 +2217,35 @@ function getPaymentsForRegistration(sessionToken, registrationId) {
  * fetched in contiguous batches to preserve sheet order without loading every
  * unrelated payment/verification record into Apps Script memory.
  */
+function sheetRowsAtRowNumbers_(sheet, rowNumbers) {
+  if (!sheet || !rowNumbers || !rowNumbers.length) return [];
+  const lastRow = sheet.getLastRow();
+  const lastColumn = sheet.getLastColumn();
+  if (lastRow < 2 || lastColumn < 1) return [];
+  const selected = Array.from(new Set(rowNumbers.map(Number)
+    .filter(rowNumber => Number.isInteger(rowNumber) && rowNumber >= 2 && rowNumber <= lastRow)))
+    .sort((a, b) => a - b);
+  if (!selected.length) return [];
+  const headers = sheet.getRange(1, 1, 1, lastColumn).getValues()[0].map(String);
+  const output = [];
+  let blockStart = selected[0];
+  let previousRow = selected[0];
+  function appendBlock_(startRow, endRow) {
+    const values = sheet.getRange(startRow, 1, endRow - startRow + 1, lastColumn).getValues();
+    values.forEach((row, offset) => output.push(rowObject_(headers, row, startRow + offset)));
+  }
+  for (let i = 1; i < selected.length; i++) {
+    const rowNumber = selected[i];
+    if (rowNumber !== previousRow + 1) {
+      appendBlock_(blockStart, previousRow);
+      blockStart = rowNumber;
+    }
+    previousRow = rowNumber;
+  }
+  appendBlock_(blockStart, previousRow);
+  return output;
+}
+
 function sheetRowsMatchingValues_(sheet, keyField, wantedValues) {
   if (!sheet || sheet.getLastRow() < 2) return [];
   const wanted = Object.create(null);
