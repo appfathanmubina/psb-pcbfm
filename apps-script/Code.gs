@@ -2896,8 +2896,10 @@ function publishAnnouncement(sessionToken,payload) {
 function getNotifications(sessionToken) {
   const actor=requireRole_(sessionToken,PSB_ANNOUNCEMENT_VIEW_ROLES);
   const sheet=getDatabaseSpreadsheet_().getSheetByName(PSB_SHEETS.NOTIFICATIONS);
-  const rows=sheet&&sheet.getLastRow()>=2?sheetRows_(sheet):[];
-  const items=rows.filter(x=>String(x.userId)===String(actor.userId)).sort((a,b)=>String(b.createdAt||'').localeCompare(String(a.createdAt||''))).slice(0,100);
+  // Scan only the userId column and fetch full rows for this user's records.
+  // The helper preserves sheet order; sorting and the 100-item cap stay intact.
+  const rows=sheetRowsMatchingValues_(sheet,'userId',[actor.userId]);
+  const items=rows.sort((a,b)=>String(b.createdAt||'').localeCompare(String(a.createdAt||''))).slice(0,100);
   return {success:true,items,unreadCount:items.filter(x=>String(x.isRead).toUpperCase()!=='TRUE').length};
 }
 
