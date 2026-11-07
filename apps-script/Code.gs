@@ -2119,6 +2119,7 @@ function getRegistrationDetail(sessionToken, registrationId) {
 // =====================================================
 const PSB_PAYMENT_VIEW_ROLES = ['WALI','SUPERADMIN','ADMIN_PSB','KEUANGAN'];
 const PSB_PAYMENT_MANAGE_ROLES = ['SUPERADMIN','ADMIN_PSB','KEUANGAN'];
+const PSB_SELECTION_ADMIN_ROLES = ['SUPERADMIN','ADMIN_PSB','SELEKSI'];
 const PSB_PAYMENT_EDITABLE_STATUSES = ['SUBMITTED','UNDER_REVIEW','REVISION','VERIFIED'];
 
 function ensureFormBillForRegistration_(registrationId, paymentTypes, actorUserId, suppressOwnerNotification) {
