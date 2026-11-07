@@ -4080,15 +4080,24 @@ function getDocumentPageData(sessionToken, registrationId) {
   const actor = requireRole_(sessionToken, PSB_DOCUMENT_ACCESS_ROLES);
   const isWali = hasRoleDirect_(actor, ['WALI']);
   const ss = getDatabaseSpreadsheet_();
-  const registrationRows = sheetRows_(ss.getSheetByName(PSB_SHEETS.REGISTRATIONS));
-  let items = registrationRows;
-  if (isWali) items = items.filter(x => String(x.userId) === String(actor.userId));
+  const registrationSheet = ss.getSheetByName(PSB_SHEETS.REGISTRATIONS);
+  let items = [];
+  if (registrationSheet && registrationSheet.getLastRow() >= 2) {
+    if (isWali) {
+      items = sheetRowsMatchingValues_(registrationSheet, 'userId', [actor.userId]);
+    } else {
+      // Select the newest 200 registrations before transferring complete rows.
+      const projected = sheetRowsByFields_(registrationSheet, ['registrationId','updatedAt']);
+      projected.sort((a,b)=>String(b.updatedAt||'').localeCompare(String(a.updatedAt||'')));
+      items = sheetRowsAtRowNumbers_(registrationSheet, projected.slice(0,200).map(x=>x.rowNumber));
+    }
+  }
   if (!items.length) return { success:true, registrations:[], documentData:null };
 
-  // Read related rows once and reuse the indexes for both the registration
-  // list and selected registration. This avoids re-reading REGISTRATIONS and
-  // CANDIDATES through findRegistration_ after the list has been prepared.
-  const candidateRows = sheetRows_(ss.getSheetByName(PSB_SHEETS.CANDIDATES));
+  // Reuse only candidates referenced by this page. Preserve the prior
+  // last-row-wins display map and first-row-wins detail map semantics.
+  const candidateIds = items.map(x=>String(x.candidateId||'')).filter(Boolean);
+  const candidateRows = sheetRowsMatchingValues_(ss.getSheetByName(PSB_SHEETS.CANDIDATES), 'candidateId', candidateIds);
   const candidatesForDisplay = Object.create(null);
   const candidatesForDetail = Object.create(null);
   candidateRows.forEach(candidate => {
@@ -4125,7 +4134,7 @@ function getDocumentPageData(sessionToken, registrationId) {
   }
 
   const relatedRowsByCandidate = field => {
-    const rows = sheetRows_(ss.getSheetByName(field.sheet));
+    const rows = sheetRowsMatchingValues_(ss.getSheetByName(field.sheet), 'candidateId', [candidateId]);
     const firstByCandidate = Object.create(null);
     const primaryByCandidate = Object.create(null);
     rows.forEach(row => {
