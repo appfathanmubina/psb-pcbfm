@@ -50,7 +50,7 @@ assert.match(migration, /current\.passwordHash !== verifiedUser\.passwordHash/);
 assert.match(migration, /current\.passwordSalt !== verifiedUser\.passwordSalt/);
 assert.match(source, /migratePbkdf2PasswordToLegacySha256AfterLogin_\(user, password\)/);
 assert.doesNotMatch(source, /migrateLegacyPasswordToPbkdf2AfterLogin_/);
-assert.match(section('login'), /Migrasi bersifat best-effort/);
+assert.match(section('login'), /Login tetap dilanjutkan/);
 assert.doesNotMatch(section('login'), /migration_failed/);
 
 for (const name of ['registerWali', 'changePassword', 'adminResetUserPassword', 'createManualUser']) {
