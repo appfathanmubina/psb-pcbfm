@@ -40,8 +40,8 @@
     <div class="pwa-install-actions"><button type="button" id="installLater" class="btn btn-secondary">Nanti</button><button type="button" id="installBtn" class="btn btn-primary">Install</button></div>
   </div>
 </section>
-<script src="./api-bridge.js?v=32.18.0"></script>
-<script src="./app.js?v=32.33.0"></script>
+<script src="./api-bridge.js?v=32.19.0"></script>
+<script src="./app.js?v=32.34.0"></script>
 <script>
 (function(){
   'use strict';
@@ -53,7 +53,7 @@
       window.location.reload();
     });
     window.addEventListener('load',function(){
-      navigator.serviceWorker.register('./sw.js?v=32.36.0',{updateViaCache:'none'})
+      navigator.serviceWorker.register('./sw.js?v=32.37.0',{updateViaCache:'none'})
         .then(function(reg){return reg.update().catch(function(e){console.warn('Service worker update:',e);});})
         .catch(function(e){console.warn('Service worker:',e);});
     });
