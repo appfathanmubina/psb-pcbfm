@@ -4288,24 +4288,12 @@ function canAccessRegistration_(actor, registration) {
 function getCurrentDocuments_(registrationId) {
   const sheet = getDatabaseSpreadsheet_().getSheetByName(PSB_SHEETS.DOCUMENTS);
   if (!sheet || sheet.getLastRow() < 2) return [];
-  const lastRow = sheet.getLastRow();
-  const lastColumn = sheet.getLastColumn();
-  if (lastColumn < 1) return [];
-  // Read the table once, filter raw rows first, and only materialize documents
-  // belonging to this registration. Keep the original sheet row number.
-  const values = sheet.getRange(1,1,lastRow,lastColumn).getValues();
-  const headers = values[0].map(String);
-  const regIdx = headers.indexOf('registrationId');
-  const statusIdx = headers.indexOf('status');
-  if (regIdx < 0) return [];
-  const documents = [];
-  for (let i = 1; i < values.length; i++) {
-    const row = values[i];
-    if (String(row[regIdx] || '') !== String(registrationId)) continue;
-    if (statusIdx >= 0 && String(row[statusIdx] || '').toUpperCase() === 'REPLACED') continue;
-    documents.push(rowObject_(headers,row,i+1));
-  }
-  return documents.sort((a,b)=>String(b.uploadedAt||'').localeCompare(String(a.uploadedAt||'')));
+  // Scan only registrationId, then fetch full rows for this registration.
+  // The shared helper preserves sheet order and original rowNumber metadata.
+  const documents = sheetRowsMatchingValues_(sheet, 'registrationId', [registrationId]);
+  return documents
+    .filter(document => String(document.status || '').toUpperCase() !== 'REPLACED')
+    .sort((a,b)=>String(b.uploadedAt||'').localeCompare(String(a.uploadedAt||'')));
 }
 
 function getRegistrationDocumentFolder_(registration) {
