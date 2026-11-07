@@ -58,7 +58,6 @@ const context = {
   PSB_REPORT_ROLES: ['SUPERADMIN','ADMIN_PSB','VERIFIKATOR','SELEKSI','KEUANGAN'],
   PSB_VERIFICATION_ROLES: ['SUPERADMIN','ADMIN_PSB','VERIFIKATOR'],
   PSB_PAYMENT_MANAGE_ROLES: ['SUPERADMIN','ADMIN_PSB','KEUANGAN'],
-  PSB_SELECTION_ADMIN_ROLES: ['SUPERADMIN','ADMIN_PSB','SELEKSI'],
   PSB_ANNOUNCEMENT_ADMIN_ROLES: ['SUPERADMIN','ADMIN_PSB','SELEKSI'],
   PSB_REREGISTRATION_ADMIN_ROLES: ['SUPERADMIN','ADMIN_PSB','KEUANGAN'],
   PSB_MONITORING_ROLES: ['SUPERADMIN','ADMIN_PSB','VERIFIKATOR','SELEKSI','KEUANGAN'],
@@ -83,8 +82,11 @@ const context = {
   findParticipantRegistration_: participant => participant && participant.registrationId ? participant.registrationId : '',
   sortCountMap_: obj => Object.keys(obj || {}).map(name => ({ name, count: Number(obj[name] || 0) })).sort((a,b) => b.count-a.count || a.name.localeCompare(b.name))
 };
+const selectionAdminRolesDeclaration = code.match(/^const PSB_SELECTION_ADMIN_ROLES = \[[^\n]+\];$/m);
+assert.ok(selectionAdminRolesDeclaration,
+  'Production backend must declare the selection admin role allowlist used by Dashboard');
 vm.createContext(context);
-vm.runInContext(page, context);
+vm.runInContext(selectionAdminRolesDeclaration[0] + '\n' + page, context);
 
 function response(role) {
   return JSON.parse(JSON.stringify(context.getDashboardPageData(role)));
