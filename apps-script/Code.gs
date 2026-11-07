@@ -3630,7 +3630,14 @@ function getAdvancedReportingData(sessionToken, filters) {
   const avg=a=>{const v=a.filter(x=>typeof x==='number'&&isFinite(x));return v.length?Math.round((v.reduce((s,x)=>s+x,0)/v.length)*10)/10:null;};
   const by=(arr,keyFn)=>{const m={};arr.forEach(x=>{const k=keyFn(x)||'-';m[k]=(m[k]||0)+1;});return Object.keys(m).map(k=>({label:k,count:m[k]})).sort((a,b)=>b.count-a.count || a.label.localeCompare(b.label,'id'));};
   const regMap={}; filtered.forEach(r=>regMap[String(r.registrationId)]=r);
-  const funnel={registrations:filtered.length,submitted:filtered.filter(r=>String(r.submittedAt||'').trim()).length,verified:filtered.filter(r=>['VERIFIED','PAYMENT_PENDING','PAYMENT_VERIFIED','SELECTION','PASSED','NOT_PASSED','REREGISTRATION','COMPLETED'].includes(String(r.status||''))).length,paymentVerified:filtered.filter(r=>{const id=String(r.registrationId);return scopedPayments.some(p=>String(p.registrationId)===id&&String(p.status||'').toUpperCase()==='VERIFIED')||scopedBills.some(b=>String(b.registrationId)===id&&String(b.status||'').toUpperCase()==='PAID');}).length,selection:scopedParticipants.length,announced:announced.length,passed:passed.length,reregistration:scopedRereg.length,completed:completed.length};
+  const paymentVerifiedRegistrationIds = Object.create(null);
+  scopedPayments.forEach(p => {
+    if (String(p.status || '').toUpperCase() === 'VERIFIED') paymentVerifiedRegistrationIds[String(p.registrationId)] = true;
+  });
+  scopedBills.forEach(b => {
+    if (String(b.status || '').toUpperCase() === 'PAID') paymentVerifiedRegistrationIds[String(b.registrationId)] = true;
+  });
+  const funnel={registrations:filtered.length,submitted:filtered.filter(r=>String(r.submittedAt||'').trim()).length,verified:filtered.filter(r=>['VERIFIED','PAYMENT_PENDING','PAYMENT_VERIFIED','SELECTION','PASSED','NOT_PASSED','REREGISTRATION','COMPLETED'].includes(String(r.status||''))).length,paymentVerified:filtered.filter(r=>!!paymentVerifiedRegistrationIds[String(r.registrationId)]).length,selection:scopedParticipants.length,announced:announced.length,passed:passed.length,reregistration:scopedRereg.length,completed:completed.length};
   const conversion={verificationRate:funnel.registrations?Math.round(funnel.verified/funnel.registrations*1000)/10:0,paymentRate:funnel.verified?Math.round(funnel.paymentVerified/funnel.verified*1000)/10:0,selectionRate:funnel.paymentVerified?Math.round(funnel.selection/funnel.paymentVerified*1000)/10:0,passRate:funnel.selection?Math.round(funnel.passed/funnel.selection*1000)/10:0,reregistrationCompletionRate:funnel.passed?Math.round(funnel.completed/funnel.passed*1000)/10:0};
   const trendMap={}; const monthKey=d=>{const x=new Date(d);return isNaN(x)?null:Utilities.formatDate(x,Session.getScriptTimeZone()||'Asia/Jakarta','yyyy-MM');};
   filtered.forEach(r=>{const k=monthKey(r.createdAt||r.submittedAt);if(k){if(!trendMap[k])trendMap[k]={month:k,registrations:0,submitted:0,verified:0};trendMap[k].registrations++;if(r.submittedAt)trendMap[k].submitted++;if(['VERIFIED','PAYMENT_PENDING','PAYMENT_VERIFIED','SELECTION','PASSED','NOT_PASSED','REREGISTRATION','COMPLETED'].includes(String(r.status||'')))trendMap[k].verified++;}});
@@ -3642,7 +3649,12 @@ function getAdvancedReportingData(sessionToken, filters) {
   const outcome={passed:passed.length,notPassed:scopedResults.filter(r=>String(r.status||'').toUpperCase()==='NOT_PASSED').length,waitlist:scopedResults.filter(r=>String(r.status||'').toUpperCase()==='WAITLIST').length,pending:scopedResults.filter(r=>!String(r.status||'').trim()).length};
   const paymentAmount=paidBills.reduce((s,b)=>s+(Number(b.amount)||0),0);
   const processing={registrationToSubmit:avg(filtered.map(r=>days(r.createdAt,r.submittedAt))),submitToVerified:avg(filtered.map(r=>days(r.submittedAt,r.verifiedAt))),paymentToSelection:avg(scopedParticipants.map(p=>{const r=regMap[String(p.registrationId)];return r?days(r.verifiedAt,p.createdAt):null;})),resultToAnnouncement:avg(scopedResults.map(r=>days(r.createdAt,r.announcementDate))),reregistrationCompletion:avg(completed.map(rr=>days(rr.createdAt,rr.completedAt||rr.updatedAt)))};
-  const byPaymentType=by(paidBills,b=>String(b.paymentTypeId||'-')).map(x=>{const total=paidBills.filter(b=>String(b.paymentTypeId||'-')===x.label).reduce((s,b)=>s+(Number(b.amount)||0),0);return Object.assign(x,{amount:total});});
+  const paymentAmountByType = Object.create(null);
+  paidBills.forEach(b => {
+    const key = String(b.paymentTypeId || '-');
+    paymentAmountByType[key] = (paymentAmountByType[key] || 0) + (Number(b.amount) || 0);
+  });
+  const byPaymentType=by(paidBills,b=>String(b.paymentTypeId||'-')).map(x=>Object.assign(x,{amount:paymentAmountByType[x.label]||0}));
   const last30={registrations:filtered.filter(r=>new Date(r.createdAt||0)>=new Date(Date.now()-30*msPerDay)).length,payments:verifiedPayments.filter(p=>new Date(p.submittedAt||p.createdAt||0)>=new Date(Date.now()-30*msPerDay)).length,announcements:announced.filter(r=>new Date(r.announcementDate||0)>=new Date(Date.now()-30*msPerDay)).length};
   writeAudit_(actor.userId,'ADVANCED_REPORT_VIEW','REPORTING','', '', JSON.stringify({yearId,gelombangId,jenjangId,gender,fromDate:filters.fromDate||'',toDate:filters.toDate||''}), 'Advanced Reporting & Analytics dijalankan');
   return {success:true,activeYear,filters:{tahunAjaranId:yearId,gelombangId,jenjangId,gender,status,fromDate:filters.fromDate||'',toDate:filters.toDate||''},funnel,conversion,trends,breakdowns:{jenjang:byJenjang.slice(0,20),kelompok:byKelompok.slice(0,20),gelombang:byGelombang.slice(0,20),status:byStatus.slice(0,20)},outcome,finance:{paidAmount:paymentAmount,paidBills:paidBills.length,byPaymentType:byPaymentType.slice(0,20)},processing,last30,generatedAt:new Date().toISOString()};
