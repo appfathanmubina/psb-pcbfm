@@ -16,7 +16,7 @@ assert.match(css, /\.public-gallery,\s*\.public-video\s*\{[^}]*width:\s*100%;[^}
   'Gallery and video must each occupy a full-width vertical row');
 assert.match(css, /@media\s*\(min-width:\s*900px\)\s*and\s*\(max-width:\s*1100px\)/,
   'Desktop layout must also adapt to narrower laptop screens');
-assert.match(html, /styles\\.css\\?v=32\\.24\\.0/,
+assert.match(html, /styles\.css\?v=32\.24\.0/,
   'HTML must request the updated responsive stylesheet');
 assert.match(fs.readFileSync('frontend/sw.js', 'utf8'), /psb-pwa-shell-v32-39-0/,
   'Service worker cache must be versioned for the current production PWA shell v32.39.0');
