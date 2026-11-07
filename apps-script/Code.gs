@@ -951,7 +951,9 @@ function findUserById_(id, bypassCache) {
 
   // bypassCache dipertahankan untuk kompatibilitas pemanggil lama. Indeks saja
   // yang di-cache; isi baris pengguna selalu dibaca terbaru dari Spreadsheet.
-  const cachedRowNumber = Number(cache.get(cacheKey) || 0);
+  // Cache hanya indeks. Kegagalan baca cache harus jatuh kembali ke scan USERS.
+  let cachedRowNumber = 0;
+  try { cachedRowNumber = Number(cache.get(cacheKey) || 0); } catch (cacheReadError) {}
   if (cachedRowNumber >= 2) {
     try {
       const row = sheet.getRange(cachedRowNumber, 1, 1, 15).getValues()[0];
