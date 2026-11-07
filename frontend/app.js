@@ -256,22 +256,21 @@ function scheduleWarmNavigationData(){
   }
 }
 async function boot(){
-  hydrateSplashLogo();
-  // Establish the Apps Script bridge in the background before the user submits
-  // the login form. Login will reuse this token instead of waiting for a GET handshake.
+  // Render the public landing page immediately. Bridge preparation, public
+  // configuration refresh, and saved-session validation continue in background.
+  renderPublicHome();
   if(window.PSBBridge&&typeof window.PSBBridge.prepare==='function'){
     window.PSBBridge.prepare().catch(error=>console.warn('PSB bridge warm-up skipped:',error));
   }
-  loading(true,'Memeriksa aplikasi...');
+  const hadStoredSession=!!state.token;
   const configTask=refreshPublicConfig();
   try{
-    if(state.token){
+    if(hadStoredSession){
       const session=await server('validateSession',state.token);
       if(session?.success){
         state.user=session.user;
         const savedPage=sessionStorage.getItem('psb_current_page')||'home';
         initializeAfterLogin();
-        $('loading')?.classList.add('hidden');
         // Hindari renderHome ganda saat sesi dipulihkan pada halaman selain Beranda.
         renderApp({deferInitialPage:true});
         await goPage(savedPage);
@@ -281,14 +280,14 @@ async function boot(){
         sessionStorage.removeItem('psb_current_page');
         renderPublicHome('Sesi sebelumnya sudah berakhir. Silakan masuk kembali.');
       }
-    }else{
-      renderPublicHome();
     }
   }catch(e){
     console.error('PSB boot error:',e);
-    if(state.token)renderSessionRecovery('Sesi tersimpan, tetapi server belum dapat dihubungi. Muat ulang atau coba periksa koneksi internet.');
-    else renderPublicHome('Sebagian informasi belum dapat dimuat. Periksa koneksi internet Anda.');
-  }finally{if(!state.appInitialized)loading(false);}
+    // Keep the public page available when session validation or the network fails.
+    renderPublicHome(hadStoredSession
+      ? 'Sesi tersimpan belum dapat diverifikasi. Silakan masuk kembali atau periksa koneksi internet.'
+      : 'Sebagian informasi belum dapat dimuat. Periksa koneksi internet Anda.');
+  }
   configTask.catch(()=>{});
 }
 function renderSessionRecovery(message){
