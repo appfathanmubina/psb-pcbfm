@@ -78,8 +78,10 @@ assert.match(createSeed, /PSB_SESSION_ROW_V1_/,
 const loginLookup = fn('findUser_');
 assert.match(loginLookup, /try\s*\{\s*cachedRowNumber = Number\(cache\.get\(cacheKey\)/,
   'Login user lookup must fall back to USERS when the optional row-index cache is unavailable');
-assert.match(loginLookup, /getRange\(2,\s*1,\s*lastRow\s*-\s*1,\s*15\)/,
-  'Login user lookup must retain the authoritative Spreadsheet fallback');
+assert.match(loginLookup, /getRange\(2,\s*3,\s*lastRow\s*-\s*1,\s*4\)/,
+  'Login user lookup must scan only the four identity columns on cache miss');
+assert.match(loginLookup, /getRange\(rowNumber,\s*1,\s*1,\s*15\)/,
+  'Login user lookup must fetch the full account row only after an identity match');
 const userIdLookup = fn('findUserById_');
 assert.match(userIdLookup, /try\s*\{\s*cachedRowNumber = Number\(cache\.get\(cacheKey\)/,
   'Session user lookup must fall back to USERS when the optional row-index cache is unavailable');
