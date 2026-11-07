@@ -1390,7 +1390,6 @@ async function renderWaliVerificationStatus(){
 function renderMore(){
   if(hasAnyRole(['WALI'])){
     const items=[
-      ['verificationStatus','Verifikasi','Pantau status pemeriksaan data dan dokumen setelah pembayaran formulir dikonfirmasi.','shield'],
       ['selection','Tes','Lihat jadwal tes, status peserta, dan hasil seleksi.','grad'],
       ['announcement','Pengumuman','Lihat hasil seleksi yang sudah dipublikasikan.','megaphone'],
       ['reregistration','Daftar Ulang','Lanjutkan proses akhir jika calon santri dinyatakan lulus.','refresh']
