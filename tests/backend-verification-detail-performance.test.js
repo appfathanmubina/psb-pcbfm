@@ -20,10 +20,13 @@ assert.match(currentDocs, /sort\(\(a,b\)=>String\(b\.uploadedAt\|\|''\)\.localeC
   'Current documents must remain sorted newest first');
 
 const batchLookup = functionSource('findRegistrationBatch_');
-assert.equal((batchLookup.match(/readTable\(ss\.getSheetByName\(/g) || []).length, 5,
-  'Registration detail must batch-read each related table exactly once');
-assert.doesNotMatch(batchLookup, /findRowById_|findFirstBy_/,
-  'Batch lookup must not invoke helpers that reread the same sheets');
+assert.match(batchLookup, /findFirstIndexedRow_\(\s*ss\.getSheetByName\(PSB_SHEETS\.REGISTRATIONS\)/,
+  'Registration detail must use the indexed registration lookup');
+for (const sheetName of ['CANDIDATES','GUARDIANS','ADDRESSES','SCHOOLS']) {
+  assert.match(batchLookup, new RegExp('findFirstIndexedRow_\\(\\s*ss\\.getSheetByName\\(PSB_SHEETS\\.' + sheetName + '\\)'));
+}
+assert.doesNotMatch(batchLookup, /readTable\(/,
+  'Registration detail must not load full related tables');
 assert.match(batchLookup, /if \(!fallback\) fallback = found/,
   'Duplicate related rows must preserve the first-row fallback');
 assert.match(batchLookup, /preferPrimary && primaryIdx >= 0/,
