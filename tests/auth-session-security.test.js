@@ -91,9 +91,9 @@ assert.ok(loginSessionOrder >= 0 && login.indexOf('clearLoginFailure_(key)') > l
 const failureContention = fn('registerLoginFailure_');
 assert.match(failureContention, /PSB_LOGIN_LOCK_V2_[\s\S]*Date\.now\(\) \+ 60000/,
   'Login failure counter lock contention must create a short fail-closed lock marker');
-const migration = fn('migrateLegacyPasswordToPbkdf2AfterLogin_');
+const migration = fn('migratePbkdf2PasswordToLegacySha256AfterLogin_');
 assert.ok(migration.indexOf('hashPassword_(') < migration.indexOf('lock.waitLock(20000)'),
-  'Legacy password migration must derive the hash before taking the global lock');
+  'PBKDF2-to-SHA migration must derive the hash before taking the global lock');
 assert.match(migration.slice(migration.indexOf('lock.waitLock(20000)')),
   /findUserById_\(verifiedUser\.userId, true\)[\s\S]*?passwordHash !== verifiedUser\.passwordHash[\s\S]*?return false/,
   'Password migration must recheck current credentials under lock');
@@ -102,9 +102,9 @@ const passwordLockAt = passwordChange.indexOf('lock.waitLock(20000)');
 assert.ok(passwordChange.indexOf('verifyPasswordForUser_(') < passwordLockAt,
   'Current password verification must happen before taking the global lock');
 assert.ok(passwordChange.indexOf('hashPassword_(') < passwordLockAt,
-  'New PBKDF2 hash must be derived before taking the global lock');
+  'New SHA-256 hash must be derived before taking the global lock');
 assert.doesNotMatch(passwordChange.slice(passwordLockAt), /verifyPasswordForUser_|hashPassword_/,
-  'Password change critical section must not run expensive PBKDF2 work');
+  'Password change critical section must not perform password hashing');
 assert.match(passwordChange.slice(passwordLockAt),
   /String\(current\.status\)\.toUpperCase\(\) !== 'ACTIVE'/,
   'Password change must recheck active account status under lock');
