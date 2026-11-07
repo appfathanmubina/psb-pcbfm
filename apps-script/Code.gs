@@ -2863,14 +2863,19 @@ function saveSelectionResult(sessionToken,payload){
   assertOperationalMutation_(actor); payload=payload||{};
   const registrationId=String(payload.registrationId||'').trim(), status=String(payload.status||'').toUpperCase(), note=clean_(payload.note);
   if(!registrationId||!['PENDING','PASSED','NOT_PASSED','WAITLIST'].includes(status))return fail_('Pendaftaran dan hasil seleksi wajib diisi.');
-  const found=findRegistration_(registrationId); if(!found)return fail_('Pendaftaran tidak ditemukan.');
-  const participant=findRowById_(getDatabaseSpreadsheet_().getSheetByName(PSB_SHEETS.SELECTION_PARTICIPANTS),'registrationId',registrationId); if(!participant)return fail_('Pendaftar belum terdaftar sebagai peserta tes.');
 
   const lock=LockService.getScriptLock();
   try { lock.waitLock(10000); } catch (lockError) { return fail_('Server sedang memproses permintaan lain. Silakan coba kembali beberapa saat lagi.'); }
   try{
-    const sheet=getDatabaseSpreadsheet_().getSheetByName(PSB_SHEETS.SELECTION_RESULTS);
+    const ss=getDatabaseSpreadsheet_(), sheet=ss.getSheetByName(PSB_SHEETS.SELECTION_RESULTS);
     if(!sheet)return fail_('Sheet hasil seleksi belum tersedia.');
+
+    // Re-read all workflow state under the lock so eligibility and status
+    // transitions cannot be based on a stale pre-lock snapshot.
+    const found=findRegistration_(registrationId); if(!found)return fail_('Pendaftaran tidak ditemukan.');
+    const participant=findRowById_(ss.getSheetByName(PSB_SHEETS.SELECTION_PARTICIPANTS),'registrationId',registrationId);
+    if(!participant)return fail_('Pendaftar belum terdaftar sebagai peserta tes.');
+
     const rows=sheetRows_(sheet), existing=rows.find(x=>String(x.registrationId)===registrationId), now=new Date();
     if(existing && String(existing.announcementDate||'').trim()!=='')return fail_('Hasil seleksi tidak dapat diubah setelah dipublikasikan.');
 
@@ -2879,21 +2884,24 @@ function saveSelectionResult(sessionToken,payload){
     const currentStatus=String(found.registration.status||'').toUpperCase();
     if(!['VERIFIED','PAYMENT_VERIFIED','SELECTION','PASSED'].includes(currentStatus))return fail_('Pendaftaran belum berada pada tahap hasil seleksi.');
     // Defense-in-depth: direct RPC calls must pass the same eligibility rule
-    // used when generating the selection participant. This closes a gap where
-    // a crafted request could try to write a result for a merely VERIFIED record.
+    // used when generating the selection participant.
     if((currentStatus==='VERIFIED' || currentStatus==='PAYMENT_VERIFIED') && !isRegistrationSelectionEligible_(registrationId))return fail_('Pendaftar belum memenuhi syarat mengikuti tes. Pastikan verifikasi pendaftaran dan Pembayaran Formulir sudah selesai.');
-    if(currentStatus==='VERIFIED' || currentStatus==='PAYMENT_VERIFIED'){
-      const moved=setRegistrationStatus_(found.registration,'SELECTION',actor.userId,'Pendaftaran masuk tahap penetapan hasil seleksi.');
-      if(!moved?.success)return moved;
-    }
 
     const record=existing?Object.assign({},existing,{status,announcementDate:existing.announcementDate||'',note,updatedAt:now}):{resultId:generateId_('RES'),registrationId,status,announcementDate:'',note,createdAt:now,updatedAt:now};
     upsertById_(sheet,'resultId',record.resultId,record);
 
-    // Read-back verification prevents a false success when the sheet write did not persist.
+    // Confirm the result row is durable before advancing registration status.
+    // If the status update then fails, a retry finds the existing result and
+    // safely retries the transition rather than leaving an advanced status
+    // without its corresponding selection result.
     const savedRows=sheetRows_(sheet);
     const saved=savedRows.find(x=>String(x.resultId)===String(record.resultId) && String(x.registrationId)===registrationId);
     if(!saved || String(saved.status||'').toUpperCase()!==status)return fail_('Hasil seleksi belum tersimpan. Silakan coba lagi.');
+
+    if(currentStatus==='VERIFIED' || currentStatus==='PAYMENT_VERIFIED'){
+      const moved=setRegistrationStatus_(found.registration,'SELECTION',actor.userId,'Pendaftaran masuk tahap penetapan hasil seleksi.');
+      if(!moved?.success)return moved;
+    }
 
     writeAudit_(actor.userId,existing?'UPDATE':'CREATE','SELECTION_RESULT',record.resultId,existing?JSON.stringify(existing):'',JSON.stringify(saved),'Hasil seleksi disimpan');
     return {success:true,message:'Hasil seleksi berhasil disimpan.',result:rpcSafe_(saved)};
