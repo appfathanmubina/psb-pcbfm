@@ -51,8 +51,10 @@ assert.match(sessionIndex, /getRange\(cachedRowNumber,\s*1,\s*1,\s*7\)/,
   'Session cache hits must read only the indexed session row');
 assert.match(sessionIndex, /constantTimeEqual_\(String\(cachedRow\[2\]/,
   'A cached session row must be checked against the requested token hash');
-assert.match(sessionIndex, /getRange\(2,\s*1,\s*lastRow\s*-\s*1,\s*7\)/,
-  'A full session scan is permitted only as an index-miss fallback');
+assert.match(sessionIndex, /getRange\(2,\s*3,\s*lastRow\s*-\s*1,\s*1\)/,
+  'A cache miss must scan only the token-hash column');
+assert.match(sessionIndex, /getRange\(rowNumber,\s*1,\s*1,\s*7\)/,
+  'A full session row may be read only after a matching token hash is found');
 assert.match(sessionIndex, />=\s*2\s*\*\s*60000/,
   'Session activity writes must be throttled to at most once per two minutes');
 assert.match(sessionIndex, /findUserById_\(String\(row\[1\]\),\s*true\)/,
