@@ -31,7 +31,7 @@ const PSB_PWA_BRIDGE_ALLOWED_FUNCTIONS = Object.freeze([
   'getUserManagementData','adminResetUserPassword','createManualUser','getAuditLogPageData',
   'getAcademicYearLifecycleData','setActiveAcademicYear','getMasterDefinitions','getMasterData','saveMasterItem','deactivateMasterItem',
   'getRegistrationFormOptions','getWaliHomeData','getMyRegistrations','getRegistrationList','getRegistrationDetail',
-  'getPaymentPageData','getPaymentsForRegistration','createBill','submitPayment','verifyPayment',
+  'getPaymentPageData','getPaymentQueue','getPaymentsForRegistration','createBill','submitPayment','verifyPayment',
   'getSelectionPageData','createSelectionSchedule','updateSelectionScheduleStatus','addSelectionParticipant','addSelectionParticipantsBulk','updateSelectionParticipantStatus','saveSelectionScore','saveSelectionResult',
   'getAnnouncementPageData','publishAnnouncement',
   'getNotifications','markNotificationRead','markAllNotificationsRead',
@@ -2203,6 +2203,102 @@ function getPaymentPageData(sessionToken, registrationId) {
     catch(notificationError){console.error('Auto form bill notification failed after bill creation: '+notificationError);}
   }
   return {success:true,registrations,paymentData,paymentTypes};
+}
+
+
+
+function getPaymentQueue(sessionToken, page) {
+  const actor = requireRole_(sessionToken, PSB_PAYMENT_MANAGE_ROLES);
+  page = Math.max(1, Math.floor(Number(page)||1));
+  const pageSize = 50;
+  const ss = getDatabaseSpreadsheet_();
+  const billSheet = ss.getSheetByName(PSB_SHEETS.BILLS);
+  const paymentTypes = getActiveMasterItems_('MASTER_JENIS_PEMBAYARAN');
+  if (!billSheet || billSheet.getLastRow() < 2) {
+    return { success:true, items:[], paymentTypes, totalBills:0, page:1, pageSize, pageCount:1, hasMore:false };
+  }
+
+  // Read only queue columns, then enrich only the requested 50-bill page.
+  const allBills = sheetRowsByFields_(billSheet,
+    ['billId','registrationId','paymentTypeId','amount','dueDate','status','createdAt']);
+  const activeBills = allBills.filter(x=>String(x.status||'').toUpperCase()!=='CANCELLED');
+  activeBills.sort((a,b)=>{
+    const aTime=new Date(a.createdAt||0).getTime(), bTime=new Date(b.createdAt||0).getTime();
+    if(Number.isFinite(aTime)&&Number.isFinite(bTime))return bTime-aTime;
+    return String(b.createdAt||'').localeCompare(String(a.createdAt||''));
+  });
+  const totalBills = activeBills.length;
+  const pageCount = Math.max(1,Math.ceil(totalBills/pageSize));
+  page = Math.min(page,pageCount);
+  const bills = activeBills.slice((page-1)*pageSize,page*pageSize);
+  const registrationIds = Array.from(new Set(bills.map(x=>String(x.registrationId||'')).filter(Boolean)));
+  const registrations = sheetRowsMatchingValuesByFields_(
+    ss.getSheetByName(PSB_SHEETS.REGISTRATIONS), 'registrationId', registrationIds,
+    ['candidateId','registrationNumber','tahunAjaranId','gelombangId','jenjangId']
+  );
+  const registrationMap = Object.create(null);
+  registrations.forEach(x=>{registrationMap[String(x.registrationId||'')]=x;});
+  const candidateIds = Array.from(new Set(registrations.map(x=>String(x.candidateId||'')).filter(Boolean)));
+  const candidates = sheetRowsMatchingValuesByFields_(
+    ss.getSheetByName(PSB_SHEETS.CANDIDATES), 'candidateId', candidateIds, ['fullName']
+  );
+  const candidateMap = Object.create(null);
+  candidates.forEach(x=>{candidateMap[String(x.candidateId||'')]=x;});
+  const paymentTypesById = Object.create(null);
+  paymentTypes.forEach(x=>{paymentTypesById[String(x.paymentTypeId||'')]=x;});
+  const payments = sheetRowsMatchingValuesByFields_(
+    ss.getSheetByName(PSB_SHEETS.PAYMENTS), 'billId',
+    bills.map(x=>String(x.billId||'')).filter(Boolean),
+    ['paymentId','status','proofFileUrl','submittedAt','createdAt']
+  );
+  const paymentByBill = Object.create(null);
+  payments.forEach(x=>{paymentByBill[String(x.billId||'')]=x;});
+  const paymentIds = payments.map(x=>String(x.paymentId||'')).filter(Boolean);
+  const verifications = sheetRowsMatchingValuesByFields_(
+    ss.getSheetByName(PSB_SHEETS.PAYMENT_VERIFICATIONS), 'paymentId', paymentIds,
+    ['note','status','verifiedAt']
+  );
+  const verificationByPayment = Object.create(null);
+  verifications.forEach(x=>{verificationByPayment[String(x.paymentId||'')]=x;});
+  const years = sheetMapByIdForValues_(ss.getSheetByName(PSB_SHEETS.MASTER_TAHUN_AJARAN),
+    'tahunAjaranId', registrations.map(x=>x.tahunAjaranId));
+  const waves = sheetMapByIdForValues_(ss.getSheetByName(PSB_SHEETS.MASTER_GELOMBANG),
+    'gelombangId', registrations.map(x=>x.gelombangId));
+  const levels = sheetMapByIdForValues_(ss.getSheetByName(PSB_SHEETS.MASTER_JENJANG),
+    'jenjangId', registrations.map(x=>x.jenjangId));
+
+  const items = bills.map(bill=>{
+    const registration=registrationMap[String(bill.registrationId||'')]||{};
+    const candidate=candidateMap[String(registration.candidateId||'')]||{};
+    const payment=paymentByBill[String(bill.billId||'')]||null;
+    const verification=payment?verificationByPayment[String(payment.paymentId||'')]||null:null;
+    const paymentStatus=String(payment?.status||'').toUpperCase();
+    const billStatus=String(bill.status||'').toUpperCase();
+    const queueStatus=billStatus==='PAID'||paymentStatus==='VERIFIED'?'PAID':
+      paymentStatus==='SUBMITTED'?'WAITING':
+      paymentStatus==='REJECTED'?'REJECTED':'UNPAID';
+    const paymentType=paymentTypesById[String(bill.paymentTypeId||'')]||{};
+    return {
+      billId:String(bill.billId||''),
+      registrationId:String(bill.registrationId||''),
+      registrationNumber:String(registration.registrationNumber||'-'),
+      candidateName:String(candidate.name||candidate.fullName||'-'),
+      jenjangName:levels[String(registration.jenjangId||'')]?.name||registration.jenjangId||'-',
+      gelombangName:waves[String(registration.gelombangId||'')]?.name||registration.gelombangId||'-',
+      tahunAjaranName:years[String(registration.tahunAjaranId||'')]?.name||registration.tahunAjaranId||'-',
+      paymentTypeName:String(paymentType.name||bill.paymentTypeId||'Tagihan'),
+      amount:Number(bill.amount||0),
+      dueDate:String(bill.dueDate||''),
+      billStatus,
+      queueStatus,
+      paymentId:String(payment?.paymentId||''),
+      paymentStatus,
+      proofFileUrl:String(payment?.proofFileUrl||''),
+      submittedAt:payment?.submittedAt||'',
+      verificationNote:String(verification?.note||'')
+    };
+  });
+  return { success:true, items, paymentTypes, totalBills, page, pageSize, pageCount, hasMore:page<pageCount, hasPrevious:page>1 };
 }
 
 
