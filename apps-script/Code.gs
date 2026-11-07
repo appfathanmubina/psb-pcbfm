@@ -1869,15 +1869,30 @@ function getRegistrationFormOptions(sessionToken) {
   return { success:true, user:publicUser_(user), years:year, waves:filteredWaves, jenjang:levels, activeYearId:selectedYear ? selectedYear.tahunAjaranId : '', activeYearName:selectedYear ? selectedYear.name : activeYearName };
 }
 
+function sheetRowsByFields_(sheet, fields) {
+  if (!sheet || sheet.getLastRow() < 2) return [];
+  const lastColumn = sheet.getLastColumn();
+  if (lastColumn < 1) return [];
+  const headers = sheet.getRange(1, 1, 1, lastColumn).getValues()[0].map(String);
+  const indexes = (fields || []).map(field => headers.indexOf(String(field)));
+  if (indexes.some(index => index < 0)) return [];
+  const minIndex = Math.min.apply(null, indexes);
+  const maxIndex = Math.max.apply(null, indexes);
+  const values = sheet.getRange(2, minIndex + 1, sheet.getLastRow() - 1, maxIndex - minIndex + 1).getValues();
+  return values.map(row => {
+    const item = {};
+    (fields || []).forEach((field, i) => { item[field] = row[indexes[i] - minIndex]; });
+    return item;
+  });
+}
+
 function getFormPaymentVerifiedRegistrationIds_() {
   const ss = getDatabaseSpreadsheet_();
   const formTypes = getActiveMasterItems_('MASTER_JENIS_PEMBAYARAN').filter(x => /formulir/i.test(String(x.name || '')));
   const formTypeIds = Object.create(null);
   formTypes.forEach(x => { formTypeIds[String(x.paymentTypeId)] = true; });
-  const billsSheet = ss.getSheetByName(PSB_SHEETS.BILLS);
-  const paymentsSheet = ss.getSheetByName(PSB_SHEETS.PAYMENTS);
-  const bills = billsSheet && billsSheet.getLastRow() >= 2 ? sheetRows_(billsSheet) : [];
-  const payments = paymentsSheet && paymentsSheet.getLastRow() >= 2 ? sheetRows_(paymentsSheet) : [];
+  const bills = sheetRowsByFields_(ss.getSheetByName(PSB_SHEETS.BILLS), ['registrationId','billId','paymentTypeId','status']);
+  const payments = sheetRowsByFields_(ss.getSheetByName(PSB_SHEETS.PAYMENTS), ['billId','status']);
   const verifiedPayments = Object.create(null);
   payments.forEach(x => {
     if (String(x.status || '').toUpperCase() === 'VERIFIED') verifiedPayments[String(x.billId || '')] = true;
