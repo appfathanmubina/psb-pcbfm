@@ -16,16 +16,24 @@ function section(source, start, end) {
 const endpoint = section(
   backend,
   'function getSelectionPageData(sessionToken, registrationId) {',
+  '\nfunction getSelectionDetailData_('
+);
+assert.match(endpoint, /if \(selectedId\) return getSelectionDetailData_\(actor, isWali, ss, selectedId\)/,
+  'Detail requests must use the targeted detail loader');
+
+const detail = section(
+  backend,
+  'function getSelectionDetailData_(actor, isWali, ss, registrationId) {',
   '\nfunction createSelectionSchedule('
 );
-assert.match(endpoint, /const visibleScores = isWali \? \[\] : scores;/,
-  'WALI must never receive raw selection scores in the page response');
-assert.match(endpoint, /const visibleResults = isWali\s*\?\s*results\.filter\(x => regMap\[String\(x\.registrationId\)\] && String\(x\.announcementDate \|\| ''\)\.trim\(\) !== ''\)/,
-  'WALI may only receive selection results after official publication');
-assert.match(endpoint, /scores: isWali \? \[\] : \(participant \? \(scoresByParticipant\[String\(participant\.participantId\)\] \|\| \[\]\) : \[\]\)/,
+assert.match(detail, /if \(!canAccessRegistration_\(actor, registration\)/,
+  'Targeted detail loader must enforce registration ownership');
+assert.match(detail, /scores: isWali \? \[\] : scores/,
   'WALI detail response must not include score breakdown');
-assert.match(endpoint, /result: isWali && !resultIsPublished \? null : selectedResult/,
+assert.match(detail, /result: isWali && !resultIsPublished \? null : selectedResult/,
   'WALI detail response must hide unpublished outcomes');
+assert.match(detail, /\(!isWali && participant\)/,
+  'Only staff may load raw score rows');
 
 const detailUi = section(frontend, 'function renderSelectionDetail(data,targetEl){', '\nasync function saveSelectionScoreUI(');
 assert.match(detailUi, /const scoreSection=isWali\?'':/,
