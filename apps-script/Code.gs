@@ -2157,15 +2157,63 @@ function getPaymentsForRegistration(sessionToken, registrationId) {
   return Object.assign({success:true},buildPaymentData_(registrationId));
 }
 
+/**
+ * Read only rows whose indexed column matches one of the requested values.
+ * The key column is scanned as a single narrow range; matching full rows are
+ * fetched in contiguous batches to preserve sheet order without loading every
+ * unrelated payment/verification record into Apps Script memory.
+ */
+function sheetRowsMatchingValues_(sheet, keyField, wantedValues) {
+  if (!sheet || sheet.getLastRow() < 2) return [];
+  const wanted = Object.create(null);
+  (wantedValues || []).forEach(value => {
+    const key = String(value == null ? '' : value);
+    if (key) wanted[key] = true;
+  });
+  if (!Object.keys(wanted).length) return [];
+
+  const lastRow = sheet.getLastRow();
+  const lastColumn = sheet.getLastColumn();
+  if (lastColumn < 1) return [];
+  const headers = sheet.getRange(1, 1, 1, lastColumn).getValues()[0].map(String);
+  const keyIndex = headers.indexOf(String(keyField));
+  if (keyIndex < 0) return [];
+
+  const keys = sheet.getRange(2, keyIndex + 1, lastRow - 1, 1).getValues();
+  const matchingRows = [];
+  for (let i = 0; i < keys.length; i++) {
+    if (wanted[String(keys[i][0] == null ? '' : keys[i][0])]) matchingRows.push(i + 2);
+  }
+  if (!matchingRows.length) return [];
+
+  const output = [];
+  let blockStart = matchingRows[0];
+  let previousRow = matchingRows[0];
+  function appendBlock_(startRow, endRow) {
+    const values = sheet.getRange(startRow, 1, endRow - startRow + 1, lastColumn).getValues();
+    values.forEach((row, offset) => output.push(rowObject_(headers, row, startRow + offset)));
+  }
+  for (let i = 1; i < matchingRows.length; i++) {
+    const rowNumber = matchingRows[i];
+    if (rowNumber !== previousRow + 1) {
+      appendBlock_(blockStart, previousRow);
+      blockStart = rowNumber;
+    }
+    previousRow = rowNumber;
+  }
+  appendBlock_(blockStart, previousRow);
+  return output;
+}
+
 function buildPaymentData_(registrationId, paymentTypes) {
   const ss=getDatabaseSpreadsheet_();
   const billsSheet=ss.getSheetByName(PSB_SHEETS.BILLS), paymentsSheet=ss.getSheetByName(PSB_SHEETS.PAYMENTS);
-  const bills=billsSheet&&billsSheet.getLastRow()>=2 ? sheetRows_(billsSheet).filter(x=>String(x.registrationId)===String(registrationId)) : [];
-  const payments=paymentsSheet&&paymentsSheet.getLastRow()>=2 ? sheetRows_(paymentsSheet).filter(x=>String(x.registrationId)===String(registrationId)) : [];
+  const bills=sheetRowsMatchingValues_(billsSheet,'registrationId',[registrationId]);
+  const payments=sheetRowsMatchingValues_(paymentsSheet,'registrationId',[registrationId]);
   const types={}; (paymentTypes || getActiveMasterItems_('MASTER_JENIS_PEMBAYARAN')).forEach(x=>types[String(x.paymentTypeId)]=x);
   const paymentByBill={}; payments.forEach(x=>{paymentByBill[String(x.billId)]=x;});
-  const verificationSheet=ss.getSheetByName(PSB_SHEETS.PAYMENT_VERIFICATIONS);
-  const verifications=verificationSheet&&verificationSheet.getLastRow()>=2?sheetRows_(verificationSheet):[];
+  const paymentIds=payments.map(x=>String(x.paymentId||'')).filter(Boolean);
+  const verifications=sheetRowsMatchingValues_(ss.getSheetByName(PSB_SHEETS.PAYMENT_VERIFICATIONS),'paymentId',paymentIds);
   const verificationByPayment={}; verifications.forEach(x=>{verificationByPayment[String(x.paymentId)]=x;});
   const items=bills.map(b=>{const payment=paymentByBill[String(b.billId)]||null;const verification=payment?verificationByPayment[String(payment.paymentId)]:null;return Object.assign({},b,{paymentTypeName:types[String(b.paymentTypeId)]?.name||b.paymentTypeId,payment:payment?Object.assign({},payment,{verificationNote:String(verification?.note||'')}):null});});
   return {registrationId:String(registrationId),bills:items,payments};
