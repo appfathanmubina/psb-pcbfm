@@ -2240,41 +2240,46 @@ function getPaymentQueue(sessionToken, page, filters) {
 
   // Build a lightweight global search/filter index from narrow projections.
   // Full bill rows and related detail are still fetched only for the selected page.
-  const billRefs = sheetRowsByFields_(billSheet,
-    ['billId','registrationId','paymentTypeId','status','createdAt']);
+  const billFields = query
+    ? ['billId','registrationId','paymentTypeId','status','createdAt']
+    : ['status','createdAt'];
+  const billRefs = sheetRowsByFields_(billSheet, billFields);
   const activeBillRefs = billRefs.filter(x=>String(x.status||'').toUpperCase()!=='CANCELLED');
   const allBills = activeBillRefs.length;
   if (!activeBillRefs.length) return emptyResult;
 
-  const registrationRows = sheetRowsByFields_(ss.getSheetByName(PSB_SHEETS.REGISTRATIONS),
-    ['registrationId','candidateId','registrationNumber']);
-  const registrationById = Object.create(null);
-  registrationRows.forEach(x=>{registrationById[String(x.registrationId||'')]=x;});
-  const candidateIds = Array.from(new Set(registrationRows.map(x=>String(x.candidateId||'')).filter(Boolean)));
-  const candidateRows = sheetRowsByFields_(ss.getSheetByName(PSB_SHEETS.CANDIDATES),
-    ['candidateId','fullName','name']);
-  const candidateById = Object.create(null);
-  candidateRows.forEach(x=>{candidateById[String(x.candidateId||'')]=x;});
+  let registrationById = Object.create(null);
+  let candidateById = Object.create(null);
+  if (query) {
+    const registrationRows = sheetRowsByFields_(ss.getSheetByName(PSB_SHEETS.REGISTRATIONS),
+      ['registrationId','candidateId','registrationNumber']);
+    registrationRows.forEach(x=>{registrationById[String(x.registrationId||'')]=x;});
+    const candidateRows = sheetRowsByFields_(ss.getSheetByName(PSB_SHEETS.CANDIDATES),
+      ['candidateId','fullName','name']);
+    candidateRows.forEach(x=>{candidateById[String(x.candidateId||'')]=x;});
+  }
 
   const paymentStatusByBill = Object.create(null);
-  sheetRowsByFields_(ss.getSheetByName(PSB_SHEETS.PAYMENTS), ['billId','status'])
-    .forEach(x=>{paymentStatusByBill[String(x.billId||'')]=String(x.status||'').toUpperCase();});
+  if (statusFilter) {
+    sheetRowsByFields_(ss.getSheetByName(PSB_SHEETS.PAYMENTS), ['billId','status'])
+      .forEach(x=>{paymentStatusByBill[String(x.billId||'')]=String(x.status||'').toUpperCase();});
+  }
   const paymentTypeNameById = Object.create(null);
-  paymentTypes.forEach(x=>{paymentTypeNameById[String(x.paymentTypeId||'')]=String(x.name||'');});
+  if (query) paymentTypes.forEach(x=>{paymentTypeNameById[String(x.paymentTypeId||'')]=String(x.name||'');});
 
   const indexed = activeBillRefs.map(bill=>{
-    const registration=registrationById[String(bill.registrationId||'')]||{};
-    const candidate=candidateById[String(registration.candidateId||'')]||{};
-    const paymentStatus=paymentStatusByBill[String(bill.billId||'')]||'';
+    const registration=query?registrationById[String(bill.registrationId||'')]||{}:{};
+    const candidate=query?candidateById[String(registration.candidateId||'')]||{}:{};
+    const paymentStatus=statusFilter?paymentStatusByBill[String(bill.billId||'')]||'':'';
     const billStatus=String(bill.status||'').toUpperCase();
     const queueStatus=billStatus==='PAID'||paymentStatus==='VERIFIED'?'PAID':
       paymentStatus==='SUBMITTED'?'WAITING':
       paymentStatus==='REJECTED'?'REJECTED':'UNPAID';
-    const paymentTypeName=paymentTypeNameById[String(bill.paymentTypeId||'')]||String(bill.paymentTypeId||'Tagihan');
-    const searchValues=[
+    const paymentTypeName=query?paymentTypeNameById[String(bill.paymentTypeId||'')]||String(bill.paymentTypeId||'Tagihan'):'';
+    const searchValues=query?[
       candidate.fullName,candidate.name,registration.registrationNumber,
       bill.registrationId,paymentTypeName
-    ];
+    ]:[];
     return {bill,queueStatus,searchValues};
   }).filter(item=>
     (!statusFilter||item.queueStatus===statusFilter)&&
