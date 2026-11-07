@@ -2982,18 +2982,13 @@ function publishAnnouncement(sessionToken,payload) {
   const registrationId=String(payload.registrationId||'').trim();
   if(!registrationId)return fail_('Pendaftaran wajib dipilih.');
   const ss=getDatabaseSpreadsheet_(), resultSheet=ss.getSheetByName(PSB_SHEETS.SELECTION_RESULTS);
-  const initial=findRowById_(resultSheet,'registrationId',registrationId);
-  if(!initial)return fail_('Hasil seleksi belum tersedia.');
-  const status=String(initial.object.status||'').toUpperCase();
-  if(!['PASSED','NOT_PASSED','WAITLIST'].includes(status))return fail_('Hasil masih menunggu keputusan dan belum dapat diumumkan.');
+  if(!resultSheet)return fail_('Sheet hasil seleksi belum tersedia.');
   const headers=resultSheet.getRange(1,1,1,resultSheet.getLastColumn()).getValues()[0].map(String), dateIdx=headers.indexOf('announcementDate');
   if(dateIdx<0)return fail_('Kolom tanggal pengumuman belum tersedia.');
   const lock=LockService.getScriptLock(); try{lock.waitLock(10000);}catch(lockError){return fail_('Server sedang memproses permintaan lain. Silakan coba kembali beberapa saat lagi.');}
   let notificationPayload=null,response;
   try{
     const latest=findRowById_(resultSheet,'registrationId',registrationId);
-    if(!latest)return fail_('Hasil seleksi belum tersedia.');
-    if(String(latest.object.announcementDate||'').trim()!=='')return {success:true,message:'Pengumuman untuk pendaftar ini    const latest=findRowById_(resultSheet,'registrationId',registrationId);
     if(!latest)return fail_('Hasil seleksi belum tersedia.');
     const latestStatus=String(latest.object.status||'').toUpperCase();
     if(!['PASSED','NOT_PASSED','WAITLIST'].includes(latestStatus))return fail_('Hasil seleksi belum dapat diumumkan.');
@@ -3025,15 +3020,20 @@ function publishAnnouncement(sessionToken,payload) {
       const title=latestStatus==='PASSED'?'Pengumuman Hasil Seleksi':latestStatus==='NOT_PASSED'?'Pengumuman Hasil Seleksi':'Informasi Hasil Seleksi';
       const message=latestStatus==='PASSED'?'Hasil seleksi untuk '+candidateName+': LULUS. Silakan buka menu Pengumuman untuk melihat informasi selanjutnya.':latestStatus==='NOT_PASSED'?'Hasil seleksi untuk '+candidateName+': TIDAK LULUS. Silakan buka menu Pengumuman untuk melihat detail hasil.':'Hasil seleksi untuk '+candidateName+': CADANGAN. Silakan buka menu Pengumuman untuk melihat informasi selanjutnya.';
       notificationPayload={userId,status:latestStatus,title,message};
-      writeAudit_(actor.userId,'ANNOUNCEMENT','ANNOUNCEMENT',String(latest.object.resultId||registrationId),JSON.stringify(latest.object),JSON.stringify(Object.assign({},latest.object,{announcementDate:now})),'Pengumuman hasil seleksi dipublikasikan: '+latestStatus);
-      response={success:true,message:'Pengumuman berhasil dipublikasikan.',announcementDate:rpcSafe_(now),result:rpcSafe_(Object.assign({},latest.object,{announcementDate:now}))};
-    }ge,p.status==='PASSED'?'SUCCESS':p.status==='NOT_PASSED'?'INFO':'WARNING');
+      writeAudit_(actor.userId,'ANNOUNCEMENT','ANNOUNCEMENT',String(latest.object.resultId||registrationId),JSON.stringify(previous),JSON.stringify(Object.assign({},previous,{announcementDate:now})),'Pengumuman hasil seleksi dipublikasikan: '+latestStatus);
+      response={success:true,message:'Pengumuman berhasil dipublikasikan.',announcementDate:rpcSafe_(now),result:rpcSafe_(Object.assign({},previous,{announcementDate:now}))};
+    }
+  }finally{lock.releaseLock();}
+  // Fanout notification is deliberately outside the lock; state is committed.
+  if(notificationPayload?.userId){
+    const p=notificationPayload;
+    try{
+      createNotification_(p.userId,p.title,p.message,p.status==='PASSED'?'SUCCESS':p.status==='NOT_PASSED'?'INFO':'WARNING');
       if(p.status==='PASSED')createNotification_(p.userId,'Daftar Ulang Dibuka','Karena hasil seleksi dinyatakan LULUS, tahap Daftar Ulang sudah dibuka. Silakan lengkapi dokumen dan pembayaran daftar ulang.','SUCCESS');
     }catch(notificationError){console.error('Announcement notification failed after publish: '+notificationError);}
   }
   return response;
 }
-
 
 function getNotifications(sessionToken) {
   const actor=requireRole_(sessionToken,PSB_ANNOUNCEMENT_VIEW_ROLES);
