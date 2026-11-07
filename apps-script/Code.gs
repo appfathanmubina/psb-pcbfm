@@ -1875,8 +1875,8 @@ function sheetRowsByFields_(sheet, fields) {
   const minIndex = Math.min.apply(null, indexes);
   const maxIndex = Math.max.apply(null, indexes);
   const values = sheet.getRange(2, minIndex + 1, sheet.getLastRow() - 1, maxIndex - minIndex + 1).getValues();
-  return values.map(row => {
-    const item = {};
+  return values.map((row, rowIndex) => {
+    const item = { rowNumber: rowIndex + 2 };
     (fields || []).forEach((field, i) => { item[field] = row[indexes[i] - minIndex]; });
     return item;
   });
