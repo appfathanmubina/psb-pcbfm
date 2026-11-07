@@ -5,7 +5,7 @@
   'use strict';
 
   const BRIDGE_URL = "https://script.google.com/macros/s/AKfycbxs1zVZdEFwbhHFVO5nGHHhEqHQDdjVOVjfnWc1Kc6mhD5t_n8VgrdUTKhAvg8JGiau/exec";
-  const BRIDGE_CLIENT_VERSION = '32.18.0';
+  const BRIDGE_CLIENT_VERSION = '32.19.0';
   const BRIDGE_ORIGIN = new URL(BRIDGE_URL).origin;
   const BRIDGE_SOURCE = 'psb-fm-api-bridge';
   const TIMEOUT_MS = 30000;
@@ -327,6 +327,17 @@
     origin: BRIDGE_ORIGIN,
     ready: function () {
       return !!(tokenSession && tokenSession.remaining > 0 && tokenSession.expiresAt > Date.now());
+    },
+    // Warm the short-lived bridge token while the user is entering credentials.
+    // This avoids putting the cross-origin iframe handshake on the login critical path.
+    prepare: function () {
+      if (tokenSession && tokenSession.remaining > 0 && tokenSession.expiresAt > Date.now()) {
+        return Promise.resolve(true);
+      }
+      if (!tokenPromise) {
+        tokenPromise = openTokenSession().finally(() => { tokenPromise = null; });
+      }
+      return tokenPromise.then(() => true);
     },
     call: function (fn, args) {
       return callWithToken(fn, args, true);
