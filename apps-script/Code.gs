@@ -4601,6 +4601,19 @@ function ensureCandidateNisnColumn_(sheet) {
   sheet.getRange(1,lastColumn+1).setValue('nisn');
 }
 
+function registrationChildId_(prefix, registrationId) {
+  const source = String(registrationId || '').trim();
+  if (!source) throw new Error('ID pendaftaran diperlukan untuk membentuk ID data terkait.');
+  // A digest avoids leaking arbitrary client text into sheet keys and gives
+  // stable, bounded child keys for every retry of the same registration.
+  const bytes = Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256, source, Utilities.Charset.UTF_8);
+  const digest = bytes.map(function (b) {
+    const value = (b + 256) % 256;
+    return ('0' + value.toString(16)).slice(-2);
+  }).join('').substring(0, 24).toUpperCase();
+  return String(prefix || 'REG') + '-' + digest;
+}
+
 function saveRegistration(sessionToken, payload) {
   const actor = requireRole_(sessionToken, PSB_REGISTRATION_EDIT_ROLES);
   assertOperationalMutation_(actor);
@@ -4644,11 +4657,14 @@ function saveRegistration(sessionToken, payload) {
     if (!level || !level.isActive) return fail_('Jenjang tidak aktif atau tidak ditemukan.');
 
     const now = new Date();
-    const candidateId = existing ? String(existing.registration.candidateId) : generateId_('CND');
-    const guardianId = existing && existing.guardian ? String(existing.guardian.guardianId) : generateId_('GRD');
-    const addressId = existing && existing.address ? String(existing.address.addressId) : generateId_('ADR');
-    const schoolId = existing && existing.school ? String(existing.school.schoolId) : generateId_('SCH');
-    const finalRegistrationId = existing ? String(existing.registration.registrationId) : generateId_('REG');
+    // The registration row is the durable idempotency anchor. Child IDs are
+    // deterministic so a retry can safely complete any writes interrupted
+    // after the anchor or between related-sheet upserts.
+    const finalRegistrationId = existing ? String(existing.registration.registrationId) : (registrationId || generateId_('REG'));
+    const candidateId = existing?.registration?.candidateId || registrationChildId_('CND', finalRegistrationId);
+    const guardianId = existing?.guardian?.guardianId || registrationChildId_('GRD', finalRegistrationId);
+    const addressId = existing?.address?.addressId || registrationChildId_('ADR', finalRegistrationId);
+    const schoolId = existing?.school?.schoolId || registrationChildId_('SCH', finalRegistrationId);
     const registrationNumber = existing ? String(existing.registration.registrationNumber) : nextRegistrationNumber_(regSheet, payload.tahunAjaranId);
 
     const candidate = {
@@ -4677,11 +4693,14 @@ function saveRegistration(sessionToken, payload) {
       createdAt: existing?.registration?.createdAt || now, updatedAt: now
     };
 
+    // Persist the ownership/status anchor first. If a later related-sheet
+    // write fails, the next request finds this row, rechecks its owner/status,
+    // and resumes using the same deterministic child IDs.
+    upsertById_(regSheet, 'registrationId', finalRegistrationId, registration);
     upsertById_(candidateSheet, 'candidateId', candidateId, candidate);
     upsertById_(guardianSheet, 'guardianId', guardianId, guardian);
     upsertById_(addressSheet, 'addressId', addressId, address);
     upsertById_(schoolSheet, 'schoolId', schoolId, school);
-    upsertById_(regSheet, 'registrationId', finalRegistrationId, registration);
 
     const action = existing ? 'UPDATE' : 'CREATE';
     // Audit tidak boleh membuat penyimpanan yang sudah berhasil terlihat gagal
