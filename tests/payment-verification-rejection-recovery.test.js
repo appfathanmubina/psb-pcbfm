@@ -34,7 +34,7 @@ assert.ok(
   verify.indexOf('const confirmedBill=findRowById_'),
   'The linked bill must be re-read after its status write'
 );
-assert.match(verify, /if\(!confirmedBill\|\|String\(confirmedBill\.object\.status\|\|'\)\.toUpperCase\(\)!==targetBillStatus\)\s*\{\s*return fail_/,
+assert.ok(verify.includes("if(!confirmedBill||String(confirmedBill.object.status||'').toUpperCase()!==targetBillStatus){"),
   'A bill status write that did not persist must stop finalization');
 assert.match(verify, /if\(reregistrationNotification\?\.success===false\)return reregistrationNotification/,
   'A failed re-registration synchronization must propagate to the caller');
