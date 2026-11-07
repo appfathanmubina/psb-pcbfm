@@ -24,7 +24,11 @@ const PSB_PWA_BRIDGE_TOKEN_MAX_USES_ = 20;
 
 function psbIssuePwaBridgeToken_(origin) {
   const requestedOrigin = String(origin || '').trim();
-  if (psbPwaBridgeAllowedOrigins_().indexOf(requestedOrigin) < 0) return '';
+  globalThis.PSB_PWA_BRIDGE_ISSUE_STATUS_ = 'NOT_ISSUED';
+  if (psbPwaBridgeAllowedOrigins_().indexOf(requestedOrigin) < 0) {
+    globalThis.PSB_PWA_BRIDGE_ISSUE_STATUS_ = 'ORIGIN_NOT_ALLOWED';
+    return '';
+  }
   const token = Utilities.getUuid().replace(/-/g, '') + Utilities.getUuid().replace(/-/g, '');
   try {
     const expiresAt = Date.now() + PSB_PWA_BRIDGE_TOKEN_TTL_SECONDS_ * 1000;
@@ -33,8 +37,10 @@ function psbIssuePwaBridgeToken_(origin) {
       remaining: PSB_PWA_BRIDGE_TOKEN_MAX_USES_,
       expiresAt: expiresAt
     }), PSB_PWA_BRIDGE_TOKEN_TTL_SECONDS_);
+    globalThis.PSB_PWA_BRIDGE_ISSUE_STATUS_ = 'OK';
     return token;
   } catch (e) {
+    globalThis.PSB_PWA_BRIDGE_ISSUE_STATUS_ = 'TOKEN_CACHE_UNAVAILABLE';
     console.error('PWA bridge token issue failed: ' + String(e && e.message || e));
     return '';
   }

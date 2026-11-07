@@ -109,10 +109,16 @@ function doGet(e) {
     const challenge = String(e && e.parameter && e.parameter.challenge || '');
     const validChallenge = /^[a-f0-9]{32}$/i.test(challenge);
     const token = validChallenge ? psbIssuePwaBridgeToken_(origin) : '';
+    const originAllowed = psbPwaBridgeAllowedOrigins_().indexOf(origin) >= 0;
     const template = HtmlService.createTemplateFromFile('Bridge');
-    template.bridgeOrigin = token ? origin : '';
-    template.bridgeChallenge = token ? challenge : '';
+    // Keep the origin only when allowlisted so Bridge.html can return a safe,
+    // challenge-bound diagnostic if token issuance fails instead of timing out.
+    template.bridgeOrigin = originAllowed ? origin : '';
+    template.bridgeChallenge = originAllowed && validChallenge ? challenge : '';
     template.bridgeToken = token;
+    template.bridgeError = token ? '' : (validChallenge
+      ? String(globalThis.PSB_PWA_BRIDGE_ISSUE_STATUS_ || 'TOKEN_ISSUE_FAILED')
+      : 'INVALID_CHALLENGE');
     return template.evaluate()
       .setTitle('PSB Fathan Mubina — API Bridge')
       .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);

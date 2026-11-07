@@ -28,6 +28,10 @@ assert.match(code, /function\s+pwaBridgeCall\s*\(/, 'Backend bridge dispatcher m
 assert.match(code, /function\s+getPwaBridgeConfig\s*\(/, 'Backend bridge configuration endpoint must exist');
 assert.match(code, /psbIssuePwaBridgeToken_\(origin\)/, 'Bridge GET must issue an origin-bound transport token');
 assert.match(bridgeServer, /function\s+doPost\s*\(/, 'Apps Script must expose the form POST transport endpoint');
+assert.match(bridgeServer, /TOKEN_CACHE_UNAVAILABLE/, 'Token cache failures must expose a safe diagnostic status');
+assert.match(code, /template\.bridgeError/, 'Bridge GET must pass a safe token issuance status into the HTML template');
+assert.match(bridgeHtml, /type: 'error'/, 'Bridge GET must explicitly report token issuance failures');
+assert.match(apiBridge, /data\.type === 'error'/, 'PWA must handle explicit handshake failures from its own iframe');
 assert.match(bridgeServer, /psbConsumePwaBridgeToken_\(payload\.token,\s*origin\)/, 'POST must consume an origin-bound transport token');
 assert.match(bridgeServer, /PSB_PWA_BRIDGE_TOKEN_MAX_USES_\s*=\s*20/, 'Bridge token must have a small fixed request budget');
 assert.match(bridgeServer, /PSB_PWA_BRIDGE_TOKEN_TTL_SECONDS_\s*=\s*180/, 'Bridge token must expire quickly');
@@ -57,8 +61,8 @@ assert.match(apiBridge, /event\.source === tokenHandshake\.iframe\.contentWindow
 assert.match(apiBridge, /event\.source !== item\.iframe\.contentWindow/, 'RPC responses must come from their own request iframe window');
 assert.match(apiBridge, /Pesan bridge diabaikan: origin tidak dikenal/, 'Rejected origins must be diagnosable');
 assert.match(apiBridge, /Timeout menunggu respons Apps Script/, 'RPC timeout must log safe transport diagnostics');
-assert.match(indexHtml, /api-bridge\.js\?v=32\.15\.0/, 'PWA HTML must cache-bust the updated bridge client');
-assert.match(serviceWorker, /psb-pwa-shell-v32-33-0/, 'PWA shell cache must use the current cache version after the upload fix');
+assert.match(indexHtml, /api-bridge\.js\?v=32\.16\.0/, 'PWA HTML must cache-bust the updated bridge client');
+assert.match(serviceWorker, /psb-pwa-shell-v32-34-0/, 'PWA shell cache must use the current cache version after the upload fix');
 
 assert.match(apiBridge, /pending\.get\(challenge\)/, 'PWA must correlate every response with its unpredictable challenge');
 assert.match(apiBridge, /let tokenSession = null/, 'PWA must retain the short-lived token session in memory');
