@@ -2529,6 +2529,22 @@ function submitPayment(sessionToken,payload){
   } catch(e) {
     console.error('PSB_PAYMENT_UPLOAD_FAILED stage='+stage+': '+String(e&&e.stack||e));
     if(paymentRowWritten) {
+      // The payment row is the durable submission record. Best-effort repair
+      // the bill status while holding the ScriptLock; the dashboard queue also
+      // treats SUBMITTED payments as pending so a failed repair stays visible.
+      try {
+        if(!lockAcquired){lock.waitLock(10000);lockAcquired=true;}
+        const ss=getDatabaseSpreadsheet_();
+        const billSheet=ss.getSheetByName(PSB_SHEETS.BILLS);
+        const latestBill=findRowById_(billSheet,'billId',String(savedPayment?.billId||payload?.billId||''));
+        if(latestBill&&String(latestBill.object.status||'').toUpperCase()!=='PAID'){
+          const headers=billSheet.getRange(1,1,1,billSheet.getLastColumn()).getValues()[0].map(String);
+          const statusIdx=headers.indexOf('status');
+          if(statusIdx>=0)billSheet.getRange(latestBill.rowNumber,statusIdx+1).setValue('PAYMENT_REVIEW');
+        }
+      } catch(recoveryError) {
+        console.error('PSB_PAYMENT_BILL_STATUS_RECOVERY_FAILED: '+String(recoveryError&&recoveryError.stack||recoveryError));
+      }
       return {success:true,message:'Bukti pembayaran berhasil disimpan dan menunggu verifikasi. Petugas akan memeriksa data pembayaran.',payment:rpcSafe_(savedPayment)};
     }
     if(uploadedFile) {
@@ -3587,7 +3603,15 @@ function getDashboardPageData(sessionToken) {
   periodRegs.forEach(r => { candidateNameByReg[String(r.registrationId)] = String(candidateMap[String(r.candidateId)]?.fullName || '-'); });
   const makeTask = (r, type, label, action, extra) => ({registrationId:r.registrationId,registrationNumber:r.registrationNumber||'',candidateName:candidateNameByReg[String(r.registrationId)]||'-',status:String(r.status||''),statusLabel:statusLabel_(String(r.status||'')),type,label,action,updatedAt:r.updatedAt||r.createdAt||'',...extra});
   const verificationItems = canVerification ? periodRegs.filter(r=>['SUBMITTED','UNDER_REVIEW','REVISION'].indexOf(String(r.status||'').toUpperCase())>=0).sort((a,b)=>new Date(a.updatedAt||a.createdAt||0)-new Date(b.updatedAt||b.createdAt||0)) : [];
-  const paymentItems = canPayments ? periodBills.filter(b=>String(b.status||'').toUpperCase()==='PAYMENT_REVIEW').map(b=>{const r=periodRegMap[String(b.registrationId||'')];return r?makeTask(r,'PAYMENT','Bukti pembayaran menunggu verifikasi','payments',{billId:b.billId,amount:Number(b.amount)||0}):null;}).filter(Boolean).sort((a,b)=>new Date(a.updatedAt||0)-new Date(b.updatedAt||0)) : [];
+  const paymentItems = canPayments ? periodBills.filter(b=>{
+    const billStatus=String(b.status||'').toUpperCase();
+    const latestStatus=String(latestPaymentByBill[String(b.billId||'')]?.status||'').toUpperCase();
+    return billStatus==='PAYMENT_REVIEW'||latestStatus==='SUBMITTED';
+  }).map(b=>{
+    const r=periodRegMap[String(b.registrationId||'')];
+    const payment=latestPaymentByBill[String(b.billId||'')];
+    return r?makeTask(r,'PAYMENT','Bukti pembayaran menunggu verifikasi','payments',{billId:b.billId,amount:Number(b.amount)||0,paymentId:String(payment?.paymentId||''),paymentStatus:String(payment?.status||''),recoveryNeeded:String(b.status||'').toUpperCase()!=='PAYMENT_REVIEW'}):null;
+  }).filter(Boolean).sort((a,b)=>new Date(a.updatedAt||0)-new Date(b.updatedAt||0)) : [];
   const selectionItems = canSelection ? periodParticipants.filter(x=>['SCHEDULED','PRESENT','PENDING'].indexOf(String(x.status||'').toUpperCase())>=0).map(x=>{const r=periodRegMap[String(x.registrationId||'')];return r?makeTask(r,'SELECTION','Peserta tes perlu ditindaklanjuti','selection',{participantId:x.participantId,scheduleId:x.scheduleId,participantStatus:String(x.status||'')}):null;}).filter(Boolean) : [];
   const activeScheduleItems = [];
   let activeSchedulesCount = 0;
