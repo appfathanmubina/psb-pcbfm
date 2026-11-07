@@ -120,6 +120,8 @@ jobs:
         run: node tests/backend-reporting-page-performance.test.js
       - name: Test payment page performance and ownership safeguards
         run: node tests/backend-payment-page-performance.test.js
+      - name: Test payment partial-commit recovery safeguards
+        run: node tests/payment-partial-commit-recovery.test.js
       - name: Test Wali home cleanup, automatic form billing, and parallel document/payment safeguards
         run: node tests/wali-parallel-payment-flow.test.js
       - name: Test registration NISN field and school type removal safeguards
