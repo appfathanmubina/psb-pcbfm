@@ -2084,12 +2084,13 @@ function getRegistrationList(sessionToken, filters) {
     (!filters.status || String(item.status) === String(filters.status)) &&
     (!filters.tahunAjaranId || String(item.tahunAjaranId) === String(filters.tahunAjaranId))
   );
+  const sortTimezone = getConfig_('TIMEZONE') || 'Asia/Jakarta';
   selected.sort((a, b) => {
     const aUpdated = a.updatedAt instanceof Date
-      ? Utilities.formatDate(a.updatedAt, getConfig_('TIMEZONE') || 'Asia/Jakarta', "yyyy-MM-dd'T'HH:mm:ss")
+      ? Utilities.formatDate(a.updatedAt, sortTimezone, "yyyy-MM-dd'T'HH:mm:ss")
       : String(a.updatedAt || '');
     const bUpdated = b.updatedAt instanceof Date
-      ? Utilities.formatDate(b.updatedAt, getConfig_('TIMEZONE') || 'Asia/Jakarta', "yyyy-MM-dd'T'HH:mm:ss")
+      ? Utilities.formatDate(b.updatedAt, sortTimezone, "yyyy-MM-dd'T'HH:mm:ss")
       : String(b.updatedAt || '');
     return bUpdated.localeCompare(aUpdated);
   });
