@@ -4785,7 +4785,24 @@ function upsertById_(sheet, idField, id, object) {
   if (rowNumber) sheet.getRange(rowNumber,1,1,headers.length).setValues([row]); else sheet.appendRow(row);
 }
 function rowObject_(headers,row,rowNumber) { const o={rowNumber:rowNumber}; headers.forEach((h,i)=>o[h]=row[i] instanceof Date ? Utilities.formatDate(row[i],getConfig_('TIMEZONE')||'Asia/Jakarta',"yyyy-MM-dd'T'HH:mm:ss") : row[i]); return o; }
-function findRowById_(sheet,idField,id) { if(!sheet||sheet.getLastRow()<2)return null; const h=sheet.getRange(1,1,1,sheet.getLastColumn()).getValues()[0].map(String), idx=h.indexOf(idField); if(idx<0)return null; const rows=sheet.getRange(2,1,sheet.getLastRow()-1,sheet.getLastColumn()).getValues(); for(let i=0;i<rows.length;i++)if(String(rows[i][idx]||'')===String(id))return {rowNumber:i+2,object:rowObject_(h,rows[i],i+2)}; return null; }
+function findRowById_(sheet,idField,id) {
+  if(!sheet)return null;
+  const lastRow=sheet.getLastRow();
+  if(lastRow<2)return null;
+  const lastColumn=sheet.getLastColumn();
+  const headers=sheet.getRange(1,1,1,lastColumn).getValues()[0].map(String);
+  const idIdx=headers.indexOf(idField);
+  if(idIdx<0)return null;
+  // Scan only the key column, then fetch the full row for the first match.
+  const keys=sheet.getRange(2,idIdx+1,lastRow-1,1).getValues();
+  for(let i=0;i<keys.length;i++){
+    if(String(keys[i][0]||'')!==String(id))continue;
+    const rowNumber=i+2;
+    const row=sheet.getRange(rowNumber,1,1,lastColumn).getValues()[0];
+    return {rowNumber,object:rowObject_(headers,row,rowNumber)};
+  }
+  return null;
+}
 function findFirstBy_(sheet,field,value,preferPrimary) { if(!sheet||sheet.getLastRow()<2)return null; const h=sheet.getRange(1,1,1,sheet.getLastColumn()).getValues()[0].map(String), idx=h.indexOf(field), primary=h.indexOf('isPrimary'); if(idx<0)return null; const rows=sheet.getRange(2,1,sheet.getLastRow()-1,sheet.getLastColumn()).getValues(); let fallback=null; for(let i=0;i<rows.length;i++){if(String(rows[i][idx]||'')!==String(value))continue; const obj=rowObject_(h,rows[i],i+2); if(!fallback)fallback={rowNumber:i+2,object:obj}; if(preferPrimary&&primary>=0&&(rows[i][primary]===true||String(rows[i][primary]).toUpperCase()==='TRUE'))return {rowNumber:i+2,object:obj};} return fallback; }
 function sheetMapById_(sheet,idField) { const out={}; if(!sheet||sheet.getLastRow()<2)return out; const h=sheet.getRange(1,1,1,sheet.getLastColumn()).getValues()[0].map(String), idx=h.indexOf(idField); if(idx<0)return out; const rows=sheet.getRange(2,1,sheet.getLastRow()-1,sheet.getLastColumn()).getValues(); rows.forEach((r,i)=>{const o=rowObject_(h,r,i+2);out[String(r[idx]||'')]=o;}); return out; }
 function hasRoleDirect_(user, roles) { const mine=String(user.role||'').split(',').map(x=>x.trim().toUpperCase()); return roles.some(r=>mine.indexOf(r)>=0); }
