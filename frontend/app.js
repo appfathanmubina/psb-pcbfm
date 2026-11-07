@@ -28,7 +28,7 @@
     root.style.setProperty('--app-viewport-height', (window.visualViewport?.height || window.innerHeight || root.clientHeight || 0) + 'px');
   }
 })();
-const state={token:localStorage.getItem('psb_session')||'',user:null,config:(()=>{try{return JSON.parse(localStorage.getItem('psb_public_config')||'{}')}catch(e){return {}}})(),page:'home',appInitialized:false,initialData:null,preloadRunning:false,preloadReady:false,cache:{registration:null,documents:{},payments:{},pages:{}},pageSnapshots:{},publicGalleryLoadScheduled:false,paymentRegistrationId:'',paymentData:null,paymentTypes:[],masterKey:'MASTER_TAHUN_AJARAN',masterItems:[],masterDefinitions:{},masterCache:{},academicYearLifecycle:null,auditData:null,registrationList:[],registrationOptions:null,registrationDetail:null,documentRegistrationId:'',documentData:null,selectionData:null,selectionTab:'overview',selectionRegistrationId:'',detailLoadingLocks:{}};
+const state={token:localStorage.getItem('psb_session')||'',user:null,config:(()=>{try{return JSON.parse(localStorage.getItem('psb_public_config')||'{}')}catch(e){return {}}})(),page:'home',appInitialized:false,initialData:null,preloadRunning:false,preloadReady:false,cache:{registration:null,documents:{},payments:{},pages:{}},pageSnapshots:{},publicGalleryLoadScheduled:false,paymentRegistrationId:'',paymentData:null,paymentTypes:[],masterKey:'MASTER_TAHUN_AJARAN',masterItems:[],masterDefinitions:{},masterCache:{},academicYearLifecycle:null,auditData:null,registrationList:[],registrationOptions:null,registrationDetail:null,documentRegistrationId:'',documentData:null,selectionData:null,selectionTab:'overview',selectionRegistrationId:'',paymentQueuePage:1,paymentQueue:[],paymentQueueMeta:null,paymentQueueFilters:{search:'',status:''},paymentQueueSearchTimer:null,detailLoadingLocks:{}};
 const $=id=>document.getElementById(id);
 function esc(v){return String(v??'').replace(/[&<>'"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c]));}
 function normalizeAssetUrl(raw){
@@ -1809,29 +1809,21 @@ async function loadPaymentQueuePage(page){
   state.paymentQueuePage=Math.max(1,Number(page)||1);
   const panel=$('paymentPanel');if(!panel)return;
   panel.innerHTML='<div class="empty-state">Memuat antrean pembayaran...</div>';
-  const r=await server('getPaymentQueue',state.token,state.paymentQueuePage);
+  const filters=state.paymentQueueFilters||{search:'',status:''};
+  const r=await server('getPaymentQueue',state.token,state.paymentQueuePage,filters);
   if(!r?.success){panel.innerHTML=showMessage(r?.message||'Antrean pembayaran tidak dapat dimuat.');return;}
   state.paymentQueue=r.items||[];
-  state.paymentQueueMeta={page:Number(r.page||1),pageCount:Number(r.pageCount||1),totalBills:Number(r.totalBills||0),pageSize:Number(r.pageSize||50)};
+  state.paymentQueueMeta={page:Number(r.page||1),pageCount:Number(r.pageCount||1),totalBills:Number(r.totalBills||0),allBills:Number(r.allBills||0),pageSize:Number(r.pageSize||50)};
   state.paymentTypes=r.paymentTypes||[];
   renderPaymentQueue();
 }
 function renderPaymentQueue(){
   const panel=$('paymentPanel');if(!panel)return;
-  const meta=state.paymentQueueMeta||{},items=state.paymentQueue||[];
-  panel.innerHTML=`<div class="staff-list-toolbar"><div class="search-box"><span class="search-icon">${ico('search')}</span><input id="paymentQueueSearch" class="search-input" placeholder="Cari nama, nomor pendaftaran, atau tagihan..." oninput="filterPaymentQueue()"></div><div class="filter-box professional-filter"><span class="filter-label">Status</span><select id="paymentQueueStatus" class="select-field compact professional-select" onchange="filterPaymentQueue()"><option value="">Semua status</option><option value="WAITING">Menunggu verifikasi</option><option value="REJECTED">Ditolak</option><option value="PAID">Lunas</option><option value="UNPAID">Belum bayar</option></select></div><button class="btn btn-secondary staff-table-action" onclick="renderPayments('',true)">Muat ulang</button><div class="staff-result-count" id="paymentQueueCount"></div></div><div id="paymentQueueTable"></div><div class="staff-pagination"><button class="btn btn-secondary staff-table-action" id="paymentQueuePrev" onclick="loadPaymentQueuePage(${Math.max(1,meta.page-1)})" ${meta.page<=1?'disabled':''}>Sebelumnya</button><span id="paymentQueuePageInfo">Halaman ${meta.page} dari ${meta.pageCount} · ${meta.totalBills} tagihan</span><button class="btn btn-secondary staff-table-action" id="paymentQueueNext" onclick="loadPaymentQueuePage(${Math.min(meta.pageCount,meta.page+1)})" ${meta.page>=meta.pageCount?'disabled':''}>Berikutnya</button></div>`;
-  filterPaymentQueue();
-}
-function filterPaymentQueue(){
-  const q=String($('paymentQueueSearch')?.value||'').trim().toLowerCase();
-  const status=String($('paymentQueueStatus')?.value||'');
-  const items=(state.paymentQueue||[]).filter(x=>
-    (!status||String(x.queueStatus||'')===status)&&
-    (!q||[x.candidateName,x.registrationNumber,x.paymentTypeName].some(v=>String(v||'').toLowerCase().includes(q)))
-  );
-  const count=$('paymentQueueCount');if(count)count.textContent=`Menampilkan ${items.length} dari ${(state.paymentQueue||[]).length} tagihan di halaman ini`;
+  const meta=state.paymentQueueMeta||{},filters=state.paymentQueueFilters||{search:'',status:''};
+  panel.innerHTML=`<div class="staff-list-toolbar"><div class="search-box"><span class="search-icon">${ico('search')}</span><input id="paymentQueueSearch" class="search-input" value="${esc(filters.search||'')}" placeholder="Cari nama, nomor pendaftaran, atau tagihan..." oninput="filterPaymentQueue()"></div><div class="filter-box professional-filter"><span class="filter-label">Status</span><select id="paymentQueueStatus" class="select-field compact professional-select" onchange="filterPaymentQueue()"><option value="">Semua status</option><option value="WAITING" ${filters.status==='WAITING'?'selected':''}>Menunggu verifikasi</option><option value="REJECTED" ${filters.status==='REJECTED'?'selected':''}>Ditolak</option><option value="PAID" ${filters.status==='PAID'?'selected':''}>Lunas</option><option value="UNPAID" ${filters.status==='UNPAID'?'selected':''}>Belum bayar</option></select></div><button class="btn btn-secondary staff-table-action" onclick="loadPaymentQueuePage(1)">Muat ulang</button><div class="staff-result-count" id="paymentQueueCount"></div></div><div id="paymentQueueTable"></div><div class="staff-pagination"><button class="btn btn-secondary staff-table-action" id="paymentQueuePrev" onclick="loadPaymentQueuePage(${Math.max(1,meta.page-1)})" ${meta.page<=1?'disabled':''}>Sebelumnya</button><span id="paymentQueuePageInfo">Halaman ${meta.page} dari ${meta.pageCount} · ${meta.totalBills} hasil dari ${meta.allBills} tagihan</span><button class="btn btn-secondary staff-table-action" id="paymentQueueNext" onclick="loadPaymentQueuePage(${Math.min(meta.pageCount,meta.page+1)})" ${meta.page>=meta.pageCount?'disabled':''}>Berikutnya</button></div>`;
+  const count=$('paymentQueueCount');if(count)count.textContent=`Menampilkan ${(state.paymentQueue||[]).length} dari ${meta.totalBills||0} hasil`;
   const columns=[
-    {label:'No.',className:'staff-col-number',render:(x,i)=>String(i+1)},
+    {label:'No.',className:'staff-col-number',render:(x,i)=>String((Math.max(1,meta.page)-1)*50+i+1)},
     {label:'Calon Santri',render:x=>`<div class="staff-primary-text">${esc(x.candidateName||'-')}</div><div class="staff-secondary-text">${esc(x.registrationNumber||'-')}</div>`},
     {label:'Jenis Tagihan',render:x=>`<div class="staff-primary-text">${esc(x.paymentTypeName||'-')}</div><div class="staff-secondary-text">${esc(x.dueDate?'Jatuh tempo: '+x.dueDate:'')}</div>`},
     {label:'Nominal',render:x=>'Rp '+Number(x.amount||0).toLocaleString('id-ID')},
@@ -1839,7 +1831,17 @@ function filterPaymentQueue(){
     {label:'Bukti',className:'staff-col-actions',render:x=>x.proofFileUrl?`<button class="btn btn-secondary staff-table-action" onclick="window.open('${esc(x.proofFileUrl)}','_blank','noopener')">Lihat Bukti</button>`:'-'},
     {label:'Aksi',className:'staff-col-actions',render:x=>x.paymentStatus==='SUBMITTED'?`<div class="staff-table-actions"><button class="btn btn-primary staff-table-action" onclick="verifyPaymentUI('${esc(x.paymentId)}','VERIFIED')">Verifikasi</button><button class="btn btn-danger staff-table-action" onclick="verifyPaymentUI('${esc(x.paymentId)}','REJECTED')">Tolak</button></div>`:'-'}
   ];
-  const target=$('paymentQueueTable');if(target)target.innerHTML=renderStaffDataTable(items,columns,'Tidak ada tagihan yang sesuai dengan filter.');
+  const target=$('paymentQueueTable');if(target)target.innerHTML=renderStaffDataTable(state.paymentQueue||[],columns,'Tidak ada tagihan yang sesuai dengan filter.');
+}
+function filterPaymentQueue(){
+  state.paymentQueueFilters={
+    search:String($('paymentQueueSearch')?.value||'').trim(),
+    status:String($('paymentQueueStatus')?.value||'').trim().toUpperCase()
+  };
+  if(state.paymentQueueSearchTimer)clearTimeout(state.paymentQueueSearchTimer);
+  state.paymentQueueSearchTimer=setTimeout(()=>loadPaymentQueuePage(1).catch(()=>{
+    const panel=$('paymentPanel');if(panel)panel.innerHTML=showMessage('Pencarian antrean pembayaran gagal dimuat.');
+  }),300);
 }
 
 function renderPaymentContent(){
