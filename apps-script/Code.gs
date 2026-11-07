@@ -4521,19 +4521,40 @@ function getRegistrationPaymentDocumentStatusMap_(items) {
   if(!Object.keys(ids).length)return Object.create(null);
   const formTypeIds=Object.create(null);
   getActiveMasterItems_('MASTER_JENIS_PEMBAYARAN').forEach(x=>{if(/formulir/i.test(String(x.name||'')))formTypeIds[String(x.paymentTypeId)]=true;});
-  // Pilih tagihan formulir aktif terbaru; tagihan yang dibatalkan tidak boleh
-  // memengaruhi status pembayaran atau membuka akses dokumen/verifikasi.
-  const bills=sheetRows_(ss.getSheetByName(PSB_SHEETS.BILLS))
-    .filter(x=>ids[String(x.registrationId||'')]&&formTypeIds[String(x.paymentTypeId||'')]&&String(x.status||'').toUpperCase()!=='CANCELLED')
-    .sort((a,b)=>String(b.createdAt||'').localeCompare(String(a.createdAt||'')));
-  const billIds=Object.create(null),billByReg=Object.create(null);
-  bills.forEach(x=>{billIds[String(x.billId||'')]=true;const id=String(x.registrationId||'');if(id&&!billByReg[id])billByReg[id]=x;});
-  const payments=sheetRows_(ss.getSheetByName(PSB_SHEETS.PAYMENTS)).filter(x=>billIds[String(x.billId||'')]).sort((a,b)=>String(b.createdAt||'').localeCompare(String(a.createdAt||'')));
-  const latest=Object.create(null);payments.forEach(x=>{const id=String(x.billId||'');if(id&&!latest[id])latest[id]=x;});
+
+  // Select the newest eligible form bill per registration in one pass.
+  // Strictly-greater comparison preserves the first sheet row on equal timestamps,
+  // matching the stable descending sort used by the previous implementation.
+  const billIds=Object.create(null),billByReg=Object.create(null),billStampByReg=Object.create(null);
+  sheetRows_(ss.getSheetByName(PSB_SHEETS.BILLS)).forEach(x=>{
+    const id=String(x.registrationId||''),billId=String(x.billId||'');
+    if(!ids[id]||!formTypeIds[String(x.paymentTypeId||'')]||String(x.status||'').toUpperCase()==='CANCELLED')return;
+    if(billId)billIds[billId]=true;
+    const stamp=String(x.createdAt||'');
+    if(!billByReg[id]||stamp.localeCompare(billStampByReg[id])>0){billByReg[id]=x;billStampByReg[id]=stamp;}
+  });
+
+  // Latest payment per relevant bill, without sorting the full payment table.
+  const latest=Object.create(null),paymentStampByBill=Object.create(null);
+  sheetRows_(ss.getSheetByName(PSB_SHEETS.PAYMENTS)).forEach(x=>{
+    const billId=String(x.billId||'');
+    if(!billIds[billId])return;
+    const stamp=String(x.createdAt||'');
+    if(!latest[billId]||stamp.localeCompare(paymentStampByBill[billId])>0){latest[billId]=x;paymentStampByBill[billId]=stamp;}
+  });
+
   const required=getActiveMasterItems_('MASTER_DOKUMEN').filter(x=>x.required===true||String(x.required).toUpperCase()==='TRUE');
   const req=Object.create(null);required.forEach(x=>req[String(x.documentTypeId)]=true);
-  const docs=sheetRows_(ss.getSheetByName(PSB_SHEETS.DOCUMENTS)).filter(x=>ids[String(x.registrationId||'')]&&req[String(x.documentTypeId||'')]&&String(x.status||'').toUpperCase()!=='REPLACED').sort((a,b)=>String(b.uploadedAt||'').localeCompare(String(a.uploadedAt||'')));
-  const byDoc=Object.create(null);docs.forEach(x=>{const k=String(x.registrationId)+'|'+String(x.documentTypeId);if(!byDoc[k])byDoc[k]=x;});
+
+  // Latest non-replaced required document per registration/type in one pass.
+  const byDoc=Object.create(null),docStamp=Object.create(null);
+  sheetRows_(ss.getSheetByName(PSB_SHEETS.DOCUMENTS)).forEach(x=>{
+    const id=String(x.registrationId||''),typeId=String(x.documentTypeId||'');
+    if(!ids[id]||!req[typeId]||String(x.status||'').toUpperCase()==='REPLACED')return;
+    const key=id+'|'+typeId,stamp=String(x.uploadedAt||'');
+    if(!byDoc[key]||stamp.localeCompare(docStamp[key])>0){byDoc[key]=x;docStamp[key]=stamp;}
+  });
+
   const out=Object.create(null);
   Object.keys(ids).forEach(id=>{
     const bill=billByReg[id]||null,payment=bill?latest[String(bill.billId||'')]||null:null;
