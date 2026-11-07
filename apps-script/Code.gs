@@ -1918,15 +1918,47 @@ function getWaliHomeData(sessionToken) {
   const schedules = sheetRows_(ss.getSheetByName(PSB_SHEETS.SELECTION_SCHEDULE));
   const candidates = sheetMapById_(ss.getSheetByName(PSB_SHEETS.CANDIDATES), 'candidateId');
 
+  // Index data by registration once so the home page does not rescan every
+  // operational sheet for every registration owned by this wali.
+  const billsByRegistration = Object.create(null);
+  bills.forEach(b => {
+    const id = String(b.registrationId || '');
+    if (!id) return;
+    if (!billsByRegistration[id]) billsByRegistration[id] = [];
+    billsByRegistration[id].push(b);
+  });
+  const documentsByRegistration = Object.create(null);
+  documents.forEach(d => {
+    const id = String(d.registrationId || '');
+    if (!id) return;
+    if (!documentsByRegistration[id]) documentsByRegistration[id] = [];
+    documentsByRegistration[id].push(d);
+  });
+  const participantByRegistration = Object.create(null);
+  participants.forEach(x => {
+    const id = String(x.registrationId || '');
+    if (id && !Object.prototype.hasOwnProperty.call(participantByRegistration, id)) participantByRegistration[id] = x;
+  });
+  const resultByRegistration = Object.create(null);
+  results.forEach(x => {
+    const id = String(x.registrationId || '');
+    if (id && !Object.prototype.hasOwnProperty.call(resultByRegistration, id)) resultByRegistration[id] = x;
+  });
+  const scheduleById = Object.create(null);
+  schedules.forEach(x => {
+    const id = String(x.scheduleId || '');
+    if (id && !Object.prototype.hasOwnProperty.call(scheduleById, id)) scheduleById[id] = x;
+  });
+
   const items = activeRegs.map(reg => {
     const candidate = candidates[String(reg.candidateId)] || {};
-    const regBills = bills.filter(b => String(b.registrationId) === String(reg.registrationId));
+    const regBills = billsByRegistration[String(reg.registrationId)] || [];
     const formBill = regBills.find(b => /formulir/i.test(String(paymentTypes[String(b.paymentTypeId)]?.name || '')));
     const formPayment = formBill ? paymentByBill[String(formBill.billId)] : null;
     // Status bayar ditentukan hanya dari tagihan formulir aktif dan pembayaran
     // yang terkait; status registrasi lama tidak boleh membuka akses sendiri.
     const formPaid = String(formBill?.status).toUpperCase() === 'PAID' || String(formPayment?.status).toUpperCase() === 'VERIFIED';
-    const regDocuments = documents.filter(d => String(d.registrationId) === String(reg.registrationId));
+    const regDocuments = documentsByRegistration[String(reg.registrationId)] || [];
     const uploadedByType = Object.create(null);
     regDocuments.filter(d=>String(d.status||'').toUpperCase()!=='REPLACED')
       .sort((a,b)=>String(b.uploadedAt||'').localeCompare(String(a.uploadedAt||'')))
@@ -1947,8 +1979,8 @@ function getWaliHomeData(sessionToken) {
       :paymentStatus==='REJECTED'?'Ditolak'
       :paymentStatus==='SUBMITTED'||billStatus==='PAYMENT_REVIEW'?'Menunggu verifikasi'
       :formBill?'Belum dibayar':'Tagihan belum dibuat';
-    const participant = participants.find(x => String(x.registrationId) === String(reg.registrationId));
-    const result = results.find(x => String(x.registrationId) === String(reg.registrationId));
+    const participant = participantByRegistration[String(reg.registrationId)] || null;
+    const result = resultByRegistration[String(reg.registrationId)] || null;
     const published = !!String(result?.announcementDate || '').trim();
     const resultStatus = String(result?.status || '').toUpperCase();
     const registrationStatus = String(reg.status || '').toUpperCase();
@@ -1983,7 +2015,7 @@ function getWaliHomeData(sessionToken) {
       statusLabel:registrationStatus==='SUBMITTED' && formPaid ? 'Menunggu verifikasi PSB' : statusLabel_(registrationStatus), completed, next, formPaid,
       documents:{requiredCount:requiredDocumentTypes.length,uploadedRequiredCount,verifiedRequiredCount,revisionRequiredCount,missingRequiredCount,complete:documentsComplete,status:requiredDocumentTypes.length===0?'NOT_REQUIRED':revisionRequiredCount?'REVISION':missingRequiredCount?(uploadedRequiredCount===0?'NOT_UPLOADED':'INCOMPLETE'):verifiedRequiredCount>=requiredDocumentTypes.length?'VERIFIED':'PENDING_VERIFICATION',statusLabel:requiredDocumentTypes.length===0?'Tidak ada dokumen wajib':revisionRequiredCount?'Perlu perbaikan':missingRequiredCount?(uploadedRequiredCount===0?'Belum upload':'Belum lengkap'):verifiedRequiredCount>=requiredDocumentTypes.length?'Terverifikasi':'Menunggu verifikasi'},
       formPayment:{billExists:!!formBill,billId:String(formBill?.billId||''),amount:Number(formBill?.amount||0),billStatus:String(formBill?.status||''),paymentStatus,paymentStatusLabel,paymentRejected:paymentStatus==='REJECTED',paymentSubmitted:paymentStatus==='SUBMITTED',paymentNote,paid:formPaid},
-      participant:participant ? {status:String(participant.status||''), scheduleId:String(participant.scheduleId||''), scheduleName:String(schedules.find(x=>String(x.scheduleId)===String(participant.scheduleId))?.name || '')} : null,
+      participant:participant ? {status:String(participant.status||''), scheduleId:String(participant.scheduleId||''), scheduleName:String(scheduleById[String(participant.scheduleId)]?.name || '')} : null,
       result:result ? {status:resultStatus, published, announcementDate:result.announcementDate||'', note:result.note||''} : null
     };
   });
