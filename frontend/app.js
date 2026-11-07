@@ -1263,8 +1263,16 @@ async function markAllNotificationsReadUI(){loading(true,'Memperbarui notifikasi
 
 async function renderVerification(force=false){
   if(!hasAnyRole(['SUPERADMIN','ADMIN_PSB','VERIFIKATOR'])){renderMore();return}
+  state.verificationSearch=state.verificationSearch||'';
+  state.verificationStatus=state.verificationStatus||'';
   $('content').innerHTML=`<section class="hero"><h2>Verifikasi</h2><p>Periksa data pendaftaran dan dokumen sebelum menetapkan hasil verifikasi.</p></section><div id="verificationPanel"><div class="empty-state">Memuat antrean verifikasi...</div></div>`;
-  try{const r=force?await server('getVerificationQueue',state.token,{}):(pageDataCached('verification')||await warmPageData('verification',()=>server('getVerificationQueue',state.token,{})));if(!r?.success){$('verificationPanel').innerHTML=showMessage(r?.message||'Gagal memuat antrean verifikasi.');return}renderVerificationQueue(r.registrations||[]);}catch(e){$('verificationPanel').innerHTML=showMessage('Gagal memuat antrean verifikasi.')}
+  try{
+    const filters={page:1,pageSize:50,search:state.verificationSearch,status:state.verificationStatus};
+    const useCache=!force&&!state.verificationSearch&&!state.verificationStatus;
+    const r=useCache?(pageDataCached('verification')||await warmPageData('verification',()=>server('getVerificationQueue',state.token,filters))):await server('getVerificationQueue',state.token,filters);
+    if(!r?.success){$('verificationPanel').innerHTML=showMessage(r?.message||'Gagal memuat antrean verifikasi.');return}
+    renderVerificationQueue(r.registrations||[],r);
+  }catch(e){$('verificationPanel').innerHTML=showMessage('Gagal memuat antrean verifikasi.')}
 }
 function renderStaffDataTable(rows, columns, emptyMessage){
   const items=Array.isArray(rows)?rows:[];
@@ -1273,15 +1281,20 @@ function renderStaffDataTable(rows, columns, emptyMessage){
   const body=items.map((row,rowIndex)=>`<tr>${columns.map(col=>`<td class="${esc(col.className||'')}">${typeof col.render==='function'?col.render(row,rowIndex):esc(row?.[col.key]??'-')}</td>`).join('')}</tr>`).join('');
   return `<div class="staff-table-scroll" role="region" aria-label="Tabel data" tabindex="0"><table class="staff-data-table"><thead><tr>${heads}</tr></thead><tbody>${body}</tbody></table></div>`;
 }
-function renderVerificationQueue(items){
+function renderVerificationQueue(items,meta){
   const el=$('verificationPanel'); if(!el)return;
-  el.innerHTML=`<div class="verification-toolbar"><div class="search-box"><span class="search-icon">${ico('search')}</span><input id="verificationSearch" class="search-input" placeholder="Cari nama atau nomor pendaftaran..." autocomplete="off" oninput="filterVerificationQueue()"><button type="button" class="search-clear" id="verificationSearchClear" onclick="clearVerificationSearch()" aria-label="Hapus pencarian">×</button></div><div class="filter-box professional-filter"><span class="filter-label">Status</span><select id="verificationStatus" class="select-field compact professional-select" onchange="loadVerificationQueue()"><option value="">Semua status</option><option value="SUBMITTED">Menunggu verifikasi</option><option value="UNDER_REVIEW">Sedang diperiksa</option><option value="REVISION">Perlu revisi</option><option value="REREGISTRATION">Daftar ulang</option><option value="VERIFIED">Terverifikasi</option></select></div></div><div id="verificationList"></div>`;
-  state.verificationQueue=items; renderVerificationList(items);
+  state.verificationQueue=items||[];
+  state.verificationPageMeta={page:Number(meta?.page||1),pageCount:Number(meta?.pageCount||1),total:Number(meta?.total||state.verificationQueue.length),pageSize:Number(meta?.pageSize||50)};
+  const page=state.verificationPageMeta;
+  el.innerHTML=`<div class="verification-toolbar"><div class="search-box"><span class="search-icon">${ico('search')}</span><input id="verificationSearch" class="search-input" placeholder="Cari nama atau nomor pendaftaran..." autocomplete="off" value="${esc(state.verificationSearch||'')}" onkeydown="if(event.key==='Enter')loadVerificationQueue(1)"><button type="button" class="btn btn-secondary staff-table-action" onclick="loadVerificationQueue(1)">Cari</button><button type="button" class="search-clear" id="verificationSearchClear" onclick="clearVerificationSearch()" aria-label="Hapus pencarian">×</button></div><div class="filter-box professional-filter"><span class="filter-label">Status</span><select id="verificationStatus" class="select-field compact professional-select" onchange="loadVerificationQueue(1)"><option value="">Semua status</option><option value="SUBMITTED">Menunggu verifikasi</option><option value="UNDER_REVIEW">Sedang diperiksa</option><option value="REVISION">Perlu revisi</option><option value="REREGISTRATION">Daftar ulang</option><option value="VERIFIED">Terverifikasi</option></select></div></div><div id="verificationList"></div><div class="staff-pagination"><button class="btn btn-secondary staff-table-action" onclick="loadVerificationQueue(${Math.max(1,page.page-1)})" ${page.page<=1?'disabled':''}>Sebelumnya</button><span>Halaman ${page.page} dari ${page.pageCount} · ${page.total} pendaftar</span><button class="btn btn-secondary staff-table-action" onclick="loadVerificationQueue(${Math.min(page.pageCount,page.page+1)})" ${page.page>=page.pageCount?'disabled':''}>Berikutnya</button></div>`;
+  const status=$('verificationStatus');if(status)status.value=state.verificationStatus||'';
+  const clear=$('verificationSearchClear');if(clear)clear.classList.toggle('show',!!state.verificationSearch);
+  renderVerificationList(state.verificationQueue);
 }
 function renderVerificationList(items){
   const el=$('verificationList');if(!el)return;
   const columns=[
-    {label:'No.',className:'staff-col-number',render:(x,i)=>String(i+1)},
+    {label:'No.',className:'staff-col-number',render:(x,i)=>String(((state.verificationPageMeta?.page||1)-1)*(state.verificationPageMeta?.pageSize||50)+i+1)},
     {label:'Nama Calon Santri',render:x=>`<div class="staff-primary-text">${esc(x.candidateName||'-')}</div><div class="staff-secondary-text">${esc(x.registrationNumber||'-')}</div>`},
     {label:'Jenjang / Gelombang',render:x=>`${esc(x.jenjangName||'-')}<div class="staff-secondary-text">${esc(x.gelombangName||'-')}</div>`},
     {label:'Pembayaran',render:x=>esc(x.formPaymentStatusLabel||'Belum diketahui')},
@@ -1292,9 +1305,18 @@ function renderVerificationList(items){
   const elHtml=renderStaffDataTable(items,columns,'Tidak ada pendaftaran pada antrean verifikasi.');
   el.innerHTML=elHtml;
 }
-function filterVerificationQueue(){const q=String($('verificationSearch')?.value||'').trim().toLowerCase();const clear=$('verificationSearchClear');if(clear)clear.classList.toggle('show',!!q);renderVerificationList((state.verificationQueue||[]).filter(x=>String(x.registrationNumber||'').toLowerCase().includes(q)||String(x.candidateName||'').toLowerCase().includes(q)));}
-function clearVerificationSearch(){const el=$('verificationSearch');if(el){el.value='';el.focus();}filterVerificationQueue();}
-async function loadVerificationQueue(){loading(true,'Memuat antrean...');try{const r=await server('getVerificationQueue',state.token,{status:$('verificationStatus')?.value||''});if(r.success){state.verificationQueue=r.registrations||[];filterVerificationQueue();}else showToast(r.message,'error')}catch(e){showToast('Gagal memuat antrean.','error')}finally{loading(false)}}
+function filterVerificationQueue(){renderVerificationList(state.verificationQueue||[]);}
+function clearVerificationSearch(){state.verificationSearch='';const el=$('verificationSearch');if(el)el.value='';loadVerificationQueue(1);}
+async function loadVerificationQueue(page){
+  state.verificationSearch=String($('verificationSearch')?.value??state.verificationSearch??'').trim();
+  state.verificationStatus=String($('verificationStatus')?.value??state.verificationStatus??'');
+  loading(true,'Memuat antrean...');
+  try{
+    const r=await server('getVerificationQueue',state.token,{page:page||1,pageSize:50,search:state.verificationSearch,status:state.verificationStatus});
+    if(r.success)renderVerificationQueue(r.registrations||[],r);else showToast(r.message,'error');
+  }catch(e){showToast('Gagal memuat antrean.','error')}
+  finally{loading(false)}
+}
 async function openVerification(id){
   const key='verification';if(state.detailLoadingLocks[key])return;state.detailLoadingLocks[key]=true;
   let modal=$('verificationDetailModal');
@@ -1453,30 +1475,31 @@ function closeRegistrationDetailUI(){state.detailLoadingLocks.registrationDetail
 function renderRegistrationDetail(d,target){const r=d.registration,c=d.candidate||{},g=d.guardian||{},a=d.address||{},s=d.school||{};const root=target||$('content');root.innerHTML=`<section class="hero"><h2>${esc(c.fullName||'Pendaftaran')}</h2><p>${esc(r.registrationNumber||'-')} · ${esc(statusLabel(r.status))}</p></section><section class="form-section"><h3>Data Pendaftaran</h3><div class="registration-meta"><span>Tahun Ajaran: ${esc(state.registrationOptions?.activeYearName||r.tahunAjaranId)}</span><span>Jenjang: ${esc(r.jenjangId)}</span><span>Gelombang: ${esc(r.gelombangId)}</span></div></section><section class="form-section"><h3>Calon Santri</h3><div class="registration-meta"><span>Nama: ${esc(c.fullName||'-')}</span><span>NISN: ${esc(c.nisn||'-')}</span><span>Tempat/Tanggal lahir: ${esc(c.birthPlace||'-')} / ${esc(String(c.birthDate||'-').substring(0,10))}</span><span>Jenis kelamin: ${esc(c.gender==='L'?'Laki-laki':c.gender==='P'?'Perempuan':'-')}</span></div></section><section class="form-section"><h3>Wali</h3><div class="registration-meta"><span>${esc(g.relationship||'-')} · ${esc(g.fullName||'-')}</span><span>${esc(g.phone||'-')} · ${esc(g.email||'-')}</span></div></section><section class="form-section"><h3>Alamat</h3><div class="registration-meta"><span>${esc(a.addressLine||'-')}</span><span>${esc(a.village||'-')}, ${esc(a.district||'-')}, ${esc(a.regency||'-')}, ${esc(a.province||'-')}</span></div></section><section class="form-section"><h3>Sekolah Asal</h3><div class="registration-meta"><span>${esc(s.schoolName||'-')}</span><span>Tahun lulus: ${esc(s.graduationYear||'-')}</span></div></section><div style="display:grid;gap:9px"><button class="btn btn-primary" onclick="openDocumentsForRegistration('${esc(r.registrationId)}')">${ico('file')} &nbsp; Kelola Dokumen</button>${target?'':'<button class="btn btn-secondary" onclick="goPage(\'registration\')">Kembali</button>'}</div>`;}
 async function renderApplicants(force=false){
   if(!hasAnyRole(['SUPERADMIN','ADMIN_PSB','VERIFIKATOR'])){renderMore();return;}
+  state.applicantSearch=state.applicantSearch||'';
+  state.applicantStatus=state.applicantStatus||'';
   $('content').innerHTML=`<section class="hero"><h2>Pendaftar</h2><p>Daftar pendaftaran yang masuk ke sistem.</p></section><div id="applicantPanel"><div class="empty-state">Memuat pendaftar...</div></div>`;
   try{
-    const r=force?await server('getRegistrationList',state.token,{}):(pageDataCached('applicants')||await warmPageData('applicants',()=>server('getRegistrationList',state.token,{})));
+    const filters={page:1,pageSize:50,search:state.applicantSearch,status:state.applicantStatus};
+    const useCache=!force&&!state.applicantSearch&&!state.applicantStatus;
+    const r=useCache?(pageDataCached('applicants')||await warmPageData('applicants',()=>server('getRegistrationList',state.token,filters))):await server('getRegistrationList',state.token,filters);
     if(!r?.success){$('applicantPanel').innerHTML=showMessage(r.message);return;}
     state.applicantList=r.registrations||[];
+    state.applicantPageMeta={page:Number(r.page||1),pageCount:Number(r.pageCount||1),total:Number(r.total||0),pageSize:Number(r.pageSize||50)};
     renderApplicantTable();
   }catch(e){$('applicantPanel').innerHTML=showMessage('Gagal memuat pendaftar.');}
 }
 function renderApplicantTable(){
   const el=$('applicantPanel');if(!el)return;
-  const items=state.applicantList||[];
-  el.innerHTML=`<div class="staff-list-toolbar"><div class="search-box"><span class="search-icon">${ico('search')}</span><input id="applicantSearch" class="search-input" placeholder="Cari nama atau nomor pendaftaran..." autocomplete="off" oninput="filterApplicantTable()"></div><div class="filter-box professional-filter"><span class="filter-label">Status</span><select id="applicantStatus" class="select-field compact professional-select" onchange="filterApplicantTable()"><option value="">Semua status</option><option value="DRAFT">Draft</option><option value="SUBMITTED">Pendaftaran dikirim</option><option value="UNDER_REVIEW">Sedang diverifikasi</option><option value="REVISION">Perlu perbaikan</option><option value="VERIFIED">Terverifikasi</option><option value="SELECTION">Seleksi</option><option value="PASSED">Lulus</option><option value="NOT_PASSED">Tidak lulus</option><option value="REREGISTRATION">Daftar ulang</option><option value="COMPLETED">Selesai</option></select></div><div class="staff-result-count" id="applicantCount"></div></div><div id="applicantTable"></div>`;
+  const meta=state.applicantPageMeta||{page:1,pageCount:1,total:(state.applicantList||[]).length,pageSize:50};
+  el.innerHTML=`<div class="staff-list-toolbar"><div class="search-box"><span class="search-icon">${ico('search')}</span><input id="applicantSearch" class="search-input" placeholder="Cari nama atau nomor pendaftaran..." autocomplete="off" value="${esc(state.applicantSearch||'')}" onkeydown="if(event.key==='Enter')loadApplicantPage(1)"><button type="button" class="btn btn-secondary staff-table-action" onclick="loadApplicantPage(1)">Cari</button></div><div class="filter-box professional-filter"><span class="filter-label">Status</span><select id="applicantStatus" class="select-field compact professional-select" onchange="loadApplicantPage(1)"><option value="">Semua status</option><option value="DRAFT">Draft</option><option value="SUBMITTED">Pendaftaran dikirim</option><option value="UNDER_REVIEW">Sedang diverifikasi</option><option value="REVISION">Perlu perbaikan</option><option value="VERIFIED">Terverifikasi</option><option value="SELECTION">Seleksi</option><option value="PASSED">Lulus</option><option value="NOT_PASSED">Tidak lulus</option><option value="REREGISTRATION">Daftar ulang</option><option value="COMPLETED">Selesai</option></select></div><div class="staff-result-count" id="applicantCount"></div></div><div id="applicantTable"></div><div class="staff-pagination"><button class="btn btn-secondary staff-table-action" onclick="loadApplicantPage(${Math.max(1,meta.page-1)})" ${meta.page<=1?'disabled':''}>Sebelumnya</button><span>Halaman ${meta.page} dari ${meta.pageCount} · ${meta.total} pendaftar</span><button class="btn btn-secondary staff-table-action" onclick="loadApplicantPage(${Math.min(meta.pageCount,meta.page+1)})" ${meta.page>=meta.pageCount?'disabled':''}>Berikutnya</button></div>`;
+  const status=$('applicantStatus');if(status)status.value=state.applicantStatus||'';
   filterApplicantTable();
 }
 function filterApplicantTable(){
-  const q=String($('applicantSearch')?.value||'').trim().toLowerCase();
-  const status=String($('applicantStatus')?.value||'');
-  const items=(state.applicantList||[]).filter(x=>
-    (!status||String(x.status||'')===status)&&
-    (!q||String(x.candidateName||'').toLowerCase().includes(q)||String(x.registrationNumber||'').toLowerCase().includes(q))
-  );
-  const count=$('applicantCount');if(count)count.textContent=`Menampilkan ${items.length} dari ${(state.applicantList||[]).length} pendaftar`;
+  const items=state.applicantList||[];
+  const count=$('applicantCount');if(count)count.textContent=`Menampilkan ${items.length} data pada halaman ${state.applicantPageMeta?.page||1}`;
   const columns=[
-    {label:'No.',className:'staff-col-number',render:(x,i)=>String(i+1)},
+    {label:'No.',className:'staff-col-number',render:(x,i)=>String(((state.applicantPageMeta?.page||1)-1)*(state.applicantPageMeta?.pageSize||50)+i+1)},
     {label:'Calon Santri',render:x=>`<div class="staff-primary-text">${esc(x.candidateName||'-')}</div><div class="staff-secondary-text">${esc(x.registrationNumber||'-')}</div>`},
     {label:'Jenjang / Gelombang',render:x=>`${esc(x.jenjangName||'-')}<div class="staff-secondary-text">${esc(x.gelombangName||'-')}</div>`},
     {label:'Pembayaran',render:x=>esc(x.formPaymentStatusLabel||'Belum diketahui')},
@@ -1486,7 +1509,20 @@ function filterApplicantTable(){
   ];
   const target=$('applicantTable');if(target)target.innerHTML=renderStaffDataTable(items,columns,'Belum ada pendaftaran yang sesuai dengan filter.');
 }
-
+async function loadApplicantPage(page){
+  const search=String($('applicantSearch')?.value??state.applicantSearch??'').trim();
+  const status=String($('applicantStatus')?.value??state.applicantStatus??'');
+  state.applicantSearch=search;state.applicantStatus=status;
+  loading(true,'Memuat daftar pendaftar...');
+  try{
+    const r=await server('getRegistrationList',state.token,{page:page||1,pageSize:50,search,status});
+    if(!r?.success){showToast(r?.message||'Gagal memuat pendaftar.','error');return;}
+    state.applicantList=r.registrations||[];
+    state.applicantPageMeta={page:Number(r.page||1),pageCount:Number(r.pageCount||1),total:Number(r.total||0),pageSize:Number(r.pageSize||50)};
+    renderApplicantTable();
+  }catch(e){showToast('Gagal memuat pendaftar.','error');}
+  finally{loading(false);}
+}
 async function renderDocuments(registrationId,force=false){
   if(!hasAnyRole(['WALI','SUPERADMIN','ADMIN_PSB','VERIFIKATOR'])){renderMore();return;}
   state.documentRegistrationId=registrationId||state.documentRegistrationId||'';

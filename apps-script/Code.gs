@@ -2070,34 +2070,50 @@ function getMyRegistrations(sessionToken) {
 }
 
 function getRegistrationList(sessionToken, filters) {
-  const user = requireRole_(sessionToken, PSB_REGISTRATION_ADMIN_ROLES);
+  requireRole_(sessionToken, PSB_REGISTRATION_ADMIN_ROLES);
   const sheet = getDatabaseSpreadsheet_().getSheetByName(PSB_SHEETS.REGISTRATIONS);
-  if (!sheet || sheet.getLastRow() < 2) return { success:true, registrations:[] };
+  if (!sheet || sheet.getLastRow() < 2) return {success:true,registrations:[],page:1,pageSize:50,total:0,pageCount:1};
   filters = filters || {};
-
-  // Project only the filter/sort columns, then fetch complete rows for the
-  // newest 200 matches. Keep row numbers so duplicate or blank IDs remain safe.
+  const pageSize = Math.min(100, Math.max(1, Math.floor(Number(filters.pageSize) || 50)));
+  const query = String(filters.search || '').trim().toLowerCase().slice(0,120);
   const projected = sheetRowsByFields_(sheet, [
-    'registrationId', 'status', 'tahunAjaranId', 'updatedAt'
+    'registrationId', 'registrationNumber', 'candidateId', 'status', 'tahunAjaranId', 'updatedAt'
   ]);
   let selected = projected.filter(item =>
     (!filters.status || String(item.status) === String(filters.status)) &&
     (!filters.tahunAjaranId || String(item.tahunAjaranId) === String(filters.tahunAjaranId))
   );
-  const sortTimezone = getConfig_('TIMEZONE') || 'Asia/Jakarta';
-  selected.sort((a, b) => {
-    const aUpdated = a.updatedAt instanceof Date
-      ? Utilities.formatDate(a.updatedAt, sortTimezone, "yyyy-MM-dd'T'HH:mm:ss")
-      : String(a.updatedAt || '');
-    const bUpdated = b.updatedAt instanceof Date
-      ? Utilities.formatDate(b.updatedAt, sortTimezone, "yyyy-MM-dd'T'HH:mm:ss")
-      : String(b.updatedAt || '');
-    return bUpdated.localeCompare(aUpdated);
+  if (query) {
+    const candidateIds = selected.map(item => String(item.candidateId || '')).filter(Boolean);
+    const candidates = sheetMapByIdForValues_(
+      getDatabaseSpreadsheet_().getSheetByName(PSB_SHEETS.CANDIDATES), 'candidateId', candidateIds
+    );
+    selected = selected.filter(item => {
+      const candidate = candidates[String(item.candidateId || '')] || {};
+      return [
+        item.registrationNumber, item.registrationId, candidate.fullName, candidate.name
+      ].some(value => String(value || '').toLowerCase().includes(query));
+    });
+  }
+  selected.sort((a,b) => {
+    const aTime = a.updatedAt instanceof Date ? a.updatedAt.getTime() : (Date.parse(String(a.updatedAt || '')) || 0);
+    const bTime = b.updatedAt instanceof Date ? b.updatedAt.getTime() : (Date.parse(String(b.updatedAt || '')) || 0);
+    return bTime - aTime;
   });
-  const rowNumbers = selected.slice(0, 200).map(item => item.rowNumber);
+  const total = selected.length;
+  const pageCount = Math.max(1, Math.ceil(total / pageSize));
+  const page = Math.min(pageCount, Math.max(1, Math.floor(Number(filters.page) || 1)));
+  const rowNumbers = selected.slice((page - 1) * pageSize, page * pageSize).map(item => item.rowNumber);
   const items = sheetRowsAtRowNumbers_(sheet, rowNumbers);
-  items.sort((a, b) => String(b.updatedAt || '').localeCompare(String(a.updatedAt || '')));
-  return { success:true, registrations: enrichRegistrationList_(items) };
+  items.sort((a,b) => {
+    const aTime = a.updatedAt instanceof Date ? a.updatedAt.getTime() : (Date.parse(String(a.updatedAt || '')) || 0);
+    const bTime = b.updatedAt instanceof Date ? b.updatedAt.getTime() : (Date.parse(String(b.updatedAt || '')) || 0);
+    return bTime - aTime;
+  });
+  return {
+    success:true, registrations:enrichRegistrationList_(items),
+    page:page, pageSize:pageSize, total:total, pageCount:pageCount
+  };
 }
 
 function getRegistrationDetail(sessionToken, registrationId) {
@@ -4188,38 +4204,55 @@ const PSB_VERIFICATION_ROLES = ['SUPERADMIN','ADMIN_PSB','VERIFIKATOR'];
 const PSB_VERIFICATION_REGISTRATION_STATUSES = ['SUBMITTED','UNDER_REVIEW','REVISION','REREGISTRATION'];
 
 function getVerificationQueue(sessionToken, filters) {
-  const actor = requireRole_(sessionToken, PSB_VERIFICATION_ROLES);
+  requireRole_(sessionToken, PSB_VERIFICATION_ROLES);
   const sheet = getDatabaseSpreadsheet_().getSheetByName(PSB_SHEETS.REGISTRATIONS);
-  if (!sheet || sheet.getLastRow() < 2) return {success:true, registrations:[]};
+  if (!sheet || sheet.getLastRow() < 2) return {success:true,registrations:[],page:1,pageSize:50,total:0,pageCount:1};
   filters = filters || {};
+  const pageSize = Math.min(100, Math.max(1, Math.floor(Number(filters.pageSize) || 50)));
+  const query = String(filters.search || '').trim().toLowerCase().slice(0,120);
   const allowed = filters.status ? [String(filters.status)] : ['SUBMITTED','UNDER_REVIEW','REVISION','VERIFIED','REREGISTRATION'];
-  const searchEnabled = !!filters.search;
-  const query = searchEnabled ? String(filters.search).trim().toLowerCase() : '';
   const formPaidIds = getFormPaymentVerifiedRegistrationIds_();
-
-  // Project only queue filter/search/sort fields before loading full records.
   const projected = sheetRowsByFields_(sheet, [
-    'registrationId', 'registrationNumber', 'status', 'updatedAt'
+    'registrationId', 'registrationNumber', 'candidateId', 'status', 'updatedAt'
   ]);
-  const selected = projected.filter(item => {
+  let selected = projected.filter(item => {
     const status = item.status;
     if (allowed.indexOf(String(status)) < 0) return false;
     const registrationId = String(item.registrationId || '');
     if (['SUBMITTED','UNDER_REVIEW','REVISION'].indexOf(String(status).toUpperCase()) >= 0 && !formPaidIds.has(registrationId)) return false;
-    if (searchEnabled) {
-      const matches = [item.registrationNumber, item.registrationId].some(value =>
-        String(value || '').toLowerCase().includes(query));
-      if (!matches) return false;
-    }
     return true;
   });
-
-  // Preserve newest-first order and the 200-item cap before enrichment.
-  selected.sort((a,b)=>String(b.updatedAt||'').localeCompare(String(a.updatedAt||'')));
-  const rowNumbers = selected.slice(0,200).map(item => item.rowNumber);
+  if (query) {
+    const candidateIds = selected.map(item => String(item.candidateId || '')).filter(Boolean);
+    const candidates = sheetMapByIdForValues_(
+      getDatabaseSpreadsheet_().getSheetByName(PSB_SHEETS.CANDIDATES), 'candidateId', candidateIds
+    );
+    selected = selected.filter(item => {
+      const candidate = candidates[String(item.candidateId || '')] || {};
+      return [
+        item.registrationNumber, item.registrationId, candidate.fullName, candidate.name
+      ].some(value => String(value || '').toLowerCase().includes(query));
+    });
+  }
+  selected.sort((a,b) => {
+    const aTime = a.updatedAt instanceof Date ? a.updatedAt.getTime() : (Date.parse(String(a.updatedAt || '')) || 0);
+    const bTime = b.updatedAt instanceof Date ? b.updatedAt.getTime() : (Date.parse(String(b.updatedAt || '')) || 0);
+    return bTime - aTime;
+  });
+  const total = selected.length;
+  const pageCount = Math.max(1, Math.ceil(total / pageSize));
+  const page = Math.min(pageCount, Math.max(1, Math.floor(Number(filters.page) || 1)));
+  const rowNumbers = selected.slice((page - 1) * pageSize, page * pageSize).map(item => item.rowNumber);
   const limitedItems = sheetRowsAtRowNumbers_(sheet, rowNumbers);
-  limitedItems.sort((a,b)=>String(b.updatedAt||'').localeCompare(String(a.updatedAt||'')));
-  return {success:true, registrations:enrichRegistrationList_(limitedItems)};
+  limitedItems.sort((a,b) => {
+    const aTime = a.updatedAt instanceof Date ? a.updatedAt.getTime() : (Date.parse(String(a.updatedAt || '')) || 0);
+    const bTime = b.updatedAt instanceof Date ? b.updatedAt.getTime() : (Date.parse(String(b.updatedAt || '')) || 0);
+    return bTime - aTime;
+  });
+  return {
+    success:true, registrations:enrichRegistrationList_(limitedItems),
+    page:page, pageSize:pageSize, total:total, pageCount:pageCount
+  };
 }
 
 function getVerificationDetail(sessionToken, registrationId) {
