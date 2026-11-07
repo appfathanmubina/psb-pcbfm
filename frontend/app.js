@@ -1294,7 +1294,7 @@ function renderVerificationQueue(items,meta){
 function renderVerificationList(items){
   const el=$('verificationList');if(!el)return;
   const columns=[
-    {label:'No.',className:'staff-col-number',render:(x,i)=>String(i+1)},
+    {label:'No.',className:'staff-col-number',render:(x,i)=>String(((state.verificationPageMeta?.page||1)-1)*(state.verificationPageMeta?.pageSize||50)+i+1)},
     {label:'Nama Calon Santri',render:x=>`<div class="staff-primary-text">${esc(x.candidateName||'-')}</div><div class="staff-secondary-text">${esc(x.registrationNumber||'-')}</div>`},
     {label:'Jenjang / Gelombang',render:x=>`${esc(x.jenjangName||'-')}<div class="staff-secondary-text">${esc(x.gelombangName||'-')}</div>`},
     {label:'Pembayaran',render:x=>esc(x.formPaymentStatusLabel||'Belum diketahui')},
