@@ -3468,21 +3468,44 @@ function finalizeReregistration(sessionToken, registrationId) {
   return {success:true,message:'Daftar ulang berhasil diselesaikan.',status:'COMPLETED'};
 }
 function syncReregistrationAfterPayment_(registrationId, actorUserId, deferNotification) {
+  const id=String(registrationId||'');
   const rrSheet=getDatabaseSpreadsheet_().getSheetByName(PSB_SHEETS.REREGISTRATIONS);
-  const rrFound=findRowById_(rrSheet,'registrationId',String(registrationId));
+  const rrFound=findRowById_(rrSheet,'registrationId',id);
   if(!rrFound)return null;
-  const docs=getCurrentDocuments_(String(registrationId));
+  const docs=getCurrentDocuments_(id);
   const required=getActiveMasterItems_('MASTER_DOKUMEN').filter(x=>x.required);
   const docsReady=required.every(t=>{const d=docs.find(x=>String(x.documentTypeId)===String(t.documentTypeId));return d&&String(d.status||'').toUpperCase()==='VERIFIED';});
-  const payment=buildPaymentData_(String(registrationId)).bills.find(b=>/daftar\s*ulang/i.test(String(b.paymentTypeName||'')));
+  const payment=buildPaymentData_(id).bills.find(b=>/daftar\s*ulang/i.test(String(b.paymentTypeName||'')));
   if(!payment||String(payment.status||'').toUpperCase()!=='PAID')return null;
-  const now=new Date(),headers=rrSheet.getRange(1,1,1,rrSheet.getLastColumn()).getValues()[0].map(String);
+
+  let reg=null;
+  if(docsReady){
+    reg=findRegistration_(id);
+    if(!reg)return fail_('Data pendaftaran untuk sinkronisasi Daftar Ulang tidak ditemukan. Verifikasi pembayaran dapat dicoba kembali.');
+    if(String(reg.registration.status||'').toUpperCase()!=='COMPLETED'){
+      const moved=setRegistrationStatus_(reg.registration,'COMPLETED',actorUserId||'SYSTEM','Dokumen dan pembayaran Daftar Ulang lengkap.');
+      if(!moved?.success)return moved||fail_('Status pendaftaran belum berhasil diselesaikan. Silakan coba kembali.');
+    }
+    // Re-read the durable registration row before marking the re-registration
+    // record complete. A retry can safely continue if the previous write landed.
+    reg=findRegistration_(id);
+    if(!reg||String(reg.registration.status||'').toUpperCase()!=='COMPLETED'){
+      return fail_('Status pendaftaran belum tersimpan sebagai COMPLETED. Sinkronisasi Daftar Ulang perlu dicoba kembali.');
+    }
+  }
+
+  const headers=rrSheet.getRange(1,1,1,rrSheet.getLastColumn()).getValues()[0].map(String);
   const statusIdx=headers.indexOf('status'),updatedIdx=headers.indexOf('updatedAt');
-  if(statusIdx>=0)rrSheet.getRange(rrFound.rowNumber,statusIdx+1).setValue(docsReady?'COMPLETED':'PAYMENT_VERIFIED');
-  if(updatedIdx>=0)rrSheet.getRange(rrFound.rowNumber,updatedIdx+1).setValue(now);
+  if(statusIdx<0)return fail_('Struktur kolom REREGISTRATIONS belum memiliki kolom status.');
+  const targetStatus=docsReady?'COMPLETED':'PAYMENT_VERIFIED';
+  rrSheet.getRange(rrFound.rowNumber,statusIdx+1).setValue(targetStatus);
+  if(updatedIdx>=0)rrSheet.getRange(rrFound.rowNumber,updatedIdx+1).setValue(new Date());
+  const confirmedRereg=findRowById_(rrSheet,'registrationId',id);
+  if(!confirmedRereg||String(confirmedRereg.object.status||'').toUpperCase()!==targetStatus){
+    return fail_('Status Daftar Ulang belum berhasil disimpan. Sinkronisasi dapat dicoba kembali.');
+  }
   if(!docsReady)return null;
-  const reg=findRegistration_(String(registrationId));
-  if(reg&&String(reg.registration.status)!=='COMPLETED')setRegistrationStatus_(reg.registration,'COMPLETED',actorUserId||'SYSTEM','Dokumen dan pembayaran Daftar Ulang lengkap.');
+
   const userId=String(reg?.registration?.userId||'');
   if(!userId)return null;
   const payload={userId,candidateName:String(reg?.candidate?.fullName||'calon santri')};
