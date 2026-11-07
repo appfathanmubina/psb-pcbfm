@@ -2648,7 +2648,7 @@ function addSelectionParticipant(sessionToken,payload){
   const lock=LockService.getScriptLock(); try { lock.waitLock(15000); } catch (lockError) { return fail_('Server sedang memproses permintaan lain. Silakan coba kembali beberapa saat lagi.'); }
   let record;
   try {
-    const duplicate=sheetRows_(sheet).find(x=>String(x.registrationId)===registrationId);
+    const duplicate=sheetRowsMatchingValues_(sheet,'registrationId',[registrationId])[0] || null;
     if(duplicate){
       if(String(duplicate.scheduleId)===scheduleId)return fail_('Pendaftar sudah terdaftar pada jadwal ini.');
       return fail_('Pendaftar sudah memiliki jadwal tes.');
@@ -2678,7 +2678,8 @@ function addSelectionParticipantsBulk(sessionToken,payload){
   const lock=LockService.getScriptLock(); try { lock.waitLock(20000); } catch (lockError) { return fail_('Server sedang memproses permintaan lain. Silakan coba kembali beberapa saat lagi.'); }
   let added=[], result;
   try{
-    const headers=sheet.getRange(1,1,1,sheet.getLastColumn()).getValues()[0].map(String), rows=sheetRows_(sheet);
+    const headers=sheet.getRange(1,1,1,sheet.getLastColumn()).getValues()[0].map(String);
+    const rows=sheetRowsMatchingValues_(sheet,'registrationId',registrationIds);
     const existing={}; rows.forEach(x=>{existing[String(x.registrationId)]=x});
     const skipped=[], failed=[];
     registrationIds.forEach(registrationId=>{
