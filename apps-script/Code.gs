@@ -1924,14 +1924,21 @@ function getWaliHomeData(sessionToken) {
   const activeYearId = yearItems.find(x => String(x.name) === activeYear)?.tahunAjaranId || '';
   const activeRegs = activeYearId ? regs.filter(x => String(x.tahunAjaranId) === String(activeYearId)) : regs;
 
-  // Urutkan record terbaru dan abaikan record yang sudah dibatalkan/digantikan.
-  const bills = sheetRows_(ss.getSheetByName(PSB_SHEETS.BILLS))
+  // Ambil hanya data operasional yang terkait pendaftaran milik wali ini.
+  // ID unik disiapkan sekali agar setiap sheet dapat dipindai pada kolom kunci saja.
+  const registrationIds = activeRegs.map(x => String(x.registrationId || '')).filter(Boolean);
+  const candidateIds = activeRegs.map(x => String(x.candidateId || '')).filter(Boolean);
+  const bills = sheetRowsMatchingValues_(ss.getSheetByName(PSB_SHEETS.BILLS), 'registrationId', registrationIds)
     .filter(x=>String(x.status||'').toUpperCase()!=='CANCELLED')
     .sort((a,b)=>String(b.createdAt||'').localeCompare(String(a.createdAt||'')));
-  const payments = sheetRows_(ss.getSheetByName(PSB_SHEETS.PAYMENTS))
+  const payments = sheetRowsMatchingValues_(ss.getSheetByName(PSB_SHEETS.PAYMENTS), 'registrationId', registrationIds)
     .sort((a,b)=>String(b.createdAt||'').localeCompare(String(a.createdAt||'')));
-  const paymentVerifications = sheetRows_(ss.getSheetByName(PSB_SHEETS.PAYMENT_VERIFICATIONS));
-  const documents = sheetRows_(ss.getSheetByName(PSB_SHEETS.DOCUMENTS))
+  const paymentVerifications = sheetRowsMatchingValues_(
+    ss.getSheetByName(PSB_SHEETS.PAYMENT_VERIFICATIONS),
+    'paymentId',
+    payments.map(x => String(x.paymentId || '')).filter(Boolean)
+  );
+  const documents = sheetRowsMatchingValues_(ss.getSheetByName(PSB_SHEETS.DOCUMENTS), 'registrationId', registrationIds)
     .filter(x=>String(x.status||'').toUpperCase()!=='REPLACED')
     .sort((a,b)=>String(b.uploadedAt||'').localeCompare(String(a.uploadedAt||'')));
   const requiredDocumentTypes = getActiveMasterItems_('MASTER_DOKUMEN').filter(x => x.required === true || String(x.required).toUpperCase() === 'TRUE');
@@ -1944,10 +1951,13 @@ function getWaliHomeData(sessionToken) {
   });
   const verificationByPayment = {};
   paymentVerifications.forEach(x => verificationByPayment[String(x.paymentId)] = x);
-  const participants = sheetRows_(ss.getSheetByName(PSB_SHEETS.SELECTION_PARTICIPANTS));
-  const results = sheetRows_(ss.getSheetByName(PSB_SHEETS.SELECTION_RESULTS));
-  const schedules = sheetRows_(ss.getSheetByName(PSB_SHEETS.SELECTION_SCHEDULE));
-  const candidates = sheetMapById_(ss.getSheetByName(PSB_SHEETS.CANDIDATES), 'candidateId');
+  const participants = sheetRowsMatchingValues_(ss.getSheetByName(PSB_SHEETS.SELECTION_PARTICIPANTS), 'registrationId', registrationIds);
+  const results = sheetRowsMatchingValues_(ss.getSheetByName(PSB_SHEETS.SELECTION_RESULTS), 'registrationId', registrationIds);
+  const participantScheduleIds = participants.map(x => String(x.scheduleId || '')).filter(Boolean);
+  const schedules = sheetRowsMatchingValues_(ss.getSheetByName(PSB_SHEETS.SELECTION_SCHEDULE), 'scheduleId', participantScheduleIds);
+  const candidateRows = sheetRowsMatchingValues_(ss.getSheetByName(PSB_SHEETS.CANDIDATES), 'candidateId', candidateIds);
+  const candidates = Object.create(null);
+  candidateRows.forEach(x => { candidates[String(x.candidateId || '')] = x; });
 
   // Index data by registration once so the home page does not rescan every
   // operational sheet for every registration owned by this wali.
