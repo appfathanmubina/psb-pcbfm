@@ -2265,6 +2265,7 @@ function createBill(sessionToken,payload){
   const type=findMasterItemById_('MASTER_JENIS_PEMBAYARAN','paymentTypeId',paymentTypeId); if(!type||!type.isActive) return fail_('Jenis pembayaran tidak aktif.');
   const result=withScriptLock_(10000, function(){
     const sheet=getDatabaseSpreadsheet_().getSheetByName(PSB_SHEETS.BILLS); if(!sheet) return fail_('Sheet BILLS belum tersedia.');
+    const headers=sheet.getRange(1,1,1,sheet.getLastColumn()).getValues()[0].map(String);
     const rows=sheetRowsMatchingValues_(sheet,'registrationId',[registrationId]);
     const dup=rows.some(r=>String(r.paymentTypeId)===paymentTypeId&&String(r.status)!=='CANCELLED');
     if(dup) return fail_('Tagihan untuk jenis pembayaran ini sudah ada.');
