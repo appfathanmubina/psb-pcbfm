@@ -2234,19 +2234,23 @@ function getPaymentQueue(sessionToken, page) {
     return { success:true, items:[], paymentTypes, totalBills:0, page:1, pageSize, pageCount:1, hasMore:false };
   }
 
-  // Read only queue columns, then enrich only the requested 50-bill page.
-  const allBills = sheetRowsByFields_(billSheet,
-    ['billId','registrationId','paymentTypeId','amount','dueDate','status','createdAt']);
-  const activeBills = allBills.filter(x=>String(x.status||'').toUpperCase()!=='CANCELLED');
-  activeBills.sort((a,b)=>{
+  // Scan only the adjacent status/createdAt columns for the global count and
+  // exact newest-first ordering. Fetch full bill rows only for the requested page.
+  const billRefs = sheetRowsByFields_(billSheet, ['status','createdAt']);
+  const activeBillRefs = billRefs.filter(x=>String(x.status||'').toUpperCase()!=='CANCELLED');
+  activeBillRefs.sort((a,b)=>{
     const aTime=new Date(a.createdAt||0).getTime(), bTime=new Date(b.createdAt||0).getTime();
     if(Number.isFinite(aTime)&&Number.isFinite(bTime))return bTime-aTime;
     return String(b.createdAt||'').localeCompare(String(a.createdAt||''));
   });
-  const totalBills = activeBills.length;
+  const totalBills = activeBillRefs.length;
   const pageCount = Math.max(1,Math.ceil(totalBills/pageSize));
   page = Math.min(page,pageCount);
-  const bills = activeBills.slice((page-1)*pageSize,page*pageSize);
+  const pageBillRefs = activeBillRefs.slice((page-1)*pageSize,page*pageSize);
+  const pageRowsByNumber = Object.create(null);
+  sheetRowsAtRowNumbers_(billSheet,pageBillRefs.map(x=>x.rowNumber))
+    .forEach(x=>{pageRowsByNumber[String(x.rowNumber)]=x;});
+  const bills = pageBillRefs.map(x=>pageRowsByNumber[String(x.rowNumber)]).filter(Boolean);
   const registrationIds = Array.from(new Set(bills.map(x=>String(x.registrationId||'')).filter(Boolean)));
   const registrations = sheetRowsMatchingValuesByFields_(
     ss.getSheetByName(PSB_SHEETS.REGISTRATIONS), 'registrationId', registrationIds,
