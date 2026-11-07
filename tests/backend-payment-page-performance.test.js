@@ -44,8 +44,12 @@ assert.ok(queueEnd > queueStart, 'Staff payment queue backend boundary exists');
 const queue = code.slice(queueStart, queueEnd);
 assert.match(queue, /requireRole_\(sessionToken, PSB_PAYMENT_MANAGE_ROLES\)/,
   'Only payment-managing staff roles may read the global payment queue');
-assert.match(queue, /sheetRowsByFields_\(billSheet,\s*\['billId','registrationId','paymentTypeId','status','createdAt'\]\)/,
-  'Queue must build a narrow bill index for global search, filtering, and ordering');
+assert.match(queue, /const billFields = query/,
+  'Queue must select the smallest bill projection needed for the active global filters');
+assert.match(queue, /sheetRowsByFields_\(billSheet, billFields\)/,
+  'Queue must use the conditional narrow bill projection');
+assert.match(queue, /statusFilter \? \['billId','status','createdAt'\] : \['status','createdAt'\]/,
+  'Unfiltered queue requests must retain the original status/createdAt-only bill scan');
 assert.match(queue, /sheetRowsByFields_\(ss\.getSheetByName\(PSB_SHEETS\.REGISTRATIONS\)/,
   'Global search must index registration number and candidate ID without loading full registration rows');
 assert.match(queue, /sheetRowsByFields_\(ss\.getSheetByName\(PSB_SHEETS\.CANDIDATES\)/,
