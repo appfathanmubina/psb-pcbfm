@@ -10,6 +10,10 @@ const end = backend.indexOf('\nfunction verifyPayment(sessionToken,payload){', s
 assert.notEqual(start, -1, 'payment proof upload backend must exist');
 assert.notEqual(end, -1, 'payment proof upload boundary must exist');
 const upload = backend.slice(start, end);
+assert.match(upload, /const headers=initialHeaders, now=new Date\(\), paymentId=/,
+  'payment row creation must use the validated header snapshot instead of an undefined variable');
+assert.doesNotMatch(upload, /\blatestHeaders\b/,
+  'payment upload must not reference an undeclared latestHeaders variable');
 
 const tryIndex = upload.indexOf('try {');
 const waitLocks = [...upload.matchAll(/lock\.waitLock\(20000\)/g)].map(match => match.index);
