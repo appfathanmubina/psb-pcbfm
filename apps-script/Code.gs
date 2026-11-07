@@ -2147,9 +2147,14 @@ function getPaymentPageData(sessionToken, registrationId) {
   let registrations = [];
   let registrationsById = Object.create(null);
   if (regSheet && regSheet.getLastRow() >= 2) {
-    const headers = regSheet.getRange(1,1,1,regSheet.getLastColumn()).getValues()[0].map(String);
-    const rows = regSheet.getRange(2,1,regSheet.getLastRow()-1,regSheet.getLastColumn()).getValues();
-    let items = rows.map((r,i)=>rowObject_(headers,r,i+2));
+    let items;
+    if (isWali) {
+      items = sheetRowsMatchingValues_(regSheet, 'userId', [actor.userId]);
+    } else {
+      const headers = regSheet.getRange(1,1,1,regSheet.getLastColumn()).getValues()[0].map(String);
+      const rows = regSheet.getRange(2,1,regSheet.getLastRow()-1,regSheet.getLastColumn()).getValues();
+      items = rows.map((r,i)=>rowObject_(headers,r,i+2));
+    }
     items.forEach(item => { const id=String(item.registrationId||''); if(id&&!Object.prototype.hasOwnProperty.call(registrationsById,id)) registrationsById[id]=item; });
     if (isWali) items = items.filter(x=>String(x.userId)===String(actor.userId));
     const preloadedMaps = {
