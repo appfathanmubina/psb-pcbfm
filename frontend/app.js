@@ -1750,6 +1750,13 @@ function renderMore(){
 function hasAnyRole(roles){const current=String(state.user?.role||'').split(',').map(x=>x.trim().toUpperCase());return roles.some(r=>current.includes(r));}
 async function renderPayments(registrationId,force=false){
   if(!hasAnyRole(['WALI','SUPERADMIN','ADMIN_PSB','KEUANGAN'])){renderMore();return;}
+  if(!hasAnyRole(['WALI'])){
+    state.paymentQueuePage=Number(state.paymentQueuePage||1);
+    $('content').innerHTML=`<section class="hero"><h2>Antrean Pembayaran</h2><p>Periksa bukti transfer dan status tagihan seluruh pendaftar.</p></section><div id="paymentPanel"><div class="empty-state">Memuat antrean pembayaran...</div></div>`;
+    try{await loadPaymentQueuePage(force?1:state.paymentQueuePage||1);}
+    catch(e){$('paymentPanel').innerHTML=showMessage('Gagal memuat antrean pembayaran.');}
+    return;
+  }
   state.paymentRegistrationId=String(registrationId||state.paymentRegistrationId||state.registrationList?.[0]?.registrationId||'');
   $('content').innerHTML=`<section class="hero"><h2>Pembayaran Formulir</h2><p>Unggah bukti pembayaran dan pantau proses verifikasi oleh petugas Keuangan.</p></section><div id="paymentPanel"><div class="empty-state">Memuat data pembayaran...</div></div>`;
   try{
@@ -1761,6 +1768,44 @@ async function renderPayments(registrationId,force=false){
     state.paymentRegistrationId=String(r.paymentData?.registrationId||state.paymentRegistrationId||state.registrationList[0].registrationId);renderPaymentContent();
   }catch(e){$('paymentPanel').innerHTML=showMessage('Gagal memuat pembayaran.')}
 }
+
+async function loadPaymentQueuePage(page){
+  state.paymentQueuePage=Math.max(1,Number(page)||1);
+  const panel=$('paymentPanel');if(!panel)return;
+  panel.innerHTML='<div class="empty-state">Memuat antrean pembayaran...</div>';
+  const r=await server('getPaymentQueue',state.token,state.paymentQueuePage);
+  if(!r?.success){panel.innerHTML=showMessage(r?.message||'Antrean pembayaran tidak dapat dimuat.');return;}
+  state.paymentQueue=r.items||[];
+  state.paymentQueueMeta={page:Number(r.page||1),pageCount:Number(r.pageCount||1),totalBills:Number(r.totalBills||0),pageSize:Number(r.pageSize||50)};
+  state.paymentTypes=r.paymentTypes||[];
+  renderPaymentQueue();
+}
+function renderPaymentQueue(){
+  const panel=$('paymentPanel');if(!panel)return;
+  const meta=state.paymentQueueMeta||{},items=state.paymentQueue||[];
+  panel.innerHTML=`<div class="staff-list-toolbar"><div class="search-box"><span class="search-icon">${ico('search')}</span><input id="paymentQueueSearch" class="search-input" placeholder="Cari nama, nomor pendaftaran, atau tagihan..." oninput="filterPaymentQueue()"></div><div class="filter-box professional-filter"><span class="filter-label">Status</span><select id="paymentQueueStatus" class="select-field compact professional-select" onchange="filterPaymentQueue()"><option value="">Semua status</option><option value="WAITING">Menunggu verifikasi</option><option value="REJECTED">Ditolak</option><option value="PAID">Lunas</option><option value="UNPAID">Belum bayar</option></select></div><button class="btn btn-secondary staff-table-action" onclick="renderPayments('',true)">Muat ulang</button><div class="staff-result-count" id="paymentQueueCount"></div></div><div id="paymentQueueTable"></div><div class="staff-pagination"><button class="btn btn-secondary staff-table-action" id="paymentQueuePrev" onclick="loadPaymentQueuePage(${Math.max(1,meta.page-1)})" ${meta.page<=1?'disabled':''}>Sebelumnya</button><span id="paymentQueuePageInfo">Halaman ${meta.page} dari ${meta.pageCount} · ${meta.totalBills} tagihan</span><button class="btn btn-secondary staff-table-action" id="paymentQueueNext" onclick="loadPaymentQueuePage(${Math.min(meta.pageCount,meta.page+1)})" ${meta.page>=meta.pageCount?'disabled':''}>Berikutnya</button></div>`;
+  filterPaymentQueue();
+}
+function filterPaymentQueue(){
+  const q=String($('paymentQueueSearch')?.value||'').trim().toLowerCase();
+  const status=String($('paymentQueueStatus')?.value||'');
+  const items=(state.paymentQueue||[]).filter(x=>
+    (!status||String(x.queueStatus||'')===status)&&
+    (!q||[x.candidateName,x.registrationNumber,x.paymentTypeName].some(v=>String(v||'').toLowerCase().includes(q)))
+  );
+  const count=$('paymentQueueCount');if(count)count.textContent=`Menampilkan ${items.length} dari ${(state.paymentQueue||[]).length} tagihan di halaman ini`;
+  const columns=[
+    {label:'No.',className:'staff-col-number',render:(x,i)=>String(i+1)},
+    {label:'Calon Santri',render:x=>`<div class="staff-primary-text">${esc(x.candidateName||'-')}</div><div class="staff-secondary-text">${esc(x.registrationNumber||'-')}</div>`},
+    {label:'Jenis Tagihan',render:x=>`<div class="staff-primary-text">${esc(x.paymentTypeName||'-')}</div><div class="staff-secondary-text">${esc(x.dueDate?'Jatuh tempo: '+x.dueDate:'')}</div>`},
+    {label:'Nominal',render:x=>'Rp '+Number(x.amount||0).toLocaleString('id-ID')},
+    {label:'Status',render:x=>{const labels={WAITING:'Menunggu verifikasi',REJECTED:'Ditolak',PAID:'Lunas',UNPAID:'Belum bayar'};return `<span class="pill ${x.queueStatus==='PAID'?'ok':x.queueStatus==='WAITING'?'warn':''}">${labels[x.queueStatus]||x.queueStatus||'-'}</span>${x.verificationNote?`<div class="staff-secondary-text">${esc(x.verificationNote)}</div>`:''}`;}},
+    {label:'Bukti',className:'staff-col-actions',render:x=>x.proofFileUrl?`<button class="btn btn-secondary staff-table-action" onclick="window.open('${esc(x.proofFileUrl)}','_blank','noopener')">Lihat Bukti</button>`:'-'},
+    {label:'Aksi',className:'staff-col-actions',render:x=>x.paymentStatus==='SUBMITTED'?`<div class="staff-table-actions"><button class="btn btn-primary staff-table-action" onclick="verifyPaymentUI('${esc(x.paymentId)}','VERIFIED')">Verifikasi</button><button class="btn btn-danger staff-table-action" onclick="verifyPaymentUI('${esc(x.paymentId)}','REJECTED')">Tolak</button></div>`:'-'}
+  ];
+  const target=$('paymentQueueTable');if(target)target.innerHTML=renderStaffDataTable(items,columns,'Tidak ada tagihan yang sesuai dengan filter.');
+}
+
 function renderPaymentContent(){
  const d=state.paymentData||{}, items=d.bills||[], isWali=hasAnyRole(['WALI']), canManage=hasAnyRole(['SUPERADMIN','ADMIN_PSB','KEUANGAN']);
  const list=items.length?items.map(b=>{const p=b.payment, st=String(b.status||'').toUpperCase(), displayStatus=st==='PAID'?'PAID':(st==='PAYMENT_REVIEW'||p?.status==='SUBMITTED'?'PAYMENT_REVIEW':st);return `<article class="registration-item"><div class="registration-item-top"><div><div class="registration-name">${esc(b.paymentTypeName||'Tagihan')}</div><div class="registration-number">Rp ${Number(b.amount||0).toLocaleString('id-ID')}</div></div><span class="pill">${esc(displayStatus==='PAID'?'LUNAS':displayStatus==='PAYMENT_REVIEW'?'MENUNGGU VERIFIKASI':p?.status==='REJECTED'?'DITOLAK':'BELUM BAYAR')}</span></div>${p?.submittedAt?`<div class="registration-meta"><span>Dikirim: ${esc(String(p.submittedAt).substring(0,10))}</span></div>`:'' }${p?.status==='REJECTED'&&p?.verificationNote?`<div class="message warning" style="margin-top:8px">Alasan penolakan: ${esc(p.verificationNote)}</div>`:''}<div class="registration-actions">${p?.proofFileUrl?`<button class="btn btn-secondary" onclick="window.open('${esc(p.proofFileUrl)}','_blank')">Bukti</button>`:''}${isWali&&st!=='PAID'&&(!p||p.status==='REJECTED')?`<button class="btn btn-primary" onclick="openPaymentUpload('${esc(b.billId)}')">${p?.status==='REJECTED'?'Upload Ulang':'Upload Bukti'}</button>`:''}${canManage&&p&&p.status==='SUBMITTED'?`<button class="btn btn-primary" onclick="verifyPaymentUI('${esc(p.paymentId)}','VERIFIED')">Verifikasi</button><button class="btn btn-danger" onclick="verifyPaymentUI('${esc(p.paymentId)}','REJECTED')">Tolak</button>`:''}</div></article>`}).join(''):`<div class="empty-state">${isWali?(d.autoBillMessage?'Tagihan formulir belum dapat dibuat: '+d.autoBillMessage:'Tagihan formulir akan dibuat otomatis setelah pendaftaran dikirim. Jika belum muncul, silakan hubungi Admin PSB.'):'Belum ada tagihan pembayaran.'}</div>`;
@@ -1797,7 +1842,7 @@ async function submitPaymentUpload(billId){
     reader.readAsDataURL(prepared.blob);
   }catch(e){msg.innerHTML=showMessage('Foto tidak dapat diproses. Silakan pilih file JPG, PNG, atau WEBP lain.','error');loading(false)}
 }
-async function verifyPaymentUI(paymentId,status){const note=status==='REJECTED'?(prompt('Tuliskan alasan penolakan pembayaran:')||'').trim():'';if(status==='REJECTED'&&!note){showAlert('Alasan diperlukan','Tuliskan alasan agar Wali mengetahui perbaikan yang harus dilakukan.','warning');return}showConfirm(status==='VERIFIED'?'Verifikasi pembayaran?':'Tolak pembayaran?',status==='VERIFIED'?'Pembayaran akan dikonfirmasi dan pendaftaran masuk antrean verifikasi PSB.':'Pembayaran akan ditolak. Alasan penolakan akan dikirimkan kepada Wali.',async()=>{loading(true,status==='VERIFIED'?'Memverifikasi pembayaran...':'Menolak pembayaran...');try{const r=await server('verifyPayment',state.token,{paymentId,status,note});if(r.success){showToast(r.message,'success');await renderPayments(state.paymentRegistrationId,true)}else showAlert('Belum dapat diproses',r.message||'Operasi gagal.','warning')}catch(e){showAlert('Gagal menyimpan','Terjadi gangguan saat menyimpan.','error')}finally{loading(false)}} ,status==='VERIFIED'?'Verifikasi':'Tolak')}
+async function verifyPaymentUI(paymentId,status){const note=status==='REJECTED'?(prompt('Tuliskan alasan penolakan pembayaran:')||'').trim():'';if(status==='REJECTED'&&!note){showAlert('Alasan diperlukan','Tuliskan alasan agar Wali mengetahui perbaikan yang harus dilakukan.','warning');return}showConfirm(status==='VERIFIED'?'Verifikasi pembayaran?':'Tolak pembayaran?',status==='VERIFIED'?'Pembayaran akan dikonfirmasi dan pendaftaran masuk antrean verifikasi PSB.':'Pembayaran akan ditolak. Alasan penolakan akan dikirimkan kepada Wali.',async()=>{loading(true,status==='VERIFIED'?'Memverifikasi pembayaran...':'Menolak pembayaran...');try{const r=await server('verifyPayment',state.token,{paymentId,status,note});if(r.success){showToast(r.message,'success');if(!hasAnyRole(['WALI']))await loadPaymentQueuePage(state.paymentQueuePage||1);else await renderPayments(state.paymentRegistrationId,true)}else showAlert('Belum dapat diproses',r.message||'Operasi gagal.','warning')}catch(e){showAlert('Gagal menyimpan','Terjadi gangguan saat menyimpan.','error')}finally{loading(false)}} ,status==='VERIFIED'?'Verifikasi':'Tolak')}
 function openCreateBill(){const types=state.paymentTypes||[];document.body.insertAdjacentHTML('beforeend',`<div class="modal-backdrop" id="createBillModal"><div class="modal"><h3>Buat Tagihan</h3><div id="createBillMsg"></div><div class="field"><label>Jenis Pembayaran</label><select id="billType">${types.map(x=>`<option value="${esc(x.paymentTypeId)}">${esc(x.name)} · Rp ${Number(x.amount||0).toLocaleString('id-ID')}</option>`).join('')}</select></div><div class="field"><label>Nominal</label><input id="billAmount" type="number" min="1" value="${Number(types[0]?.amount||0)}"></div><div class="field"><label>Jatuh Tempo</label><input id="billDueDate" type="date"></div><div class="modal-actions"><button class="btn btn-primary" onclick="createBillUI()">Simpan</button><button class="btn btn-secondary" onclick="$('createBillModal')?.remove()">Batal</button></div></div></div>`)}
 async function createBillUI(){const msg=$('createBillMsg');loading(true,'Membuat tagihan...');try{const r=await server('createBill',state.token,{registrationId:state.paymentRegistrationId,paymentTypeId:$('billType').value,amount:Number($('billAmount').value||0),dueDate:$('billDueDate').value});if(r.success){$('createBillModal')?.remove();showToast(r.message,'success');await renderPayments(state.paymentRegistrationId)}else msg.innerHTML=showMessage(r.message)}catch(e){msg.innerHTML=showMessage('Gagal membuat tagihan.')}finally{loading(false)}}
 

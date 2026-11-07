@@ -4,7 +4,7 @@ const fs = require('node:fs');
 
 const code = fs.readFileSync('apps-script/Code.gs', 'utf8');
 const start = code.indexOf('function getPaymentPageData(');
-const end = code.indexOf('\nfunction getPaymentsForRegistration(', start);
+const end = code.indexOf('\nfunction getPaymentQueue(', start);
 assert.notEqual(start, -1, 'Payment page backend exists');
 assert.ok(end > start, 'Payment page backend boundary exists');
 
@@ -37,4 +37,25 @@ const build = code.slice(buildStart, buildEnd);
 assert.match(build, /paymentTypes \|\| getActiveMasterItems_\('MASTER_JENIS_PEMBAYARAN'\)/,
   'Other callers must retain the default payment-type lookup');
 
+const queueStart = code.indexOf('function getPaymentQueue(');
+const queueEnd = code.indexOf('\nfunction getPaymentsForRegistration(', queueStart);
+assert.notEqual(queueStart, -1, 'Staff payment queue backend exists');
+assert.ok(queueEnd > queueStart, 'Staff payment queue backend boundary exists');
+const queue = code.slice(queueStart, queueEnd);
+assert.match(queue, /requireRole_\(sessionToken, PSB_PAYMENT_MANAGE_ROLES\)/,
+  'Only payment-managing staff roles may read the global payment queue');
+assert.match(queue, /sheetRowsByFields_\(billSheet/,
+  'Queue must project only required bill columns');
+assert.match(queue, /pageSize = 50/,
+  'Queue must return a bounded page size');
+assert.match(queue, /sheetRowsMatchingValuesByFields_\(/,
+  'Queue must batch-load only related registration, payment, candidate, and verification rows');
+assert.doesNotMatch(queue, /findRegistration_\(/,
+  'Queue must not perform per-row registration lookups');
+assert.match(queue, /queueStatus/,
+  'Queue must provide a normalized status for table filtering');
+
+
 console.log('PSB payment page performance and ownership safeguards: OK');
+
+// Staff queue authorization, bounded pagination, and batch-enrichment assertions are covered above.
