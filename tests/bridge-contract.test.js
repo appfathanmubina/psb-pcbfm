@@ -63,8 +63,10 @@ assert.match(apiBridge, /String\(data\.id \|\| ''\) !== item\.requestId/, 'RPC r
 assert.doesNotMatch(apiBridge, /event\.source !== item\.iframe\.contentWindow/, 'RPC response validation must not depend on nested Apps Script WindowProxy identity');
 assert.match(apiBridge, /Pesan bridge diabaikan: origin tidak dikenal/, 'Rejected origins must be diagnosable');
 assert.match(apiBridge, /Timeout menunggu respons Apps Script/, 'RPC timeout must log safe transport diagnostics');
-assert.match(indexHtml, /api-bridge\.js\?v=32\.18\.0/, 'PWA HTML must cache-bust the updated bridge client');
-assert.match(serviceWorker, /psb-pwa-shell-v32-36-0/, 'PWA shell cache must use the current cache version after the upload fix');
+assert.match(indexHtml, /api-bridge\.js\?v=32\.19\.0/, 'PWA HTML must cache-bust the warmed bridge client');
+assert.match(apiBridge, /prepare: function \(\)/, 'Bridge must expose a non-consuming warm-up method');
+assert.match(app, /PSBBridge\.prepare\(\)/, 'PWA must warm the bridge in the background before login');
+assert.match(serviceWorker, /psb-pwa-shell-v32-37-0/, 'PWA shell cache must use the current cache version after the upload fix');
 
 assert.match(apiBridge, /pending\.get\(challenge\)/, 'PWA must correlate every response with its unpredictable challenge');
 assert.match(apiBridge, /let tokenSession = null/, 'PWA must retain the short-lived token session in memory');
