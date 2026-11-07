@@ -2341,8 +2341,8 @@ function submitPayment(sessionToken,payload){
     lockAcquired=true;
 
     stage='CHECK_DUPLICATE_PAYMENT';
-    const existingRows=paymentSheet.getLastRow()<2?[]:paymentSheet.getRange(2,1,paymentSheet.getLastRow()-1,paymentSheet.getLastColumn()).getValues();
-    if(existingRows.some(r=>String(r[pBillIdx])===billId && ['SUBMITTED','VERIFIED'].indexOf(String(r[pStatusIdx]||'').toUpperCase())>=0)) {
+    const existingRows=sheetRowsMatchingValues_(paymentSheet,'billId',[billId]);
+    if(existingRows.some(r=>['SUBMITTED','VERIFIED'].indexOf(String(r.status||'').toUpperCase())>=0)) {
       return fail_('Bukti pembayaran untuk tagihan ini sudah pernah dikirim dan sedang diproses.');
     }
 
@@ -2387,10 +2387,8 @@ function submitPayment(sessionToken,payload){
     lockAcquired=true;
 
     stage='RECHECK_DUPLICATE_PAYMENT';
-    const latestHeaders=paymentSheet.getRange(1,1,1,paymentSheet.getLastColumn()).getValues()[0].map(String);
-    const latestBillIdx=latestHeaders.indexOf('billId'), latestStatusIdx=latestHeaders.indexOf('status');
-    const latestRows=paymentSheet.getLastRow()<2?[]:paymentSheet.getRange(2,1,paymentSheet.getLastRow()-1,paymentSheet.getLastColumn()).getValues();
-    if(latestRows.some(r=>String(r[latestBillIdx])===billId && ['SUBMITTED','VERIFIED'].indexOf(String(r[latestStatusIdx]||'').toUpperCase())>=0)) {
+    const latestRows=sheetRowsMatchingValues_(paymentSheet,'billId',[billId]);
+    if(latestRows.some(r=>['SUBMITTED','VERIFIED'].indexOf(String(r.status||'').toUpperCase())>=0)) {
       lock.releaseLock();
       lockAcquired=false;
       try{uploadedFile.setTrashed(true);uploadedFile=null;}catch(cleanupError){console.error('PSB_PAYMENT_UPLOAD_CLEANUP_FAILED: '+String(cleanupError&&cleanupError.message||cleanupError));}
