@@ -2123,7 +2123,11 @@ function getPaymentPageData(sessionToken, registrationId) {
       waves: sheetMapById_(ss.getSheetByName(PSB_SHEETS.MASTER_GELOMBANG), 'gelombangId'),
       levels: sheetMapById_(ss.getSheetByName(PSB_SHEETS.MASTER_JENJANG), 'jenjangId')
     };
-    registrations = enrichRegistrationList_(items, preloadedMaps).slice(0,200);
+    // Keep the existing newest-first order and 200-item response limit,
+    // but avoid enriching registrations that will not be returned to the PWA.
+    items.sort((a,b)=>String(b.updatedAt||'').localeCompare(String(a.updatedAt||'')));
+    items = items.slice(0,200);
+    registrations = enrichRegistrationList_(items, preloadedMaps);
   }
   if (!registrations.length) return {success:true,registrations:[],paymentData:null,paymentTypes};
   const selectedId=String(registrationId||'');
