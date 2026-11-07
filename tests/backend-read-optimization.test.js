@@ -9,10 +9,10 @@ assert.notEqual(start, -1, 'Announcement page backend exists');
 assert.ok(end > start, 'Announcement page backend boundary exists');
 
 const fn = code.slice(start, end);
-assert.match(fn, /sheetRows_\(registrationSheet\)/,
-  'Registrations must be batch-read once for the announcement page');
-assert.match(fn, /sheetRows_\(candidateSheet\)/,
-  'Candidates must be batch-read once for the announcement page');
+assert.match(fn, /sheetRowsMatchingValues_\(registrationSheet,\s*'registrationId',\s*resultRegistrationIds\)/,
+  'Registrations must be scoped to announcement registration IDs');
+assert.match(fn, /sheetRowsMatchingValues_\(candidateSheet,\s*'candidateId',\s*candidateIds\)/,
+  'Candidates must be scoped to candidates referenced by announcements');
 assert.match(fn, /registrationsById\[String\(r\.registrationId/,
   'Announcement rows must use the registration index');
 assert.match(fn, /candidatesById\[String\(reg\.candidateId/,
