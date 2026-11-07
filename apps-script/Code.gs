@@ -2770,6 +2770,10 @@ function getSelectionPageData(sessionToken, registrationId) {
   const actor = requireRole_(sessionToken, PSB_SELECTION_VIEW_ROLES);
   const isWali = hasRoleDirect_(actor, ['WALI']);
   const ss = getDatabaseSpreadsheet_();
+  const selectedId = String(registrationId || '').trim();
+  // Detail requests are served from only the selected registration and its related rows.
+  // The list endpoint below remains unchanged for dashboard, tabs, and Wali announcements.
+  if (selectedId) return getSelectionDetailData_(actor, isWali, ss, selectedId);
 
   // Wali only needs their own registrations; administrative roles retain
   // the complete registration index and existing list scope.
@@ -2889,6 +2893,74 @@ function getSelectionPageData(sessionToken, registrationId) {
     };
   }
   return {success:true,registrations,schedules,participants:participantItems,scores:visibleScores,results:visibleResults,detail};
+}
+
+
+/**
+ * Loads one selection detail without building the full selection-page collections.
+ * Keeps first-match behavior, role checks, Wali ownership, and unpublished-result privacy.
+ */
+function getSelectionDetailData_(actor, isWali, ss, registrationId) {
+  const found = findRegistration_(registrationId);
+  const registration = found?.registration || null;
+  if (!registration) return fail_('Pendaftaran tidak ditemukan.');
+  if (!canAccessRegistration_(actor, registration) &&
+      !hasRoleDirect_(actor, PSB_SELECTION_ADMIN_ROLES)) {
+    return fail_('Anda tidak memiliki akses ke proses seleksi ini.');
+  }
+
+  const candidateId = String(registration.candidateId || '');
+  const candidateSheet = ss.getSheetByName(PSB_SHEETS.CANDIDATES);
+  const candidateRows = candidateId
+    ? sheetRowsMatchingValuesByFields_(candidateSheet, 'candidateId', [candidateId], ['name', 'fullName'])
+    : [];
+  const candidate = candidateRows[0] || found.candidate || null;
+  const enrichedMaps = {
+    candidates: candidateId ? { [candidateId]: candidate || {} } : {},
+    years: sheetMapByIdForValues_(ss.getSheetByName(PSB_SHEETS.MASTER_TAHUN_AJARAN), 'tahunAjaranId', [registration.tahunAjaranId]),
+    waves: sheetMapByIdForValues_(ss.getSheetByName(PSB_SHEETS.MASTER_GELOMBANG), 'gelombangId', [registration.gelombangId]),
+    levels: sheetMapByIdForValues_(ss.getSheetByName(PSB_SHEETS.MASTER_JENJANG), 'jenjangId', [registration.jenjangId])
+  };
+  const enrichedRegistration = enrichRegistrationList_([registration], enrichedMaps)[0];
+
+  const participantRows = sheetRowsMatchingValuesByFields_(
+    ss.getSheetByName(PSB_SHEETS.SELECTION_PARTICIPANTS),
+    'registrationId',
+    [registrationId],
+    ['participantId', 'scheduleId', 'status']
+  );
+  const participant = participantRows[0] || null;
+  const scores = (!isWali && participant)
+    ? sheetRowsMatchingValuesByFields_(
+        ss.getSheetByName(PSB_SHEETS.SELECTION_SCORES),
+        'participantId',
+        [participant.participantId],
+        ['component', 'score', 'note']
+      )
+    : [];
+  const resultRows = sheetRowsMatchingValuesByFields_(
+    ss.getSheetByName(PSB_SHEETS.SELECTION_RESULTS),
+    'registrationId',
+    [registrationId],
+    ['status', 'note', 'announcementDate']
+  );
+  const selectedResult = resultRows[0] || null;
+  const resultIsPublished = !!(selectedResult && String(selectedResult.announcementDate || '').trim());
+
+  return {
+    success: true,
+    registrations: [],
+    schedules: [],
+    participants: [],
+    scores: [],
+    results: [],
+    detail: {
+      registration: enrichedRegistration,
+      participant,
+      scores: isWali ? [] : scores,
+      result: isWali && !resultIsPublished ? null : selectedResult
+    }
+  };
 }
 
 function createSelectionSchedule(sessionToken,payload){
