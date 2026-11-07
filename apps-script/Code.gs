@@ -1172,8 +1172,25 @@ function verifyPasswordForUser_(password, user) {
   const salt = String(user && user.passwordSalt || '');
   if (!stored || !salt) return { valid: false, needsUpgrade: false };
 
-  // Kompatibilitas untuk akun yang hash-nya sempat diubah ke PBKDF2.
-  if (stored.indexOf(PSB_PASSWORD_HASH_SCHEME_ + '
+  // Compatibility for accounts previously migrated to PBKDF2.
+  const pbkdf2Prefix = PSB_PASSWORD_HASH_SCHEME_ + String.fromCharCode(36);
+  if (stored.indexOf(pbkdf2Prefix) === 0) {
+    const parts = stored.split(String.fromCharCode(36));
+    const iterations = Number(parts[1]);
+    if (parts.length !== 3 || !Number.isInteger(iterations) ||
+        iterations < PSB_PASSWORD_HASH_MIN_ITERATIONS_ ||
+        iterations > PSB_PASSWORD_HASH_MAX_ITERATIONS_ ||
+        !/^[a-f0-9]{64}$/i.test(parts[2])) return { valid: false, needsUpgrade: false };
+    const actual = pbkdf2Sha256Hex_(String(password), salt, iterations);
+    const valid = constantTimeEqual_(actual, parts[2].toLowerCase());
+    return { valid: valid, needsUpgrade: valid };
+  }
+
+  // Original PSB format: SHA-256(password + salt).
+  if (!/^[a-f0-9]{64}$/i.test(stored)) return { valid: false, needsUpgrade: false };
+  const legacy = sha256Hex_(String(password) + salt);
+  return { valid: constantTimeEqual_(legacy, stored.toLowerCase()), needsUpgrade: false };
+}
 
 function pbkdf2Sha256Hex_(password, salt, iterations) {
   const keyBytes = Utilities.newBlob(String(password), 'text/plain').getBytes();
