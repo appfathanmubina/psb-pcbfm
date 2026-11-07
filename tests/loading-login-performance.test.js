@@ -30,8 +30,10 @@ assert.match(boot, /renderApp\(\{deferInitialPage:true\}\)/,
   'Session restore must avoid starting an unawaited duplicate Home render');
 assert.match(boot, /await goPage\(savedPage\)/,
   'Session restore must await the selected page data renderer before boot completion');
-assert.match(boot, /finally\{if\(!state\.appInitialized\)loading\(false\);\}/,
-  'Boot must not decrement the active page loading counter when hiding the splash screen');
+assert.ok(boot.indexOf('renderPublicHome();') < boot.indexOf("await server('validateSession',state.token)"),
+  'The public landing page must render before saved-session validation');
+assert.doesNotMatch(boot, /loading\(false\)/,
+  'Boot must not close a loading counter it did not open');
 const renderApp = functionSource('renderApp');
 assert.match(renderApp, /if\(options\.deferInitialPage!==true\)goPage\('home'\)/,
   'App shell must support deferring its first route until the caller awaits the selected page');

@@ -36,8 +36,8 @@ mustMatch(registrationAccess, /registration\.userId\)\s*===\s*String\(actor\.use
 const myRegistrations = functionSource('getMyRegistrations');
 mustMatch(myRegistrations, /requireRole_\(sessionToken,\s*\['WALI','SUPERADMIN','ADMIN_PSB'\]\)/,
   'My registrations endpoint must require an allowed role');
-mustMatch(myRegistrations, /filter\(x\s*=>\s*String\(x\.userId\)\s*===\s*String\(user\.userId\)\)/,
-  'My registrations endpoint must filter by authenticated owner');
+mustMatch(myRegistrations, /sheetRowsMatchingValues_\(sheet,\s*'userId',\s*\[user\.userId\]\)/,
+  'My registrations endpoint must scope the sheet read to the authenticated owner');
 
 const registrationDetail = functionSource('getRegistrationDetail');
 mustMatch(registrationDetail, /getSessionUser_\(sessionToken,\s*true\)/,

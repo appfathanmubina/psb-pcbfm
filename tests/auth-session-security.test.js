@@ -51,8 +51,10 @@ assert.match(sessionIndex, /getRange\(cachedRowNumber,\s*1,\s*1,\s*7\)/,
   'Session cache hits must read only the indexed session row');
 assert.match(sessionIndex, /constantTimeEqual_\(String\(cachedRow\[2\]/,
   'A cached session row must be checked against the requested token hash');
-assert.match(sessionIndex, /getRange\(2,\s*1,\s*lastRow\s*-\s*1,\s*7\)/,
-  'A full session scan is permitted only as an index-miss fallback');
+assert.match(sessionIndex, /getRange\(2,\s*3,\s*lastRow\s*-\s*1,\s*1\)/,
+  'A cache miss must scan only the token-hash column');
+assert.match(sessionIndex, /getRange\(rowNumber,\s*1,\s*1,\s*7\)/,
+  'A full session row may be read only after a matching token hash is found');
 assert.match(sessionIndex, />=\s*2\s*\*\s*60000/,
   'Session activity writes must be throttled to at most once per two minutes');
 assert.match(sessionIndex, /findUserById_\(String\(row\[1\]\),\s*true\)/,
@@ -76,8 +78,10 @@ assert.match(createSeed, /PSB_SESSION_ROW_V1_/,
 const loginLookup = fn('findUser_');
 assert.match(loginLookup, /try\s*\{\s*cachedRowNumber = Number\(cache\.get\(cacheKey\)/,
   'Login user lookup must fall back to USERS when the optional row-index cache is unavailable');
-assert.match(loginLookup, /getRange\(2,\s*1,\s*lastRow\s*-\s*1,\s*15\)/,
-  'Login user lookup must retain the authoritative Spreadsheet fallback');
+assert.match(loginLookup, /getRange\(2,\s*3,\s*lastRow\s*-\s*1,\s*4\)/,
+  'Login user lookup must scan only the four identity columns on cache miss');
+assert.match(loginLookup, /getRange\(rowNumber,\s*1,\s*1,\s*15\)/,
+  'Login user lookup must fetch the full account row only after an identity match');
 const userIdLookup = fn('findUserById_');
 assert.match(userIdLookup, /try\s*\{\s*cachedRowNumber = Number\(cache\.get\(cacheKey\)/,
   'Session user lookup must fall back to USERS when the optional row-index cache is unavailable');

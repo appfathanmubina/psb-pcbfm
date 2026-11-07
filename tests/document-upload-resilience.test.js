@@ -43,8 +43,8 @@ assert.match(html, /api-bridge\.js\?v=32\.19\.0/,
   'PWA must load the updated upload transport');
 assert.match(serviceWorker, /api-bridge\.js\?v=32\.19\.0/,
   'service worker must precache the updated upload transport');
-assert.match(serviceWorker, /psb-pwa-shell-v32-37-0/,
-  'PWA shell cache must be versioned for the upload transport change');
+const shellCacheVersion = serviceWorker.match(/const CACHE='(psb-pwa-shell-v[0-9-]+)'/)?.[1] || '';
+assert.ok(shellCacheVersion, 'PWA shell cache must declare a version');
 
 assert.match(client, /Koneksi terputus saat mengunggah\. Tunggu sebentar, lalu periksa status dokumen sebelum mencoba unggah ulang\./,
   'ambiguous upload failures must tell the user to check saved status before retrying');

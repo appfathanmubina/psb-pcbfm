@@ -21,11 +21,15 @@ assert.match(paidIds, /verifiedPayments\[String\(x\.billId\s*\|\|\s*''\)\]/);
 // Admin lists and the Wali home must select the newest active bill, newest
 // payment attempt, and newest non-replaced document using the same timestamps.
 const statusMap = section('getRegistrationPaymentDocumentStatusMap_');
-assert.match(statusMap, /status\s*\|\|\s*''\)\.toUpperCase\(\)!==\s*'CANCELLED'/);
-assert.match(statusMap, /createdAt\|\|\s*''\)\.localeCompare/);
-assert.match(statusMap, /billByReg\[id\]\)\s*billByReg\[id\]=x/);
-assert.match(statusMap, /status\s*\|\|\s*''\)\.toUpperCase\(\)!=='REPLACED'/);
-assert.match(statusMap, /uploadedAt\|\|\s*''\)\.localeCompare/);
+assert.match(statusMap, /String\(x\.status\|\|''\)\.toUpperCase\(\)==='CANCELLED'\)return/,
+  'cancelled bills must be excluded before payment status aggregation');
+assert.match(statusMap, /const stamp=String\(x\.createdAt\|\|''\);/);
+assert.match(statusMap, /stamp\.localeCompare\(billStampByReg\[id\]\)>0/);
+assert.match(statusMap, /if\(!billByReg\[id\]\|\|stamp\.localeCompare\(billStampByReg\[id\]\)>0\)\{billByReg\[id\]=x/);
+assert.match(statusMap, /String\(x\.status\|\|''\)\.toUpperCase\(\)==='REPLACED'\)return/,
+  'replaced documents must be excluded from the latest required-document aggregation');
+assert.match(statusMap, /const key=id\+'\|'\+typeId,stamp=String\(x\.uploadedAt\|\|''\);/);
+assert.match(statusMap, /stamp\.localeCompare\(docStamp\[key\]\)>0/);
 
 const wali = section('getWaliHomeData');
 assert.match(wali, /status\|\|''\)\.toUpperCase\(\)!=='CANCELLED'/);
