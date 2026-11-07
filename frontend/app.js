@@ -1264,9 +1264,10 @@ async function markAllNotificationsReadUI(){loading(true,'Memperbarui notifikasi
 async function renderVerification(force=false){
   if(!hasAnyRole(['SUPERADMIN','ADMIN_PSB','VERIFIKATOR'])){renderMore();return}
   state.verificationSearch=state.verificationSearch||'';
+  state.verificationStatus=state.verificationStatus||'';
   $('content').innerHTML=`<section class="hero"><h2>Verifikasi</h2><p>Periksa data pendaftaran dan dokumen sebelum menetapkan hasil verifikasi.</p></section><div id="verificationPanel"><div class="empty-state">Memuat antrean verifikasi...</div></div>`;
   try{
-    const filters={page:1,pageSize:50,search:state.verificationSearch,status:''};
+    const filters={page:1,pageSize:50,search:state.verificationSearch,status:state.verificationStatus};
     const r=force?await server('getVerificationQueue',state.token,filters):(pageDataCached('verification')||await warmPageData('verification',()=>server('getVerificationQueue',state.token,filters)));
     if(!r?.success){$('verificationPanel').innerHTML=showMessage(r?.message||'Gagal memuat antrean verifikasi.');return}
     renderVerificationQueue(r.registrations||[],r);
