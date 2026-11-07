@@ -2808,16 +2808,20 @@ function getAnnouncementPageData(sessionToken) {
   const yearItems = getActiveMasterItems_('MASTER_TAHUN_AJARAN');
   const activeYearId = yearItems.find(x=>String(x.name)===activeYear)?.tahunAjaranId || '';
 
-  // Batch-read registration and candidate rows once. findRegistration_ inside
-  // the result loop performed up to five full-sheet reads per result row.
-  // Keep the first matching ID to preserve findRowById_ duplicate-ID behavior.
+  // Only load registrations referenced by announcement rows, then candidates
+  // referenced by those registrations. The helper preserves sheet order, so
+  // first-match duplicate-ID behavior remains unchanged.
+  const resultRegistrationIds = rows.map(r => String(r.registrationId || '')).filter(Boolean);
+  const relevantRegistrations = sheetRowsMatchingValues_(registrationSheet, 'registrationId', resultRegistrationIds);
   const registrationsById = Object.create(null);
-  sheetRows_(registrationSheet).forEach(reg => {
+  relevantRegistrations.forEach(reg => {
     const id = String(reg.registrationId || '');
     if (id && !Object.prototype.hasOwnProperty.call(registrationsById, id)) registrationsById[id] = reg;
   });
+  const candidateIds = relevantRegistrations.map(reg => String(reg.candidateId || '')).filter(Boolean);
+  const relevantCandidates = sheetRowsMatchingValues_(candidateSheet, 'candidateId', candidateIds);
   const candidatesById = Object.create(null);
-  sheetRows_(candidateSheet).forEach(candidate => {
+  relevantCandidates.forEach(candidate => {
     const id = String(candidate.candidateId || '');
     if (id && !Object.prototype.hasOwnProperty.call(candidatesById, id)) candidatesById[id] = candidate;
   });
