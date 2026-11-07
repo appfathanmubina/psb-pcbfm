@@ -594,16 +594,16 @@ function buildRoleNav(){
 }
 function buildMobileNav(){
   const all=buildRoleNav();
+  const role=hasAnyRole(['SUPERADMIN'])?'SUPERADMIN':hasAnyRole(['ADMIN_PSB'])?'ADMIN_PSB':hasAnyRole(['WALI'])?'WALI':'';
+  if(role==='WALI'){
+    const waliIds=['home','registration','payments','documents','announcement'];
+    return waliIds.map(id=>all.find(x=>x[0]===id)).filter(Boolean);
+  }
   if(all.length<=5)return all;
-
-  // Umumnya maksimal 5 tombol. Untuk Wali, Pengumuman ditampilkan setelah Dokumen
-  // sehingga ada 6 tombol termasuk Lainnya; menu Tes dan Daftar Ulang tetap tersedia.
   const preferred={
     SUPERADMIN:['home','applicants','reports','announcement'],
-    ADMIN_PSB:['home','applicants','reports','announcement'],
-    WALI:['home','registration','payments','documents','announcement']
+    ADMIN_PSB:['home','applicants','reports','announcement']
   };
-  const role=hasAnyRole(['SUPERADMIN'])?'SUPERADMIN':hasAnyRole(['ADMIN_PSB'])?'ADMIN_PSB':hasAnyRole(['WALI'])?'WALI':'';
   const ids=preferred[role]||all.slice(0,4).map(x=>x[0]);
   const direct=ids.map(id=>all.find(x=>x[0]===id)).filter(Boolean);
   return [...direct,['more','Lainnya','settings']];
@@ -676,8 +676,7 @@ async function goPage(page,options={}){
   state.page=page;
   try{sessionStorage.setItem('psb_current_page',page);}catch(e){}
   document.querySelectorAll('.nav-btn,.side-btn').forEach(x=>x.classList.remove('active'));
-  const waliMorePages=['verificationStatus','selection','reregistration'];
-  const mobileNavPage=hasAnyRole(['WALI'])&&waliMorePages.includes(page)?'more':page;
+  const mobileNavPage=hasAnyRole(['WALI'])?(page==='verificationStatus'?'home':['selection','reregistration'].includes(page)?'announcement':page):page;
   $('nav-'+mobileNavPage)?.classList.add('active');$('side-'+page)?.classList.add('active');
   if(!forceReload&&restorePageSnapshot(page)){window.scrollTo({top:0,behavior:'auto'});return;}
   if(page==='home')await renderHome();

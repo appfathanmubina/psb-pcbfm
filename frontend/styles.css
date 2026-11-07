@@ -67,7 +67,7 @@ button,input{font:inherit}button{border:0;cursor:pointer}button:disabled{opacity
 }
 .nav-inner{width:100%;display:grid;grid-template-columns:repeat(3,1fr);gap:6px}
 .nav-inner.wali-nav{gap:2px}
-.nav-inner.wali-nav .nav-btn{min-width:0;font-size:9px;padding:5px 0}
+.nav-inner.wali-nav .nav-btn{min-width:0;font-size:10px;padding:6px 0}
 .nav-inner.wali-nav .nav-btn>span:last-child{white-space:normal;line-height:1.05}
 .nav-inner.wali-nav .nav-icon{margin-bottom:2px}
 .nav-inner.wali-nav .nav-icon .ico-visual{width:28px;height:28px;border-radius:9px}
