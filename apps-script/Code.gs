@@ -2556,6 +2556,7 @@ function verifyPayment(sessionToken,payload){
     const ss=getDatabaseSpreadsheet_(),sheet=ss.getSheetByName(PSB_SHEETS.PAYMENTS);
     const found=findRowById_(sheet,'paymentId',paymentId);if(!found)return fail_('Pembayaran tidak ditemukan.');
     const currentStatus=String(found.object.status||'').toUpperCase();
+    const wasAlreadyFinalized=currentStatus===status;
     if(['VERIFIED','REJECTED'].includes(currentStatus)&&currentStatus!==status)return fail_('Pembayaran ini sudah diputuskan dengan status '+currentStatus+'.');
     const regFound=findRegistration_(String(found.object.registrationId||''));if(!regFound)return fail_('Pendaftaran pembayaran tidak ditemukan.');
     const bills=ss.getSheetByName(PSB_SHEETS.BILLS),br=findRowById_(bills,'billId',String(found.object.billId||''));
@@ -2600,9 +2601,9 @@ function verifyPayment(sessionToken,payload){
     sheet.getRange(found.rowNumber,paymentUpdatedIdx+1).setValue(new Date());
     const verified=findRowById_(sheet,'paymentId',paymentId);
     if(!verified||String(verified.object.status||'').toUpperCase()!==status)return fail_('Status pembayaran belum berhasil disimpan. Silakan coba kembali.');
-    writeAudit_(actor.userId,'PAYMENT_VERIFY','PAYMENT',paymentId,'',JSON.stringify({status,note}),'Pembayaran diverifikasi');
+    if(!wasAlreadyFinalized)writeAudit_(actor.userId,'PAYMENT_VERIFY','PAYMENT',paymentId,'',JSON.stringify({status,note}),'Pembayaran diverifikasi');
     const paymentType=findMasterItemById_('MASTER_JENIS_PEMBAYARAN','paymentTypeId',String(br.object.paymentTypeId||''));
-    notificationPayload={registrationId:String(regFound.registration.registrationId),candidateName:String(regFound.candidate?.fullName||'Calon santri'),paymentLabel:String(paymentType?.name||'pembayaran'),status,note,reregistrationNotification};
+    if(!wasAlreadyFinalized)notificationPayload={registrationId:String(regFound.registration.registrationId),candidateName:String(regFound.candidate?.fullName||'Calon santri'),paymentLabel:String(paymentType?.name||'pembayaran'),status,note,reregistrationNotification};
   }finally{lock.releaseLock();}
   if(notificationPayload){
     const p=notificationPayload;
