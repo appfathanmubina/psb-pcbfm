@@ -464,3 +464,20 @@ Branch: `fix/payment-partial-commit-recovery`
 - Existing upload validation, ownership/role checks, file-size/type limits, payment verification workflow, and sheet schema remain unchanged.
 - Dashboard fallback uses the latest payment already loaded for each bill and preserves role-scoped queue authorization.
 - No production Spreadsheet data was changed and no Apps Script deployment was performed.
+
+
+## Repair batch 15 — payment verification / re-registration synchronization recovery
+
+Branch: `fix/payment-reregistration-sync-recovery`
+
+| ID | Finding | Change | Status |
+|---|---|---|---|
+| PAY-002 | Re-registration status could be written as `COMPLETED` before the linked registration status update was confirmed. A failed or partial registration write could leave `REREGISTRATIONS` and `REGISTRATIONS` inconsistent while payment verification continued. | Update and re-read the linked registration first; propagate missing-registration or failed-transition results; only then write and re-read the re-registration status. The operation remains retryable when an earlier write succeeded but a later step failed. | Implemented; regression test added; CI pending; Apps Script staging/runtime test pending |
+
+### Scope and safety
+
+- The existing payment verification decision, required-document rules, role checks, ScriptLock, payment/bill commit order, and notification flow remain unchanged.
+- `REREGISTRATIONS` is marked `COMPLETED` only after `REGISTRATIONS` is confirmed as `COMPLETED`.
+- If the registration write succeeds but a later step fails, a retry recognizes the already-completed registration and continues synchronization without repeating the status transition.
+- If required documents are incomplete, the re-registration status remains `PAYMENT_VERIFIED`; the registration is not prematurely marked `COMPLETED`.
+- No Spreadsheet schema, frontend behavior, production data, or Apps Script deployment was changed.
