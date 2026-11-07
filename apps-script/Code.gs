@@ -108,17 +108,29 @@ function doGet(e) {
     const origin = String(e && e.parameter && e.parameter.origin || '').trim();
     const challenge = String(e && e.parameter && e.parameter.challenge || '');
     const validChallenge = /^[a-f0-9]{32}$/i.test(challenge);
-    const token = validChallenge ? psbIssuePwaBridgeToken_(origin) : '';
-    const originAllowed = psbPwaBridgeAllowedOrigins_().indexOf(origin) >= 0;
+    const allowedOrigins = psbPwaBridgeAllowedOrigins_();
+    const originAllowed = allowedOrigins.indexOf(origin) >= 0;
+    let token = '';
+    let issueError = '';
+    if (validChallenge && originAllowed) {
+      try {
+        token = psbIssuePwaBridgeToken_(origin);
+        issueError = token ? '' : String(globalThis.PSB_PWA_BRIDGE_ISSUE_STATUS_ || 'TOKEN_ISSUE_FAILED');
+      } catch (bridgeError) {
+        issueError = 'TOKEN_ISSUE_EXCEPTION';
+        console.error('PWA bridge bootstrap failed: ' + String(bridgeError && bridgeError.stack || bridgeError));
+      }
+    } else {
+      issueError = validChallenge ? 'ORIGIN_NOT_ALLOWED' : 'INVALID_CHALLENGE';
+    }
+
     const template = HtmlService.createTemplateFromFile('Bridge');
-    // Keep the origin only when allowlisted so Bridge.html can return a safe,
-    // challenge-bound diagnostic if token issuance fails instead of timing out.
-    template.bridgeOrigin = originAllowed ? origin : '';
-    template.bridgeChallenge = originAllowed && validChallenge ? challenge : '';
+    // Always return a challenge-bound diagnostic to the known PWA origin.
+    // An unapproved request origin never receives a token or reflected message.
+    template.bridgeOrigin = originAllowed ? origin : 'https://appfathanmubina.github.io';
+    template.bridgeChallenge = validChallenge ? challenge : '';
     template.bridgeToken = token;
-    template.bridgeError = token ? '' : (validChallenge
-      ? String(globalThis.PSB_PWA_BRIDGE_ISSUE_STATUS_ || 'TOKEN_ISSUE_FAILED')
-      : 'INVALID_CHALLENGE');
+    template.bridgeError = issueError;
     return template.evaluate()
       .setTitle('PSB Fathan Mubina — API Bridge')
       .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
