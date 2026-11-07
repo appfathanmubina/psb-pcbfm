@@ -1918,7 +1918,7 @@ function getWaliHomeData(sessionToken) {
   const regSheet = ss.getSheetByName(PSB_SHEETS.REGISTRATIONS);
   if (!regSheet || regSheet.getLastRow() < 2) return {success:true, registrations:[], activeYear:String(getConfig_('ACTIVE_YEAR')||'2027/2028')};
 
-  const regs = sheetRows_(regSheet).filter(x => String(x.userId) === String(actor.userId));
+  const regs = sheetRowsMatchingValues_(regSheet, 'userId', [actor.userId]);
   const activeYear = String(getConfig_('ACTIVE_YEAR') || '2027/2028');
   const yearItems = getActiveMasterItems_('MASTER_TAHUN_AJARAN');
   const activeYearId = yearItems.find(x => String(x.name) === activeYear)?.tahunAjaranId || '';
