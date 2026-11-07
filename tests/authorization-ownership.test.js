@@ -81,7 +81,7 @@ mustMatch(paymentVerify, /LockService\.getScriptLock\(\)/,
   'Payment verification must serialize status changes');
 mustMatch(paymentVerify, /br=findRowById_\(bills,'billId',String\(found\.object\.billId\|\|''\)\)/,
   'Payment verification must resolve the linked bill before mutating payment status');
-mustMatch(paymentVerify, /if\(!br\) return fail_\(/,
+mustMatch(paymentVerify, /if\(!br\)\s*return fail_\(/,
   'A payment with a missing bill must not be reported as verified');
 mustMatch(paymentVerify, /String\(br\.object\.registrationId\|\|''\)!==String\(found\.object\.registrationId\|\|''\)/,
   'The linked bill must belong to the same registration as the payment');
