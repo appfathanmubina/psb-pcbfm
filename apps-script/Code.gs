@@ -624,7 +624,7 @@ function setProductionControl(sessionToken, payload) {
     const row=index[k];
     if (!row) { const values=new Array(headers.length).fill(''); values[keyIdx]=k; values[valueIdx]=changes[k]; if(updatedIdx>=0) values[updatedIdx]=new Date(); sheet.appendRow(values); }
     else { sheet.getRange(row,valueIdx+1).setValue(changes[k]); if(updatedIdx>=0) sheet.getRange(row,updatedIdx+1).setValue(new Date()); }
-    try { CacheService.getScriptCache().remove('PSB_CFG_'+sha256Hex_(k).substring(0,24)); } catch(e){}
+    try { const configCache = CacheService.getScriptCache(); configCache.remove('PSB_CFG_'+sha256Hex_(k).substring(0,24)); configCache.remove('PSB_CFG_MAP_V1'); } catch(e){}
   });
   try { CacheService.getScriptCache().remove('PSB_PUBLIC_CONFIG_V5'); CacheService.getScriptCache().remove('PSB_PUBLIC_CONFIG_V4'); } catch(e){}
   writeAudit_(actor.userId,'PRODUCTION_CONFIG_UPDATE','SYSTEM','',JSON.stringify(old),JSON.stringify(productionConfigObject_()),'Konfigurasi produksi diubah oleh SUPERADMIN');
@@ -1406,18 +1406,41 @@ function getConfig_(key) {
   const k = String(key || '');
   if (!k) return '';
   const cache = CacheService.getScriptCache();
-  const cacheKey = 'PSB_CFG_' + sha256Hex_(k).substring(0, 24);
-  const cached = cache.get(cacheKey);
-  if (cached !== null && cached !== '') return cached;
-  const sheet = getDatabaseSpreadsheet_().getSheetByName('CONFIG');
-  if (!sheet || sheet.getLastRow() < 2) return '';
-  const values = sheet.getRange(2, 1, sheet.getLastRow() - 1, 2).getValues();
-  let value = '';
-  for (let i = 0; i < values.length; i++) {
-    if (String(values[i][0]) === k) { value = values[i][1]; break; }
+  const mapKey = 'PSB_CFG_MAP_V1';
+  let configMap = null;
+
+  // CONFIG is a small reference table. Cache the complete key/value map so a
+  // cold request does not issue one Spreadsheet read for every distinct key.
+  // Fall back to the legacy per-key cache if CacheService is unavailable.
+  try {
+    const rawMap = cache.get(mapKey);
+    if (rawMap) configMap = JSON.parse(rawMap);
+  } catch (cacheReadError) {}
+
+  if (configMap && Object.prototype.hasOwnProperty.call(configMap, k)) {
+    return configMap[k];
   }
-  try { cache.put(cacheKey, String(value == null ? '' : value), 600); } catch (e) {}
-  return value;
+
+  if (!configMap) {
+    const sheet = getDatabaseSpreadsheet_().getSheetByName('CONFIG');
+    if (!sheet || sheet.getLastRow() < 2) return '';
+    const values = sheet.getRange(2, 1, sheet.getLastRow() - 1, 2).getValues();
+    configMap = {};
+    for (let i = 0; i < values.length; i++) {
+      const configKey = String(values[i][0] || '');
+      if (configKey) configMap[configKey] = values[i][1] == null ? '' : values[i][1];
+    }
+    try { cache.put(mapKey, JSON.stringify(configMap), 600); } catch (cacheWriteError) {}
+    if (Object.prototype.hasOwnProperty.call(configMap, k)) return configMap[k];
+  }
+
+  // Compatibility fallback for missing keys and transient cache failures.
+  const cacheKey = 'PSB_CFG_' + sha256Hex_(k).substring(0, 24);
+  try {
+    const cached = cache.get(cacheKey);
+    if (cached !== null && cached !== '') return cached;
+  } catch (cacheReadError) {}
+  return Object.prototype.hasOwnProperty.call(configMap || {}, k) ? configMap[k] : '';
 }
 
 function setConfigValue_(key, value) {
@@ -1439,7 +1462,7 @@ function setConfigValue_(key, value) {
     row[keyIdx] = k; row[valueIdx] = value; if (updatedIdx >= 0) row[updatedIdx] = new Date();
     sheet.appendRow(row);
   }
-  try { CacheService.getScriptCache().remove('PSB_CFG_'+sha256Hex_(k).substring(0,24)); } catch (e) {}
+  try { const configCache = CacheService.getScriptCache(); configCache.remove('PSB_CFG_'+sha256Hex_(k).substring(0,24)); configCache.remove('PSB_CFG_MAP_V1'); } catch (e) {}
   try { CacheService.getScriptCache().remove('PSB_PUBLIC_CONFIG_V5'); CacheService.getScriptCache().remove('PSB_PUBLIC_CONFIG_V4'); } catch (e) {}
   return true;
 }
