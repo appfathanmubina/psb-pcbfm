@@ -676,7 +676,7 @@ async function goPage(page,options={}){
   state.page=page;
   try{sessionStorage.setItem('psb_current_page',page);}catch(e){}
   document.querySelectorAll('.nav-btn,.side-btn').forEach(x=>x.classList.remove('active'));
-  const waliMorePages=['verificationStatus','selection','announcement','reregistration'];
+  const waliMorePages=['verificationStatus','selection','reregistration'];
   const mobileNavPage=hasAnyRole(['WALI'])&&waliMorePages.includes(page)?'more':page;
   $('nav-'+mobileNavPage)?.classList.add('active');$('side-'+page)?.classList.add('active');
   if(!forceReload&&restorePageSnapshot(page)){window.scrollTo({top:0,behavior:'auto'});return;}
