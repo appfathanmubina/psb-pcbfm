@@ -59,8 +59,8 @@ assert.match(page, /const visibleScores = isWali \? \[\] : scores;/,
   'Wali must not receive raw score records; staff may retain the indexed score collection');
 assert.match(page, /results\.filter\(x => regMap\[String\(x\.registrationId\)\] && String\(x\.announcementDate \|\| ''\)\.trim\(\) !== ''\)/,
   'Wali results must be limited to owned registrations and official publication');
-assert.match(detail, /const found = findRegistration_\(registrationId\)/,
-  'Targeted detail lookup must resolve the selected registration');
+assert.match(detail, /findFirstIndexedRow_\([\s\S]*?PSB_SHEETS\.REGISTRATIONS[\s\S]*?registrationId/,
+  'Targeted detail lookup must resolve only the selected registration row');
 assert.match(detail, /canAccessRegistration_\(actor, registration\)/,
   'Detail ownership authorization must remain');
 assert.match(detail, /scores: isWali \? \[\] : scores/,
