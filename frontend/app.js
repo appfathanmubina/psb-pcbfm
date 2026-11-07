@@ -1268,7 +1268,8 @@ async function renderVerification(force=false){
   $('content').innerHTML=`<section class="hero"><h2>Verifikasi</h2><p>Periksa data pendaftaran dan dokumen sebelum menetapkan hasil verifikasi.</p></section><div id="verificationPanel"><div class="empty-state">Memuat antrean verifikasi...</div></div>`;
   try{
     const filters={page:1,pageSize:50,search:state.verificationSearch,status:state.verificationStatus};
-    const r=force?await server('getVerificationQueue',state.token,filters):(pageDataCached('verification')||await warmPageData('verification',()=>server('getVerificationQueue',state.token,filters)));
+    const useCache=!force&&!state.verificationSearch&&!state.verificationStatus;
+    const r=useCache?(pageDataCached('verification')||await warmPageData('verification',()=>server('getVerificationQueue',state.token,filters))):await server('getVerificationQueue',state.token,filters);
     if(!r?.success){$('verificationPanel').innerHTML=showMessage(r?.message||'Gagal memuat antrean verifikasi.');return}
     renderVerificationQueue(r.registrations||[],r);
   }catch(e){$('verificationPanel').innerHTML=showMessage('Gagal memuat antrean verifikasi.')}
@@ -1479,7 +1480,8 @@ async function renderApplicants(force=false){
   $('content').innerHTML=`<section class="hero"><h2>Pendaftar</h2><p>Daftar pendaftaran yang masuk ke sistem.</p></section><div id="applicantPanel"><div class="empty-state">Memuat pendaftar...</div></div>`;
   try{
     const filters={page:1,pageSize:50,search:state.applicantSearch,status:state.applicantStatus};
-    const r=force?await server('getRegistrationList',state.token,filters):(pageDataCached('applicants')||await warmPageData('applicants',()=>server('getRegistrationList',state.token,filters)));
+    const useCache=!force&&!state.applicantSearch&&!state.applicantStatus;
+    const r=useCache?(pageDataCached('applicants')||await warmPageData('applicants',()=>server('getRegistrationList',state.token,filters))):await server('getRegistrationList',state.token,filters);
     if(!r?.success){$('applicantPanel').innerHTML=showMessage(r.message);return;}
     state.applicantList=r.registrations||[];
     state.applicantPageMeta={page:Number(r.page||1),pageCount:Number(r.pageCount||1),total:Number(r.total||0),pageSize:Number(r.pageSize||50)};
