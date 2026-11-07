@@ -486,8 +486,8 @@ function buildMobileNav(){
   const all=buildRoleNav();
   if(all.length<=5)return all;
 
-  // Umumnya maksimal 5 tombol. Untuk Wali, Pengumuman tampil setelah Dokumen,
-  // sehingga ada 6 tombol termasuk Lainnya; Tes dan Daftar Ulang tetap tersedia.
+  // Umumnya maksimal 5 tombol. Untuk Wali, Pengumuman ditampilkan setelah Dokumen
+  // sehingga ada 6 tombol termasuk Lainnya; menu Tes dan Daftar Ulang tetap tersedia.
   const preferred={
     SUPERADMIN:['home','applicants','reports','announcement'],
     ADMIN_PSB:['home','applicants','reports','announcement'],
