@@ -3306,19 +3306,11 @@ function getDashboardPageData(sessionToken) {
   const ss = getDatabaseSpreadsheet_();
   const activeYear = String(getConfig_('ACTIVE_YEAR') || '2027/2028');
   const regs = sheetRows_(ss.getSheetByName(PSB_SHEETS.REGISTRATIONS));
-  const candidates = sheetRows_(ss.getSheetByName(PSB_SHEETS.CANDIDATES));
   const users = canMonitoring ? sheetRows_(ss.getSheetByName(PSB_SHEETS.USERS)) : [];
-  const bills = sheetRows_(ss.getSheetByName(PSB_SHEETS.BILLS));
-  const payments = sheetRows_(ss.getSheetByName(PSB_SHEETS.PAYMENTS));
-  const participants = sheetRows_(ss.getSheetByName(PSB_SHEETS.SELECTION_PARTICIPANTS));
-  const results = sheetRows_(ss.getSheetByName(PSB_SHEETS.SELECTION_RESULTS));
-  const reregistrations = sheetRows_(ss.getSheetByName(PSB_SHEETS.REREGISTRATIONS));
   const schedules = canSelection ? sheetRows_(ss.getSheetByName(PSB_SHEETS.SELECTION_SCHEDULE)) : [];
   const yearMasters = sheetRows_(ss.getSheetByName(PSB_SHEETS.MASTER_TAHUN_AJARAN));
   const jenjangMasters = sheetRows_(ss.getSheetByName(PSB_SHEETS.MASTER_JENJANG));
   const gelombangMasters = sheetRows_(ss.getSheetByName(PSB_SHEETS.MASTER_GELOMBANG));
-  const candidateMap = {};
-  candidates.forEach(x => candidateMap[String(x.candidateId)] = x);
   const jenjangMap = {};
   jenjangMasters.forEach(x => jenjangMap[String(x.jenjangId)] = x);
   const gelombangMap = {};
@@ -3327,6 +3319,18 @@ function getDashboardPageData(sessionToken) {
   // Dashboard hanya menghitung periode aktif agar angka operasional tidak tercampur tahun ajaran lama.
   const activeYearId = yearMasters.find(x => String(x.name || '') === activeYear)?.tahunAjaranId || '';
   const periodRegs = activeYearId ? regs.filter(x => String(x.tahunAjaranId) === String(activeYearId)) : regs;
+  const periodRegistrationIds = periodRegs.map(x => String(x.registrationId || '')).filter(Boolean);
+  const periodCandidateIds = periodRegs.map(x => String(x.candidateId || '')).filter(Boolean);
+  // Read only records linked to the active academic year. The shared helper
+  // preserves sheet order and the previous last-row-wins candidate mapping.
+  const candidates = sheetRowsMatchingValues_(ss.getSheetByName(PSB_SHEETS.CANDIDATES), 'candidateId', periodCandidateIds);
+  const bills = sheetRowsMatchingValues_(ss.getSheetByName(PSB_SHEETS.BILLS), 'registrationId', periodRegistrationIds);
+  const payments = sheetRowsMatchingValues_(ss.getSheetByName(PSB_SHEETS.PAYMENTS), 'registrationId', periodRegistrationIds);
+  const participants = sheetRowsMatchingValues_(ss.getSheetByName(PSB_SHEETS.SELECTION_PARTICIPANTS), 'registrationId', periodRegistrationIds);
+  const results = sheetRowsMatchingValues_(ss.getSheetByName(PSB_SHEETS.SELECTION_RESULTS), 'registrationId', periodRegistrationIds);
+  const reregistrations = sheetRowsMatchingValues_(ss.getSheetByName(PSB_SHEETS.REREGISTRATIONS), 'registrationId', periodRegistrationIds);
+  const candidateMap = {};
+  candidates.forEach(x => candidateMap[String(x.candidateId)] = x);
   const periodRegIds = {};
   const periodRegMap = {};
   periodRegs.forEach(x => {
