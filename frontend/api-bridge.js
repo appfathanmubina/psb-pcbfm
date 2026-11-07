@@ -58,9 +58,20 @@
       return;
     }
 
-    if (data.type === 'ready' && tokenHandshake &&
+    if ((data.type === 'ready' || data.type === 'error') && tokenHandshake &&
         event.source === tokenHandshake.iframe.contentWindow &&
         String(data.challenge || '') === tokenHandshake.challenge) {
+      if (data.type === 'error') {
+        const fail = tokenHandshake.reject;
+        removeFrame(tokenHandshake.iframe);
+        tokenHandshake = null;
+        if (fail) {
+          const error = new Error(String(data.message || 'Apps Script gagal menyiapkan API Bridge.'));
+          error.code = String(data.code || 'BRIDGE_HANDSHAKE_FAILED');
+          fail(error);
+        }
+        return;
+      }
       const token = String(data.token || '');
       if (!/^[a-f0-9]{64}$/i.test(token)) {
         const fail = tokenHandshake.reject;
@@ -162,7 +173,7 @@
 
       iframe.src = BRIDGE_URL + '?bridge=1&origin=' +
         encodeURIComponent(location.origin) + '&challenge=' +
-        encodeURIComponent(challenge) + '&v=32.14.0';
+        encodeURIComponent(challenge) + '&v=32.16.0';
       document.body.appendChild(iframe);
     });
   }
