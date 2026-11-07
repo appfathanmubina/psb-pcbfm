@@ -2044,7 +2044,10 @@ function getRegistrationList(sessionToken, filters) {
   filters = filters || {};
   if (filters.status) items = items.filter(x => String(x.status) === String(filters.status));
   if (filters.tahunAjaranId) items = items.filter(x => String(x.tahunAjaranId) === String(filters.tahunAjaranId));
-  return { success:true, registrations: enrichRegistrationList_(items).slice(0,200) };
+  // Sort and cap before loading related payment/document status tables.
+  items.sort((a,b)=>String(b.updatedAt||'').localeCompare(String(a.updatedAt||'')));
+  items=items.slice(0,200);
+  return { success:true, registrations: enrichRegistrationList_(items) };
 }
 
 function getRegistrationDetail(sessionToken, registrationId) {
@@ -3739,7 +3742,11 @@ function getVerificationQueue(sessionToken, filters) {
     }
     items.push(rowObject_(headers, row, i + 2));
   });
-  return {success:true, registrations:enrichRegistrationList_(items).slice(0,200)};
+  // Enrich only the newest 200 matching registrations; enrichment reads related
+  // payment/document sheets, so doing it after the cap avoids unnecessary work.
+  items.sort((a,b)=>String(b.updatedAt||'').localeCompare(String(a.updatedAt||'')));
+  const limitedItems=items.slice(0,200);
+  return {success:true, registrations:enrichRegistrationList_(limitedItems)};
 }
 
 function getVerificationDetail(sessionToken, registrationId) {
