@@ -79,6 +79,16 @@ mustMatch(paymentVerify, /requireRole_\(sessionToken,\s*PSB_PAYMENT_MANAGE_ROLES
   'Payment verification must be restricted to payment managers');
 mustMatch(paymentVerify, /LockService\.getScriptLock\(\)/,
   'Payment verification must serialize status changes');
+mustMatch(paymentVerify, /const br=findRowById_\(bills,'billId',String\(found\.object\.billId\|\|''\)\)/,
+  'Payment verification must resolve the linked bill before mutating payment status');
+mustMatch(paymentVerify, /if\(!br\) return fail_\(/,
+  'A payment with a missing bill must not be reported as verified');
+mustMatch(paymentVerify, /String\(br\.object\.registrationId\|\|''\)!==String\(found\.object\.registrationId\|\|''\)/,
+  'The linked bill must belong to the same registration as the payment');
+mustMatch(paymentVerify, /paymentStatusIdx<0\|\|paymentUpdatedIdx<0/,
+  'Payment status columns must be validated before any write');
+mustMatch(paymentVerify, /billStatusIdx<0/,
+  'Bill status column must be validated before any write');
 
 const documentVerify = functionSource('verifyDocument');
 mustMatch(documentVerify, /requireRole_\(sessionToken,\s*PSB_VERIFICATION_ROLES\)/,
