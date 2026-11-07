@@ -9,7 +9,7 @@ const onlyInPwa = ['closeNotificationPopup', 'decodeUploadImage', 'getSupportedD
 const intentionallyDifferentBodies = [
   'appLogoMarkup', 'applyAppIcon', 'boot', 'buildRoleNav', 'configAssetSources', 'initializeAfterLogin', 'markAllNotificationsReadUI', 'markNotificationReadUI', 'renderLogin', 'renderMore',
   'getDocumentMaxSizeMb', 'hydrateSplashLogo', 'movePublicVideo', 'renderPaymentContent', 'openDocumentUpload',
-  'playPublicVideo', 'renderApp', 'renderPublicHome', 'renderSelectionDetail', 'renderApplicants', 'renderRegistrationList', 'renderVerificationList', 'renderWaliVerificationStatus', 'statusLabel', 'submitDocumentUpload', 'submitLogin', 'submitPaymentUpload'
+  'playPublicVideo', 'renderApp', 'renderPublicHome', 'renderSelectionDetail', 'renderApplicants', 'renderRegistrationList', 'renderVerificationList', 'renderVerificationQueue', 'renderWaliVerificationStatus', 'statusLabel', 'submitDocumentUpload', 'submitLogin', 'submitPaymentUpload'
 ];
 
 function extractFunctionBodies(source) {
