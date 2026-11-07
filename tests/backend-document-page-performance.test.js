@@ -16,8 +16,10 @@ assert.match(queue, /sheetRowsAtRowNumbers_\(sheet,\s*rowNumbers\)/,
   'Only the capped matching queue rows should be converted to complete objects');
 assert.match(queue, /registrationNumber.*registrationId|registrationId.*registrationNumber/s,
   'Search must continue checking registration number and ID');
-assert.match(queue, /enrichRegistrationList_\(items\)\.slice\(0,200\)/,
-  'Queue enrichment, ordering, and 200-row response cap must remain');
+assert.match(queue, /selected\.slice\(0,200\)\.map\(item => item\.rowNumber\)/,
+  'Queue must apply the 200-row cap before full-row reads and enrichment');
+assert.match(queue, /enrichRegistrationList_\(limitedItems\)/,
+  'Only capped queue records should be enriched');
 
 const docStart = code.indexOf('function getDocumentPageData(');
 const docEnd = code.indexOf('\n\nfunction uploadDocument(', docStart);
