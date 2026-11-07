@@ -55,7 +55,7 @@ assert.match(app, /pageSize:50,search:state\.applicantSearch,status:state\.appli
   'Applicant UI must send search and status filters to the backend');
 assert.match(app, /pageSize:50,search:state\.verificationSearch,status:state\.verificationStatus/,
   'Verification UI must send search and status filters to the backend');
-assert.match(app, /Halaman \\u0000/,
-  'pagination controls must be rendered');
+assert.match(app, /Halaman \\\$\\\{/,
+  'pagination controls must show the current page and total pages');
 
 console.log('PSB staff registration and verification server pagination safeguards: OK');
