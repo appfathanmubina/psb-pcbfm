@@ -29,8 +29,10 @@ function psbIssuePwaBridgeToken_(origin) {
     globalThis.PSB_PWA_BRIDGE_ISSUE_STATUS_ = 'ORIGIN_NOT_ALLOWED';
     return '';
   }
-  const token = Utilities.getUuid().replace(/-/g, '') + Utilities.getUuid().replace(/-/g, '');
   try {
+    // UUID generation can fail in restricted/transient Apps Script contexts;
+    // keep it inside the guarded block so doGet can return a diagnostic.
+    const token = Utilities.getUuid().replace(/-/g, '') + Utilities.getUuid().replace(/-/g, '');
     const expiresAt = Date.now() + PSB_PWA_BRIDGE_TOKEN_TTL_SECONDS_ * 1000;
     CacheService.getScriptCache().put('PSB_PWA_BRIDGE_TOKEN_' + token, JSON.stringify({
       origin: requestedOrigin,
