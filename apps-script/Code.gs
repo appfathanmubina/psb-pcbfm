@@ -4579,44 +4579,23 @@ function validateCompleteRegistration_(found) {
 }
 
 function findRegistrationBatch_(ss, registrationId) {
-  // Each related table is fetched with one range read. This preserves the
-  // first-match and first-primary semantics of findRegistration_ without
-  // repeatedly reading the header and body for the same sheet.
-  const readTable = sheet => {
-    if (!sheet || sheet.getLastRow() < 2) return {headers:[], rows:[]};
-    const values = sheet.getRange(1,1,sheet.getLastRow(),sheet.getLastColumn()).getValues();
-    return {headers:values[0].map(String), rows:values.slice(1)};
-  };
-  const findObject = (table, idField, idValue, preferPrimary) => {
-    const idx = table.headers.indexOf(idField);
-    if (idx < 0) return null;
-    const primaryIdx = table.headers.indexOf('isPrimary');
-    let fallback = null;
-    for (let i = 0; i < table.rows.length; i++) {
-      const row = table.rows[i];
-      if (String(row[idx] || '') !== String(idValue)) continue;
-      const found = {rowNumber:i+2, object:rowObject_(table.headers,row,i+2)};
-      if (!fallback) fallback = found;
-      if (preferPrimary && primaryIdx >= 0 &&
-          (row[primaryIdx] === true || String(row[primaryIdx]).toUpperCase() === 'TRUE')) {
-        return found;
-      }
-    }
-    return fallback;
-  };
-
-  const registration = findObject(readTable(ss.getSheetByName(PSB_SHEETS.REGISTRATIONS)),
-    'registrationId', registrationId, false);
+  // Read only lookup columns first, then fetch the selected records.
+  // This keeps the batch helper's response and first-primary semantics
+  // without loading every row from the five related tables.
+  const registration = findFirstIndexedRow_(
+    ss.getSheetByName(PSB_SHEETS.REGISTRATIONS), 'registrationId', registrationId, false);
   if (!registration) return null;
+
   const candidateId = registration.object.candidateId;
-  const candidate = findObject(readTable(ss.getSheetByName(PSB_SHEETS.CANDIDATES)),
-    'candidateId', candidateId, false);
-  const guardian = findObject(readTable(ss.getSheetByName(PSB_SHEETS.GUARDIANS)),
-    'candidateId', candidateId, true);
-  const address = findObject(readTable(ss.getSheetByName(PSB_SHEETS.ADDRESSES)),
-    'candidateId', candidateId, true);
-  const school = findObject(readTable(ss.getSheetByName(PSB_SHEETS.SCHOOLS)),
-    'candidateId', candidateId, true);
+  const candidate = findFirstIndexedRow_(
+    ss.getSheetByName(PSB_SHEETS.CANDIDATES), 'candidateId', candidateId, false);
+  const guardian = findFirstIndexedRow_(
+    ss.getSheetByName(PSB_SHEETS.GUARDIANS), 'candidateId', candidateId, true);
+  const address = findFirstIndexedRow_(
+    ss.getSheetByName(PSB_SHEETS.ADDRESSES), 'candidateId', candidateId, true);
+  const school = findFirstIndexedRow_(
+    ss.getSheetByName(PSB_SHEETS.SCHOOLS), 'candidateId', candidateId, true);
+
   return {
     registration:registration.object,
     candidate:candidate?.object || null,
