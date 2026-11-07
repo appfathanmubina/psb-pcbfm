@@ -4529,7 +4529,7 @@ function getRegistrationPaymentDocumentStatusMap_(items) {
   sheetRows_(ss.getSheetByName(PSB_SHEETS.BILLS)).forEach(x=>{
     const id=String(x.registrationId||''),billId=String(x.billId||'');
     if(!ids[id]||!formTypeIds[String(x.paymentTypeId||'')]||String(x.status||'').toUpperCase()==='CANCELLED')return;
-    if(billId)billIds[billId]=true;
+    billIds[billId]=true;
     const stamp=String(x.createdAt||'');
     if(!billByReg[id]||stamp.localeCompare(billStampByReg[id])>0){billByReg[id]=x;billStampByReg[id]=stamp;}
   });
