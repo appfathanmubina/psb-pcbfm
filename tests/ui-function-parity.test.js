@@ -5,10 +5,10 @@ const appsSource = fs.readFileSync('apps-script/Index.html', 'utf8') + '\n' + fs
 const pwaSource = fs.readFileSync('frontend/app.js', 'utf8');
 
 const onlyInAppsScript = ['installStaticBrandIcons', 'renderPublicVideo'];
-const onlyInPwa = ['closeNotificationPopup', 'decodeUploadImage', 'getSupportedDocumentMimeTypes', 'goPublicVideo', 'openNotificationPopup', 'prepareUploadFile', 'refreshNotificationPopup', 'refreshPublicConfig', 'renderApplicantTable', 'filterApplicantTable', 'renderPublicVideoSection', 'renderStaffDataTable', 'toggleNotificationPopup', 'updatePublicVideo', 'uploadMimeAllowed'];
+const onlyInPwa = ['closeNotificationPopup', 'decodeUploadImage', 'getSupportedDocumentMimeTypes', 'goPublicVideo', 'openNotificationPopup', 'prepareUploadFile', 'refreshNotificationPopup', 'refreshPublicConfig', 'renderApplicantTable', 'filterApplicantTable', 'loadPaymentQueuePage', 'renderPaymentQueue', 'filterPaymentQueue', 'renderPublicVideoSection', 'renderStaffDataTable', 'toggleNotificationPopup', 'updatePublicVideo', 'uploadMimeAllowed'];
 const intentionallyDifferentBodies = [
   'appLogoMarkup', 'applyAppIcon', 'boot', 'buildRoleNav', 'configAssetSources', 'initializeAfterLogin', 'markAllNotificationsReadUI', 'markNotificationReadUI', 'renderLogin', 'renderMore',
-  'getDocumentMaxSizeMb', 'hydrateSplashLogo', 'movePublicVideo', 'renderPaymentContent', 'openDocumentUpload', 'renderReregistrationPanel', 'renderAnnouncementList', 'renderSelectionSchedules', 'renderSelectionParticipants', 'renderSelectionResults',
+  'getDocumentMaxSizeMb', 'hydrateSplashLogo', 'movePublicVideo', 'renderPaymentContent', 'renderPayments', 'openDocumentUpload', 'renderReregistrationPanel', 'renderAnnouncementList', 'renderSelectionSchedules', 'renderSelectionParticipants', 'renderSelectionResults',
   'playPublicVideo', 'renderApp', 'renderPublicHome', 'renderSelectionDetail', 'renderApplicants', 'renderRegistrationList', 'renderVerificationList', 'renderVerificationQueue', 'renderWaliVerificationStatus', 'statusLabel', 'submitDocumentUpload', 'submitLogin', 'submitPaymentUpload'
 ];
 
