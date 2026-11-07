@@ -8,6 +8,13 @@ const end = code.indexOf('\nfunction createSelectionSchedule(', start);
 assert.notEqual(start, -1, 'Selection page backend exists');
 assert.ok(end > start, 'Selection page function boundary exists');
 const page = code.slice(start, end);
+const helperStart = code.indexOf('function getSelectionDetailData_(actor, isWali, ss, registrationId) {');
+const helperEnd = code.indexOf('\nfunction createSelectionSchedule(', helperStart);
+assert.notEqual(helperStart, -1, 'Targeted selection detail helper exists');
+assert.ok(helperEnd > helperStart, 'Targeted selection detail helper boundary exists');
+const detail = code.slice(helperStart, helperEnd);
+assert.match(page, /if \(selectedId\) return getSelectionDetailData_\(actor, isWali, ss, selectedId\)/,
+  'Detail requests must branch before full-page collections are read');
 
 const viewDeclaration = code.match(/^const PSB_SELECTION_VIEW_ROLES = \[([^\]]+)\];$/m);
 assert.ok(viewDeclaration, 'Backend must declare the role allowlist used by getSelectionPageData');
@@ -52,16 +59,20 @@ assert.match(page, /const visibleScores = isWali \? \[\] : scores;/,
   'Wali must not receive raw score records; staff may retain the indexed score collection');
 assert.match(page, /results\.filter\(x => regMap\[String\(x\.registrationId\)\] && String\(x\.announcementDate \|\| ''\)\.trim\(\) !== ''\)/,
   'Wali results must be limited to owned registrations and official publication');
-assert.match(page, /const foundRegistration = registrationById\[selectedId\] \|\| \(!isWali \? null : findRegistration_\(selectedId\)\?\.registration\) \|\| null/,
-  'Detail lookup must use the shared index, with the owner-checked Wali fallback for records outside the visible list');
-assert.match(page, /canAccessRegistration_\(actor,foundRegistration\)/,
+assert.match(detail, /findFirstIndexedRow_\([\s\S]*?PSB_SHEETS\.REGISTRATIONS[\s\S]*?registrationId/,
+  'Targeted detail lookup must resolve only the selected registration row');
+assert.match(detail, /canAccessRegistration_\(actor, registration\)/,
   'Detail ownership authorization must remain');
-assert.match(page, /scores: isWali \? \[\] : \(participant \? \(scoresByParticipant\[String\(participant\.participantId\)\] \|\| \[\]\) : \[\]\)/,
-  'Detail response must hide all scores from Wali and use the participant index for staff');
-assert.match(page, /result: isWali && !resultIsPublished \? null : selectedResult/,
+assert.match(detail, /scores: isWali \? \[\] : scores/,
+  'Detail response must hide all scores from Wali');
+assert.match(detail, /result: isWali && !resultIsPublished \? null : selectedResult/,
   'Detail response must hide unpublished results from Wali while preserving staff detail');
-assert.match(page, /registrationById\[selectedId\] \|\| \(!isWali \? null : findRegistration_\(selectedId\)\?\.registration\)/,
-  'Only Wali detail outside the visible registration index may use the ownership-checked fallback lookup');
+assert.match(detail, /sheetRowsMatchingValuesByFields_\([\s\S]*?SELECTION_PARTICIPANTS[\s\S]*?registrationId/,
+  'Detail participant lookup must be scoped to the selected registration');
+assert.match(detail, /sheetRowsMatchingValuesByFields_\([\s\S]*?SELECTION_SCORES[\s\S]*?participantId/,
+  'Detail score lookup must be scoped to the selected participant');
+assert.match(detail, /sheetRowsMatchingValuesByFields_\([\s\S]*?SELECTION_RESULTS[\s\S]*?registrationId/,
+  'Detail result lookup must be scoped to the selected registration');
 assert.doesNotMatch(page, /participantItems\.some\(/,
   'Wali score filtering must not scan participants for every score');
 assert.doesNotMatch(page, /scores\.filter\(x => String\(x\.participantId\) === String\(participant\.participantId\)\)/,
