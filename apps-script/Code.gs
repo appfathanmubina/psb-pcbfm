@@ -1487,17 +1487,50 @@ function getAcademicYearLifecycleData(sessionToken) {
   const schedules = sheetRows_(ss.getSheetByName(PSB_SHEETS.SELECTION_SCHEDULE));
   const configuredId = String(getConfig_('ACTIVE_YEAR_ID') || '').trim();
   const configuredName = String(getConfig_('ACTIVE_YEAR') || '').trim();
-  let active = years.find(x => configuredId && String(x.tahunAjaranId) === configuredId) || years.find(x => configuredName && String(x.name) === configuredName && x.isActive === true) || years.find(x => x.isActive === true);
+  const active = years.find(x => configuredId && String(x.tahunAjaranId) === configuredId) ||
+    years.find(x => configuredName && String(x.name) === configuredName && x.isActive === true) ||
+    years.find(x => x.isActive === true);
+
+  // Build indexes once. The previous implementation filtered registrations,
+  // waves and schedules for every academic year, then searched all registrations
+  // again for every bill (O(years * bills * registrations) in the worst case).
+  // Keep the original first-match behavior when registration IDs are duplicated.
+  const registrationCountByYear = Object.create(null);
+  const registrationYearById = Object.create(null);
+  const waveCountByYear = Object.create(null);
+  const scheduleCountByYear = Object.create(null);
+  const billCountByYear = Object.create(null);
+
+  regs.forEach(r => {
+    const yearId = String(r.tahunAjaranId);
+    registrationCountByYear[yearId] = (registrationCountByYear[yearId] || 0) + 1;
+    const registrationId = String(r.registrationId);
+    if (!Object.prototype.hasOwnProperty.call(registrationYearById, registrationId)) {
+      registrationYearById[registrationId] = yearId;
+    }
+  });
+  waves.forEach(w => {
+    const yearId = String(w.tahunAjaranId);
+    waveCountByYear[yearId] = (waveCountByYear[yearId] || 0) + 1;
+  });
+  schedules.forEach(s => {
+    const yearId = String(s.tahunAjaranId);
+    scheduleCountByYear[yearId] = (scheduleCountByYear[yearId] || 0) + 1;
+  });
+  bills.forEach(b => {
+    const registrationId = String(b.registrationId);
+    if (!Object.prototype.hasOwnProperty.call(registrationYearById, registrationId)) return;
+    const yearId = registrationYearById[registrationId];
+    billCountByYear[yearId] = (billCountByYear[yearId] || 0) + 1;
+  });
+
   const items = years.map(y => {
     const id = String(y.tahunAjaranId || '');
     return Object.assign({}, y, {
-      registrationCount: regs.filter(r => String(r.tahunAjaranId) === id).length,
-      waveCount: waves.filter(w => String(w.tahunAjaranId) === id).length,
-      scheduleCount: schedules.filter(s => String(s.tahunAjaranId) === id).length,
-      billCount: bills.filter(b => {
-        const reg = regs.find(r => String(r.registrationId) === String(b.registrationId));
-        return reg && String(reg.tahunAjaranId) === id;
-      }).length,
+      registrationCount: registrationCountByYear[id] || 0,
+      waveCount: waveCountByYear[id] || 0,
+      scheduleCount: scheduleCountByYear[id] || 0,
+      billCount: billCountByYear[id] || 0,
       lifecycleStatus: active && String(active.tahunAjaranId) === id ? 'ACTIVE' : (y.isActive ? 'AVAILABLE' : 'ARCHIVED')
     });
   }).sort((a,b) => String(b.name || '').localeCompare(String(a.name || '')));
