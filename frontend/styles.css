@@ -621,3 +621,64 @@ input:focus,select:focus,textarea:focus{background:#fff!important;box-shadow:0 0
 @keyframes notificationPopoverIn{from{opacity:0;transform:translateY(-7px)}to{opacity:1;transform:translateY(0)}}
 @media(max-width:600px){.notification-popover-backdrop{padding:68px 10px 12px;justify-content:center}.notification-popover{width:100%;max-height:min(78vh,680px);border-radius:18px;padding:13px}}
 @media(prefers-reduced-motion:reduce){.notification-popover{animation:none}}
+
+/* GLOBAL POPUP ALIGNMENT — every modal is centered on the visible viewport. */
+.modal-backdrop{
+  position:fixed;
+  inset:0;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  box-sizing:border-box;
+  padding:18px;
+  overflow-y:auto;
+  overscroll-behavior:contain;
+}
+.modal-backdrop > .modal{
+  width:min(680px, calc(100vw - 36px));
+  max-width:calc(100vw - 36px);
+  max-height:min(88dvh, 900px);
+  margin:auto;
+  border-radius:22px;
+  padding:20px;
+  box-sizing:border-box;
+  flex:0 1 auto;
+}
+.modal-backdrop.alert-modal > .modal{
+  width:min(430px, calc(100vw - 36px));
+  max-width:calc(100vw - 36px);
+  border-radius:22px;
+}
+
+/* Notification panel is a dialog too: center it instead of anchoring it to a corner. */
+.notification-popover-backdrop{
+  align-items:center;
+  justify-content:center;
+  padding:18px;
+}
+.notification-popover{
+  width:min(430px, calc(100vw - 36px));
+  max-height:min(82dvh, 680px);
+  margin:auto;
+}
+@media(max-width:600px){
+  .modal-backdrop{padding:12px}
+  .modal-backdrop > .modal{
+    width:calc(100vw - 24px);
+    max-width:calc(100vw - 24px);
+    max-height:88dvh;
+    padding:18px 15px;
+    border-radius:20px;
+  }
+  .modal-backdrop.alert-modal > .modal{
+    width:min(430px, calc(100vw - 24px));
+    max-width:calc(100vw - 24px);
+  }
+  .notification-popover-backdrop{padding:12px}
+  .notification-popover{
+    width:calc(100vw - 24px);
+    max-height:84dvh;
+    border-radius:18px;
+  }
+}
+
