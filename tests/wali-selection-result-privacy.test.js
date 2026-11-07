@@ -37,7 +37,7 @@ assert.match(detailUi, /Keterangan Hasil:/,
 assert.match(detailUi, /Nilai Seleksi/,
   'Staff score section remains available for permitted staff');
 
-const waliList = section(frontend, 'function renderSelectionWali(data){', '\nasync function openSelectionDetailUI(');
+const waliList = section(frontend, 'function renderSelectionWali(data,targetEl=null){', '\nasync function openSelectionDetailUI(');
 assert.match(waliList, /data\.results/,
   'WALI list must continue to display backend-filtered official results');
 

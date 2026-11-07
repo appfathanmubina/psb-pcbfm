@@ -960,7 +960,10 @@ async function generateSelectionParticipantsUI(){
 async function addSelectionParticipantUI(){const registrationId=$('selParticipantReg')?.value||'',scheduleId=$('selParticipantSchedule')?.value||'';if(!registrationId||!scheduleId){showAlert('Data belum lengkap','Pilih pendaftar dan jadwal tes.','warning');return}loading(true,'Menambahkan peserta...');try{const r=await server('addSelectionParticipant',state.token,{registrationId,scheduleId});if(r.success){showToast(r.message,'success');state.selectionData=null;state.selectionTab='participants';try{await renderSelection()}catch(refreshError){}}else showAlert('Belum dapat ditambahkan',r.message,'warning')}catch(e){showAlert('Gagal menambahkan','Terjadi gangguan saat menyimpan peserta.','error')}finally{loading(false)}}
 async function updateParticipantStatusUI(id,status){loading(true,'Memperbarui kehadiran...');try{const r=await server('updateSelectionParticipantStatus',state.token,{participantId:id,status});if(r.success){showToast(r.message,'success');state.selectionData=null;await renderSelection();state.selectionTab='participants';}else showAlert('Belum dapat diproses',r.message,'warning')}catch(e){showAlert('Gagal memperbarui','Terjadi gangguan saat menyimpan status peserta.','error')}finally{loading(false)}}
 function renderSelectionResults(data){const el=$('selectionTabContent');const results=data.results||[];const regs=data.registrations||[];const rows=results.map(x=>{const reg=regs.find(r=>String(r.registrationId)===String(x.registrationId));return `<article class="selection-card"><div style="display:flex;justify-content:space-between;gap:10px"><div><h3>${esc(reg?.candidateName||x.registrationId)}</h3><div class="selection-note">${esc(reg?.registrationNumber||x.registrationId)}</div></div><span class="selection-status ${x.status==='PASSED'?'ok':x.status==='NOT_PASSED'?'bad':'warn'}">${esc(selectionStatusLabel(x.status))}</span></div><p class="selection-note" style="margin-top:10px">${esc(x.note||'Belum ada catatan.')}</p><button class="btn btn-primary" onclick="openSelectionDetailUI('${esc(x.registrationId)}')">Buka Detail</button></article>`}).join('');el.innerHTML=`<div class="selection-grid">${rows||'<div class="selection-empty" style="grid-column:1/-1">Belum ada hasil seleksi.</div>'}</div>`;}
-function renderSelectionWali(data){const el=$('selectionTabContent'), regs=data.registrations||[], pmap={};(data.participants||[]).forEach(p=>pmap[String(p.registrationId)]=p);const rmap={};(data.results||[]).forEach(r=>rmap[String(r.registrationId)]=r);const cards=regs.map(r=>{const p=pmap[String(r.registrationId)],res=rmap[String(r.registrationId)];return `<article class="selection-card"><h3>${esc(r.candidateName||'-')}</h3><div class="selection-note">${esc(r.registrationNumber||r.registrationId)} · ${esc(r.gelombangName||'-')}</div><div class="selection-progress"><div class="selection-progress-step done"></div><div class="selection-progress-step ${p?'done':''}"></div><div class="selection-progress-step ${res?'done':''}"></div></div><div class="selection-meta"><span>${esc(selectionStatusLabel(r.status))}</span>${p?`<span>${esc(p.status==='SCHEDULED'?'Terjadwal':selectionStatusLabel(p.status))}</span>`:''}${res?`<span>${esc(selectionStatusLabel(res.status))}</span>`:''}</div>${p?`<p class="selection-note" style="margin-top:10px">Jadwal: ${esc((data.schedules||[]).find(s=>String(s.scheduleId)===String(p.scheduleId))?.name||p.scheduleId)}</p>`:'<p class="selection-note" style="margin-top:10px">Belum memiliki jadwal tes.</p>'}</article>`}).join('');el.innerHTML=cards||'<div class="selection-empty">Belum ada data pendaftaran untuk proses tes.</div>';}
+function renderSelectionWali(data,targetEl=null){
+  const el=targetEl||$('selectionTabContent'),regs=data.registrations||[],pmap={};(data.participants||[]).forEach(p=>pmap[String(p.registrationId)]=p);const rmap={};(data.results||[]).forEach(r=>rmap[String(r.registrationId)]=r);const cards=regs.map(r=>{const p=pmap[String(r.registrationId)],res=rmap[String(r.registrationId)];return `<article class="selection-card"><h3>${esc(r.candidateName||'-')}</h3><div class="selection-note">${esc(r.registrationNumber||r.registrationId)} · ${esc(r.gelombangName||'-')}</div><div class="selection-progress"><div class="selection-progress-step done"></div><div class="selection-progress-step ${p?'done':''}"></div><div class="selection-progress-step ${res?'done':''}"></div></div><div class="selection-meta"><span>${esc(selectionStatusLabel(r.status))}</span>${p?`<span>${esc(p.status==='SCHEDULED'?'Terjadwal':selectionStatusLabel(p.status))}</span>`:''}${res?`<span>${esc(selectionStatusLabel(res.status))}</span>`:''}</div>${p?`<p class="selection-note" style="margin-top:10px">Jadwal: ${esc((data.schedules||[]).find(s=>String(s.scheduleId)===String(p.scheduleId))?.name||p.scheduleId)}</p>`:'<p class="selection-note" style="margin-top:10px">Belum memiliki jadwal tes.</p>'}</article>`}).join('');if(el)el.innerHTML=cards||'<div class="selection-empty">Belum ada data pendaftaran untuk proses tes.</div>';
+}
+
 async function openSelectionDetailUI(registrationId){
   if(state.selectionDetailOpening)return;
   const id=String(registrationId||'').trim(); if(!id)return;
@@ -990,16 +993,49 @@ async function saveSelectionResultUI(registrationId){const status=$('selResultSt
 
 async function renderAnnouncements(force=false){
   if(!hasAnyRole(['WALI','SUPERADMIN','ADMIN_PSB','SELEKSI','VERIFIKATOR'])){renderMore();return}
-  $('content').innerHTML=`<section class="hero"><h2>Pengumuman</h2><p>${hasAnyRole(['WALI'])?'Lihat hasil seleksi yang sudah diumumkan untuk pendaftaran Anda.':'Kelola dan publikasikan hasil seleksi kepada wali santri.'}</p></section><div id="announcementPanel"><div class="announcement-empty">Memuat pengumuman...</div></div>`;
-  try{const r=force?await server('getAnnouncementPageData',state.token):(pageDataCached('announcement')||await warmPageData('announcement',()=>server('getAnnouncementPageData',state.token)));if(!r?.success){$('announcementPanel').innerHTML=showMessage(r?.message||'Gagal memuat pengumuman.');return}renderAnnouncementPanel(r)}catch(e){$('announcementPanel').innerHTML=showMessage('Gagal memuat pengumuman.')}
+  const isWali=hasAnyRole(['WALI']);
+  $('content').innerHTML=`<section class="hero"><h2>Pengumuman</h2><p>${isWali?'Lihat informasi tes, hasil seleksi, dan tahapan daftar ulang pendaftaran Anda.':'Kelola dan publikasikan hasil seleksi kepada wali santri.'}</p></section><div id="announcementPanel"><div class="announcement-empty">Memuat informasi...</div></div>`;
+  const loadPageData=(page,fn)=>force?server(fn,state.token):(pageDataCached(page)||warmPageData(page,()=>server(fn,state.token)));
+  try{
+    const tasks=[loadPageData('announcement','getAnnouncementPageData')];
+    if(isWali){tasks.push(loadPageData('selection','getSelectionPageData'));tasks.push(loadPageData('reregistration','getReregistrationPageData'));}
+    const results=await Promise.allSettled(tasks);
+    const announcement=results[0].status==='fulfilled'?results[0].value:{success:false,message:'Gagal memuat pengumuman.'};
+    const waliData=isWali?{
+      selection:results[1]?.status==='fulfilled'?results[1].value:{success:false,message:'Informasi tes tidak dapat dimuat.'},
+      reregistration:results[2]?.status==='fulfilled'?results[2].value:{success:false,message:'Informasi daftar ulang tidak dapat dimuat.'}
+    }:null;
+    if(isWali&&waliData.selection?.success)state.selectionData=waliData.selection;
+    renderAnnouncementPanel(announcement,waliData);
+  }catch(e){
+    renderAnnouncementPanel({success:false,message:'Gagal memuat pengumuman.'},isWali?{
+      selection:{success:false,message:'Informasi tes tidak dapat dimuat.'},
+      reregistration:{success:false,message:'Informasi daftar ulang tidak dapat dimuat.'}
+    }:null);
+  }
 }
+
 function announcementStatusLabel(s){return ({PASSED:'Lulus',NOT_PASSED:'Tidak lulus',WAITLIST:'Cadangan',PENDING:'Menunggu hasil'})[String(s||'').toUpperCase()]||String(s||'-')}
-function renderAnnouncementPanel(data){
-  const el=$('announcementPanel');if(!el)return;const admin=!!data.canPublish,items=data.items||[];
+function renderAnnouncementPanel(data,waliData=null){
+  const el=$('announcementPanel');if(!el)return;
+  if(waliData){
+    el.innerHTML=`<section class="card announcement-workflow-section"><div class="section-title" style="margin-top:0">Informasi Tes</div><div id="announcementWaliSelection"></div></section><section class="card announcement-workflow-section"><div class="section-title" style="margin-top:0">Informasi Pengumuman</div><div id="announcementWaliResults"></div></section><section class="card announcement-workflow-section"><div class="section-title" style="margin-top:0">Informasi Daftar Ulang</div><div id="announcementWaliReregistration"></div></section>`;
+    const selectionEl=$('announcementWaliSelection'),resultsEl=$('announcementWaliResults'),reregEl=$('announcementWaliReregistration');
+    if(waliData.selection?.success)renderSelectionWali(waliData.selection,selectionEl);else if(selectionEl)selectionEl.innerHTML=showMessage(waliData.selection?.message||'Informasi tes tidak dapat dimuat.');
+    if(data?.success===false){if(resultsEl)resultsEl.innerHTML=showMessage(data.message||'Gagal memuat pengumuman.');}else renderAnnouncementList(data,resultsEl);
+    if(waliData.reregistration?.success)renderReregistrationPanel(waliData.reregistration,reregEl);else if(reregEl)reregEl.innerHTML=showMessage(waliData.reregistration?.message||'Informasi daftar ulang tidak dapat dimuat.');
+    return;
+  }
+  renderAnnouncementList(data,el);
+}
+function renderAnnouncementList(data,targetEl){
+  const el=targetEl||$('announcementPanel');if(!el)return;const admin=!!data?.canPublish,items=data?.items||[];
+  if(data?.success===false){el.innerHTML=showMessage(data.message||'Gagal memuat pengumuman.');return;}
   if(!items.length){el.innerHTML='<div class="announcement-empty">Belum ada hasil seleksi yang tersedia untuk pengumuman.</div>';return}
   const rows=items.map(x=>{const status=String(x.status||'').toUpperCase();const published=!!x.isPublished;const cls=status==='PASSED'?'ok':status==='NOT_PASSED'?'bad':'warn';return `<article class="announcement-card"><div class="announcement-top"><div><div class="announcement-title">${esc(x.candidateName||'-')}</div><div class="announcement-sub">${esc(x.registrationNumber||'-')} · Hasil seleksi</div></div><span class="announcement-status ${cls}">${esc(announcementStatusLabel(status))}</span></div><div class="announcement-message">${published?`Diumumkan pada ${esc(String(x.announcementDate||'-'))}.`:'Hasil sudah ditetapkan tetapi belum dipublikasikan.'}${x.note?`<br><span style="display:block;margin-top:5px">Catatan: ${esc(x.note)}</span>`:''}</div>${admin?`<div class="announcement-actions">${published?'<span class="pill ok">Sudah diumumkan</span>':`<button class="btn btn-primary" onclick="publishAnnouncementUI('${esc(x.registrationId)}')">Publikasikan</button>`}</div>`:''}${!admin&&hasAnyRole(['WALI'])&&status==='PASSED'&&published?`<div class="announcement-actions"><button class="btn btn-primary" onclick="goPage('reregistration')">Lanjut Daftar Ulang</button></div>`:''}</article>`}).join('');
   el.innerHTML=`<div class="announcement-list">${rows}</div>`;
 }
+
 async function publishAnnouncementUI(registrationId){
   showConfirm('Publikasikan pengumuman?','Hasil seleksi akan dapat dilihat oleh wali dan notifikasi akan dikirim ke akun wali.',async()=>{
     loading(true,'Mempublikasikan pengumuman...');
@@ -1362,12 +1398,13 @@ async function renderReregistration(force=false){
   }catch(e){$('reregPanel').innerHTML=showMessage('Gagal memuat data daftar ulang.');}
 }
 function reregStatusLabel(s){return ({PENDING:'Menunggu proses',PAYMENT_PENDING:'Menunggu pembayaran',PAYMENT_VERIFIED:'Pembayaran terverifikasi',COMPLETED:'Selesai'})[String(s||'').toUpperCase()]||String(s||'-')}
-function renderReregistrationPanel(data){
-  const el=$('reregPanel');if(!el)return;
-  const admin=!!data.canManage, items=data.items||[];
+function renderReregistrationPanel(data,targetEl=null){
+  const el=targetEl||$('reregPanel');if(!el)return;
+  const admin=!!data.canManage,items=data.items||[];
   if(!items.length){el.innerHTML=`<div class="status-card"><div class="status-row"><div><b>Belum ada Daftar Ulang</b><div class="muted" style="margin-top:5px">Daftar Ulang hanya dibuka untuk pendaftaran yang hasil seleksinya sudah diumumkan sebagai Lulus.</div></div></div></div>`;return;}
   el.innerHTML=`<div class="status-card"><div class="status-row"><div><b>Ringkasan</b><div class="muted" style="margin-top:4px">${Number(data.summary?.completed||0)} selesai · ${Number(data.summary?.pending||0)} masih diproses</div></div></div></div><div class="registration-list" style="margin-top:10px">${items.map(x=>{const rr=x.reregistration||{},reg=x.registration||{},c=x.candidate||{},docs=x.documents||{},pay=x.payment;const ready=!!x.readyToComplete;const st=String(rr.status||'PENDING').toUpperCase();return `<article class="registration-item"><div class="registration-item-top"><div><div class="registration-name">${esc(c.fullName||'-')}</div><div class="registration-number">${esc(reg.registrationNumber||reg.registrationId||'-')}</div></div><span class="pill ${st==='COMPLETED'?'ok':''}">${esc(reregStatusLabel(st))}</span></div><div class="registration-meta"><span>Dokumen wajib: ${Number(docs.verifiedCount||0)}/${Number(docs.requiredCount||0)} terverifikasi</span><span>${pay?`Daftar Ulang: Rp ${Number(pay.amount||0).toLocaleString('id-ID')}`:'Tagihan belum tersedia'}</span></div>${docs.missing?.length?`<div class="status-card" style="margin:10px 0 0;background:#fff8ef;box-shadow:none"><b>Dokumen perlu dilengkapi</b><div class="muted" style="margin-top:5px">${docs.missing.map(v=>esc(v)).join(', ')}</div></div>`:'<div class="registration-meta" style="margin-top:8px"><span>✓ Dokumen wajib sudah lengkap/terverifikasi.</span></div>'}${pay?`<div class="registration-meta" style="margin-top:8px"><span>Status pembayaran: ${esc(pay.status==='PAID'?'LUNAS':pay.paymentStatus==='SUBMITTED'?'MENUNGGU VERIFIKASI':pay.paymentStatus==='REJECTED'?'DITOLAK':pay.status==='PAYMENT_REVIEW'?'MENUNGGU VERIFIKASI':'BELUM BAYAR')}</span>${pay.dueDate?`<span>Jatuh tempo: ${esc(pay.dueDate)}</span>`:''}</div>`:''}<div class="registration-actions" style="margin-top:10px">${docs.missing?.length&&hasAnyRole(['WALI'])?`<button class="btn btn-secondary" onclick="openDocumentsForRegistration('${esc(reg.registrationId)}')">Lengkapi Dokumen</button>`:''}${pay&&String(pay.status)!=='PAID'&&hasAnyRole(['WALI'])?`<button class="btn btn-primary" onclick="goPage('payments')">Bayar Daftar Ulang</button>`:''}${x.needsOpen&&hasAnyRole(['WALI'])?`<button class="btn btn-primary" onclick="openReregistrationUI('${esc(reg.registrationId)}')">Buka Daftar Ulang</button>`:''}${admin&&ready&&st!=='COMPLETED'?`<button class="btn btn-primary" onclick="finalizeReregistrationUI('${esc(reg.registrationId)}')">Selesaikan Daftar Ulang</button>`:''}</div></article>`}).join('')}</div>`;
 }
+
 async function openReregistrationUI(registrationId){loading(true,'Membuka daftar ulang...');try{const r=await server('openReregistration',state.token,registrationId);if(r.success){showToast(r.message,'success');await renderReregistration()}else showAlert('Belum dapat dibuka',r.message||'Daftar ulang belum dapat dibuka.','warning')}catch(e){showAlert('Gagal membuka daftar ulang','Terjadi gangguan saat membuka daftar ulang.','error')}finally{loading(false)}}
 async function finalizeReregistrationUI(registrationId){showConfirm('Selesaikan Daftar Ulang?','Pastikan dokumen wajib sudah lengkap dan pembayaran Daftar Ulang sudah lunas.',async()=>{loading(true,'Menyelesaikan daftar ulang...');try{const r=await server('finalizeReregistration',state.token,registrationId);if(r.success){showToast(r.message,'success');await renderReregistration()}else showAlert('Belum dapat diselesaikan',r.message||'Periksa dokumen dan pembayaran.','warning')}catch(e){showAlert('Gagal menyelesaikan','Terjadi gangguan saat menyimpan daftar ulang.','error')}finally{loading(false)}} ,'Selesaikan');}
 async function renderWaliVerificationStatus(){
