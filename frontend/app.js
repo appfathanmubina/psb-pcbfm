@@ -596,8 +596,8 @@ function buildMobileNav(){
   const all=buildRoleNav();
   if(all.length<=5)return all;
 
-  // Maksimal 5 tombol di bottom nav. Jika menu role lebih dari 5,
-  // empat menu utama ditampilkan langsung dan sisanya masuk ke Lainnya.
+  // Umumnya maksimal 5 tombol. Untuk Wali, Pengumuman ditampilkan setelah Dokumen
+  // sehingga ada 6 tombol termasuk Lainnya; menu Tes dan Daftar Ulang tetap tersedia.
   const preferred={
     SUPERADMIN:['home','applicants','reports','announcement'],
     ADMIN_PSB:['home','applicants','reports','announcement'],
