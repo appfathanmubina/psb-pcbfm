@@ -52,6 +52,8 @@ jobs:
         run: node tests/document-upload-resilience.test.js
       - name: Test payment proof upload lock and commit resilience
         run: node tests/payment-upload-resilience.test.js
+      - name: Test payment partial-commit recovery safeguards
+        run: node tests/payment-partial-commit-recovery.test.js
       - name: Test ScriptLock timeout and batch-write safeguards
         run: node tests/script-lock-safeguards.test.js
       - name: Test incident mutation ScriptLock and batch-write safeguards

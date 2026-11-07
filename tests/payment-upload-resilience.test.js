@@ -25,8 +25,8 @@ assert.match(upload, /lock\.releaseLock\(\);\s*lockAcquired=false;\s*\n\s*stage=
   'Drive file creation must not hold the global ScriptLock');
 assert.match(upload, /stage='RECHECK_DUPLICATE_PAYMENT'/,
   'payment upload must recheck duplicate submissions before commit');
-assert.match(upload, /if\(paymentRowWritten\)\s*\{\s*return\s*\{/,
-  'a committed payment row must never be reported as failed and retried');
+assert.match(upload, /if\(paymentRowWritten\)\s*\{[\s\S]*?PSB_PAYMENT_BILL_STATUS_RECOVERY_FAILED[\s\S]*?return\s*\{/,
+  'a committed payment row must recover the bill status before returning success, never prompting a duplicate retry');
 assert.match(upload, /if\(uploadedFile\)\s*\{\s*try\{uploadedFile\.setTrashed\(true\)/,
   'uncommitted Drive files must be cleaned up after failed commits');
 assert.match(upload, /PSB_PAYMENT_UPLOAD_FAILED stage=/,

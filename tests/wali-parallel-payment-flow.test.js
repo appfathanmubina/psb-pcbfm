@@ -45,7 +45,7 @@ assert.match(submitRegistration, /Verifikasi PSB dimulai setelah pembayaran diko
 const verifyPayment = section(backend, 'function verifyPayment(sessionToken,payload)', 'function getSelectionPageData(sessionToken, registrationId)');
 assert.match(verifyPayment, /notifyUsersByRoles_\(\['SUPERADMIN','ADMIN_PSB','VERIFIKATOR'\]/);
 assert.match(verifyPayment, /notifyRegistrationOwner_\(p\.registrationId/);
-assert.match(verifyPayment, /finally \{ lock\.releaseLock\(\); \}[\s\S]*notifyRegistrationOwner_\(p\.registrationId/, 'Payment verification notifications must be sent after releasing ScriptLock');
+assert.match(verifyPayment, /finally\s*\{\s*lock\.releaseLock\(\);\s*\}[\s\S]*notifyRegistrationOwner_\(p\.registrationId/, 'Payment verification notifications must be sent after releasing ScriptLock');
 assert.match(verifyPayment, /Alasan penolakan pembayaran wajib diisi/i);
 assert.match(verifyPayment, /note\.length>500/);
 
