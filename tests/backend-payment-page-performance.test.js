@@ -83,7 +83,7 @@ assert.match(frontend, /server\('getPaymentQueue',state\.token,state\.paymentQue
   'Frontend must send global search and status filters to the backend');
 assert.match(frontend, /paymentQueueFilters:\{search:'',status:''\}/,
   'Queue filters must persist in frontend state across pagination');
-assert.match(frontend, /value="\$\{esc\(filters\.search\|\|'\'\)\}"/,
+assert.ok(frontend.includes("value=\"\u0024{esc(filters.search||'')}\""),
   'Search text must be restored when the queue page is re-rendered');
 assert.match(frontend, /state\.paymentQueueSearchTimer=setTimeout/,
   'Search input must debounce global backend requests');
