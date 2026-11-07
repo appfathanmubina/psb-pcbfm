@@ -21,7 +21,8 @@ assert.match(paidIds, /verifiedPayments\[String\(x\.billId\s*\|\|\s*''\)\]/);
 // Admin lists and the Wali home must select the newest active bill, newest
 // payment attempt, and newest non-replaced document using the same timestamps.
 const statusMap = section('getRegistrationPaymentDocumentStatusMap_');
-assert.match(statusMap, /status\s*\|\|\s*''\)\.toUpperCase\(\)!==\s*'CANCELLED'/);
+assert.match(statusMap, /String\(x\.status\|\|''\)\.toUpperCase\(\)==='CANCELLED'\)return/,
+  'cancelled bills must be excluded before payment status aggregation');
 assert.match(statusMap, /createdAt\|\|\s*''\)\.localeCompare/);
 assert.match(statusMap, /billByReg\[id\]\)\s*billByReg\[id\]=x/);
 assert.match(statusMap, /status\s*\|\|\s*''\)\.toUpperCase\(\)!=='REPLACED'/);
