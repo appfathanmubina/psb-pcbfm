@@ -2242,7 +2242,7 @@ function getPaymentQueue(sessionToken, page, filters) {
   // Full bill rows and related detail are still fetched only for the selected page.
   const billFields = query
     ? ['billId','registrationId','paymentTypeId','status','createdAt']
-    : ['status','createdAt'];
+    : statusFilter ? ['billId','status','createdAt'] : ['status','createdAt'];
   const billRefs = sheetRowsByFields_(billSheet, billFields);
   const activeBillRefs = billRefs.filter(x=>String(x.status||'').toUpperCase()!=='CANCELLED');
   const allBills = activeBillRefs.length;
