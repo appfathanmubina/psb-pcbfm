@@ -4757,10 +4757,16 @@ function getRegistrationPaymentDocumentStatusMap_(items) {
 
 function enrichRegistrationList_(items, preloadedMaps) {
   const ss=getDatabaseSpreadsheet_(),maps=preloadedMaps||{};
-  const candidates=maps.candidates||sheetMapById_(ss.getSheetByName(PSB_SHEETS.CANDIDATES),'candidateId');
-  const years=maps.years||sheetMapById_(ss.getSheetByName(PSB_SHEETS.MASTER_TAHUN_AJARAN),'tahunAjaranId');
-  const waves=maps.waves||sheetMapById_(ss.getSheetByName(PSB_SHEETS.MASTER_GELOMBANG),'gelombangId');
-  const levels=maps.levels||sheetMapById_(ss.getSheetByName(PSB_SHEETS.MASTER_JENJANG),'jenjangId');
+  // Resolve only related records referenced by this result set. The previous
+  // full-sheet maps transferred every candidate and master row on each list call.
+  const candidateIds=items.map(r=>r.candidateId).filter(Boolean);
+  const yearIds=items.map(r=>r.tahunAjaranId).filter(Boolean);
+  const waveIds=items.map(r=>r.gelombangId).filter(Boolean);
+  const levelIds=items.map(r=>r.jenjangId).filter(Boolean);
+  const candidates=maps.candidates||sheetMapByIdForValues_(ss.getSheetByName(PSB_SHEETS.CANDIDATES),'candidateId',candidateIds);
+  const years=maps.years||sheetMapByIdForValues_(ss.getSheetByName(PSB_SHEETS.MASTER_TAHUN_AJARAN),'tahunAjaranId',yearIds);
+  const waves=maps.waves||sheetMapByIdForValues_(ss.getSheetByName(PSB_SHEETS.MASTER_GELOMBANG),'gelombangId',waveIds);
+  const levels=maps.levels||sheetMapByIdForValues_(ss.getSheetByName(PSB_SHEETS.MASTER_JENJANG),'jenjangId',levelIds);
   const workflowStatus=getRegistrationPaymentDocumentStatusMap_(items);
   return items.sort((a,b)=>String(b.updatedAt||'').localeCompare(String(a.updatedAt||''))).map(r=>Object.assign({},r,{
     candidateName:candidates[r.candidateId]?.name||candidates[r.candidateId]?.fullName||'-',
@@ -4769,6 +4775,14 @@ function enrichRegistrationList_(items, preloadedMaps) {
     jenjangName:levels[r.jenjangId]?.name||r.jenjangId,
     ...(workflowStatus[String(r.registrationId||'')]||{})
   }));
+}
+
+function sheetMapByIdForValues_(sheet,idField,wantedValues) {
+  const out=Object.create(null);
+  sheetRowsMatchingValues_(sheet,idField,wantedValues).forEach(item=>{
+    out[String(item[idField]||'')]=item;
+  });
+  return out;
 }
 function getActiveMasterItems_(masterKey) {
   const def = PSB_MASTER_DEFINITIONS[masterKey];
