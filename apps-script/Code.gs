@@ -4755,10 +4755,9 @@ function nextRegistrationNumber_(sheet, tahunAjaranId) {
   const yearItem = findMasterItemById_('MASTER_TAHUN_AJARAN','tahunAjaranId',tahunAjaranId);
   const match = String(yearItem?.name || getConfig_('ACTIVE_YEAR') || '2027/2028').match(/20\d{2}/);
   const prefix = match ? match[0] : '2027';
-  const rows = sheet.getLastRow() < 2 ? [] : sheet.getRange(2,1,sheet.getLastRow()-1,sheet.getLastColumn()).getValues();
-  const idx = sheet.getRange(1,1,1,sheet.getLastColumn()).getValues()[0].map(String).indexOf('registrationNumber');
+  const rows = sheetRowsByFields_(sheet, ['registrationNumber']);
   let max = 0;
-  rows.forEach(r=>{const m=String(r[idx]||'').match(new RegExp('^PSB-'+prefix+'-(\d+)$'));if(m)max=Math.max(max,Number(m[1])||0);});
+  rows.forEach(r=>{const m=String(r.registrationNumber||'').match(new RegExp('^PSB-'+prefix+'-(\\d+)$'));if(m)max=Math.max(max,Number(m[1])||0);});
   return 'PSB-'+prefix+'-'+String(max+1).padStart(4,'0');
 }
 
