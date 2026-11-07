@@ -1419,8 +1419,39 @@ function renderRegistrationDetail(d,target){const r=d.registration,c=d.candidate
 async function renderApplicants(force=false){
   if(!hasAnyRole(['SUPERADMIN','ADMIN_PSB','VERIFIKATOR'])){renderMore();return;}
   $('content').innerHTML=`<section class="hero"><h2>Pendaftar</h2><p>Daftar pendaftaran yang masuk ke sistem.</p></section><div id="applicantPanel"><div class="empty-state">Memuat pendaftar...</div></div>`;
-  try{const r=force?await server('getRegistrationList',state.token,{}):(pageDataCached('applicants')||await warmPageData('applicants',()=>server('getRegistrationList',state.token,{})));if(!r?.success){$('applicantPanel').innerHTML=showMessage(r.message);return}const items=r.registrations||[];$('applicantPanel').innerHTML=items.length?`<div class="registration-list">${items.map(x=>`<article class="registration-item"><div class="registration-item-top"><div><div class="registration-name">${esc(x.candidateName||'-')}</div><div class="registration-number">${esc(x.registrationNumber||'-')}</div></div><span class="pill">${esc(statusLabel(x.status))}</span></div><div class="registration-meta"><span>${esc(x.jenjangName||'-')} · ${esc(x.gelombangName||'-')}</span><span>Pembayaran: ${esc(x.formPaymentStatusLabel||'Belum diketahui')}</span><span>Dokumen: ${esc(x.documentsStatusLabel||'Belum diketahui')}</span></div><div class="registration-actions"><button class="btn btn-secondary" onclick="viewRegistration('${esc(x.registrationId)}')">Lihat</button><button class="btn btn-primary" onclick="openDocumentsForRegistration('${esc(x.registrationId)}')">Dokumen</button></div></article>`).join('')}</div>`:'<div class="empty-state">Belum ada pendaftaran masuk.</div>';}catch(e){$('applicantPanel').innerHTML=showMessage('Gagal memuat pendaftar.');}
+  try{
+    const r=force?await server('getRegistrationList',state.token,{}):(pageDataCached('applicants')||await warmPageData('applicants',()=>server('getRegistrationList',state.token,{})));
+    if(!r?.success){$('applicantPanel').innerHTML=showMessage(r.message);return;}
+    state.applicantList=r.registrations||[];
+    renderApplicantTable();
+  }catch(e){$('applicantPanel').innerHTML=showMessage('Gagal memuat pendaftar.');}
 }
+function renderApplicantTable(){
+  const el=$('applicantPanel');if(!el)return;
+  const items=state.applicantList||[];
+  el.innerHTML=`<div class="staff-list-toolbar"><div class="search-box"><span class="search-icon">${ico('search')}</span><input id="applicantSearch" class="search-input" placeholder="Cari nama atau nomor pendaftaran..." autocomplete="off" oninput="filterApplicantTable()"></div><div class="filter-box professional-filter"><span class="filter-label">Status</span><select id="applicantStatus" class="select-field compact professional-select" onchange="filterApplicantTable()"><option value="">Semua status</option><option value="DRAFT">Draft</option><option value="SUBMITTED">Pendaftaran dikirim</option><option value="UNDER_REVIEW">Sedang diverifikasi</option><option value="REVISION">Perlu perbaikan</option><option value="VERIFIED">Terverifikasi</option><option value="SELECTION">Seleksi</option><option value="PASSED">Lulus</option><option value="NOT_PASSED">Tidak lulus</option><option value="REREGISTRATION">Daftar ulang</option><option value="COMPLETED">Selesai</option></select></div><div class="staff-result-count" id="applicantCount"></div></div><div id="applicantTable"></div>`;
+  filterApplicantTable();
+}
+function filterApplicantTable(){
+  const q=String($('applicantSearch')?.value||'').trim().toLowerCase();
+  const status=String($('applicantStatus')?.value||'');
+  const items=(state.applicantList||[]).filter(x=>
+    (!status||String(x.status||'')===status)&&
+    (!q||String(x.candidateName||'').toLowerCase().includes(q)||String(x.registrationNumber||'').toLowerCase().includes(q))
+  );
+  const count=$('applicantCount');if(count)count.textContent=`Menampilkan ${items.length} dari ${(state.applicantList||[]).length} pendaftar`;
+  const columns=[
+    {label:'No.',className:'staff-col-number',render:(x,i)=>String(i+1)},
+    {label:'Calon Santri',render:x=>`<div class="staff-primary-text">${esc(x.candidateName||'-')}</div><div class="staff-secondary-text">${esc(x.registrationNumber||'-')}</div>`},
+    {label:'Jenjang / Gelombang',render:x=>`${esc(x.jenjangName||'-')}<div class="staff-secondary-text">${esc(x.gelombangName||'-')}</div>`},
+    {label:'Pembayaran',render:x=>esc(x.formPaymentStatusLabel||'Belum diketahui')},
+    {label:'Dokumen',render:x=>esc(x.documentsStatusLabel||'Belum diketahui')},
+    {label:'Status',render:x=>`<span class="pill ${String(x.status)==='VERIFIED'?'ok':''}">${esc(statusLabel(x.status))}</span>`},
+    {label:'Aksi',className:'staff-col-actions',render:x=>`<div class="staff-table-actions"><button class="btn btn-secondary staff-table-action" onclick="viewRegistration('${esc(x.registrationId)}')">Lihat</button><button class="btn btn-primary staff-table-action" onclick="openDocumentsForRegistration('${esc(x.registrationId)}')">Dokumen</button></div>`}
+  ];
+  const target=$('applicantTable');if(target)target.innerHTML=renderStaffDataTable(items,columns,'Belum ada pendaftaran yang sesuai dengan filter.');
+}
+
 async function renderDocuments(registrationId,force=false){
   if(!hasAnyRole(['WALI','SUPERADMIN','ADMIN_PSB','VERIFIKATOR'])){renderMore();return;}
   state.documentRegistrationId=registrationId||state.documentRegistrationId||'';
