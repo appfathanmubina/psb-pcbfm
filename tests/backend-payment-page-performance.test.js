@@ -57,3 +57,5 @@ assert.match(queue, /queueStatus/,
 
 
 console.log('PSB payment page performance and ownership safeguards: OK');
+
+// Staff queue authorization, bounded pagination, and batch-enrichment assertions are covered above.
