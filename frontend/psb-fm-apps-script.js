@@ -486,12 +486,12 @@ function buildMobileNav(){
   const all=buildRoleNav();
   if(all.length<=5)return all;
 
-  // Maksimal 5 tombol di bottom nav. Jika menu role lebih dari 5,
-  // empat menu utama ditampilkan langsung dan sisanya masuk ke Lainnya.
+  // Umumnya maksimal 5 tombol. Untuk Wali, Pengumuman ditampilkan setelah Dokumen
+  // sehingga ada 6 tombol termasuk Lainnya; menu Tes dan Daftar Ulang tetap tersedia.
   const preferred={
     SUPERADMIN:['home','applicants','reports','announcement'],
     ADMIN_PSB:['home','applicants','reports','announcement'],
-    WALI:['home','registration','payments','documents']
+    WALI:['home','registration','payments','documents','announcement']
   };
   const role=hasAnyRole(['SUPERADMIN'])?'SUPERADMIN':hasAnyRole(['ADMIN_PSB'])?'ADMIN_PSB':hasAnyRole(['WALI'])?'WALI':'';
   const ids=preferred[role]||all.slice(0,4).map(x=>x[0]);
@@ -507,7 +507,7 @@ function renderApp(){
   const roleLabel=hasAnyRole(['SUPERADMIN'])?'SUPERADMIN':hasAnyRole(['ADMIN_PSB'])?'ADMIN PSB':hasAnyRole(['VERIFIKATOR'])?'VERIFIKATOR':hasAnyRole(['SELEKSI'])?'SELEKSI':'WALI';
   const nav=navButtonsHtml(items,false);
   const side=navButtonsHtml(sideItems,true);
-  $('app').innerHTML=`<aside class="sidebar"><div class="sidebar-nav">${side}</div><div class="sidebar-footer"><button class="side-user side-user-button" onclick="goPage('profile')" title="Buka profil"><div>${ico('user')}</div><div style="min-width:0"><div class="side-user-name">${esc(state.user.name)}</div><div class="side-user-role">${roleLabel}</div></div></button></div></aside><div class="topbar"><div class="brand"><button class="sidebar-toggle" type="button" title="Tampilkan/sembunyikan menu" aria-label="Tampilkan/sembunyikan menu" onclick="toggleSidebar()">${ico('menu')}</button><div class="logo">${appLogoMarkup()}</div><div class="brand-copy"><h1>PSB Fathan Mubina</h1><p>${esc(state.config.ACTIVE_YEAR||'2027/2028')}</p></div><div class="top-actions"><button class="header-action" id="reloadDataBtn" type="button" title="Reload data" aria-label="Reload data" onclick="reloadCurrentData()">${ico('refresh')}</button><button class="header-action notification-bell-wrap" title="Notifikasi" aria-label="Notifikasi" onclick="goPage('notifications')">${ico('bell')}<span id="notificationBadge" class="notification-badge" style="display:none">0</span></button><button class="user-chip" type="button" title="Profil" onclick="goPage('profile')"><span class="user-name">${esc(state.user.name)}</span><span class="user-icon">${ico('user')}</span></button></div></div></div><main class="shell" id="content"></main><nav class="bottom-nav"><div class="nav-inner" style="grid-template-columns:repeat(${items.length},minmax(0,1fr))">${nav}</div></nav>`;
+  $('app').innerHTML=`<aside class="sidebar"><div class="sidebar-nav">${side}</div><div class="sidebar-footer"><button class="side-user side-user-button" onclick="goPage('profile')" title="Buka profil"><div>${ico('user')}</div><div style="min-width:0"><div class="side-user-name">${esc(state.user.name)}</div><div class="side-user-role">${roleLabel}</div></div></button></div></aside><div class="topbar"><div class="brand"><button class="sidebar-toggle" type="button" title="Tampilkan/sembunyikan menu" aria-label="Tampilkan/sembunyikan menu" onclick="toggleSidebar()">${ico('menu')}</button><div class="logo">${appLogoMarkup()}</div><div class="brand-copy"><h1>PSB Fathan Mubina</h1><p>${esc(state.config.ACTIVE_YEAR||'2027/2028')}</p></div><div class="top-actions"><button class="header-action" id="reloadDataBtn" type="button" title="Reload data" aria-label="Reload data" onclick="reloadCurrentData()">${ico('refresh')}</button><button class="header-action notification-bell-wrap" title="Notifikasi" aria-label="Notifikasi" onclick="goPage('notifications')">${ico('bell')}<span id="notificationBadge" class="notification-badge" style="display:none">0</span></button><button class="user-chip" type="button" title="Profil" onclick="goPage('profile')"><span class="user-name">${esc(state.user.name)}</span><span class="user-icon">${ico('user')}</span></button></div></div></div><main class="shell" id="content"></main><nav class="bottom-nav"><div class="nav-inner ${wali?'wali-nav':''}" style="grid-template-columns:repeat(${items.length},minmax(0,1fr))">${nav}</div></nav>`;
   goPage('home');
   updateNotificationBadge();
 }
@@ -566,7 +566,7 @@ async function goPage(page,options={}){
   state.page=page;
   try{sessionStorage.setItem('psb_current_page',page);}catch(e){}
   document.querySelectorAll('.nav-btn,.side-btn').forEach(x=>x.classList.remove('active'));
-  const waliMorePages=['verificationStatus','selection','announcement','reregistration'];
+  const waliMorePages=['verificationStatus','selection','reregistration'];
   const mobileNavPage=hasAnyRole(['WALI'])&&waliMorePages.includes(page)?'more':page;
   $('nav-'+mobileNavPage)?.classList.add('active');$('side-'+page)?.classList.add('active');
   if(!forceReload&&restorePageSnapshot(page)){window.scrollTo({top:0,behavior:'auto'});return;}
@@ -1391,7 +1391,6 @@ function renderMore(){
   if(hasAnyRole(['WALI'])){
     const items=[
       ['selection','Tes','Lihat jadwal tes, status peserta, dan hasil seleksi.','grad'],
-      ['announcement','Pengumuman','Lihat hasil seleksi yang sudah dipublikasikan.','megaphone'],
       ['reregistration','Daftar Ulang','Lanjutkan proses akhir jika calon santri dinyatakan lulus.','refresh']
     ];
     $('content').innerHTML=`<section class="hero"><h2>Lainnya</h2><p>Menu lanjutan sesuai tahapan penerimaan santri baru.</p></section><div class="wali-more-list">${items.map(([page,title,desc,icon])=>`<button type="button" class="status-card wali-more-item" onclick="goPage('${page}')"><span class="wali-more-icon">${ico(icon)}</span><span class="wali-more-copy"><b>${title}</b><span>${desc}</span></span><span class="wali-flow-open" aria-hidden="true">${ico('chevron-right')}</span></button>`).join('')}</div>`;
