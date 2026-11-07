@@ -5,6 +5,7 @@
   'use strict';
 
   const BRIDGE_URL = "https://script.google.com/macros/s/AKfycbxs1zVZdEFwbhHFVO5nGHHhEqHQDdjVOVjfnWc1Kc6mhD5t_n8VgrdUTKhAvg8JGiau/exec";
+  const BRIDGE_CLIENT_VERSION = '32.18.0';
   const BRIDGE_ORIGIN = new URL(BRIDGE_URL).origin;
   const BRIDGE_SOURCE = 'psb-fm-api-bridge';
   const TIMEOUT_MS = 30000;
@@ -58,8 +59,12 @@
       return;
     }
 
+    // Apps Script HTML Service may wrap/redirect the document through a
+    // Google-controlled frame. In that case event.source can be a wrapper
+    // WindowProxy rather than the iframe element we created. The trusted
+    // Google origin plus our 128-bit one-time challenge authenticates this
+    // handshake without depending on WindowProxy identity.
     if ((data.type === 'ready' || data.type === 'error') && tokenHandshake &&
-        event.source === tokenHandshake.iframe.contentWindow &&
         String(data.challenge || '') === tokenHandshake.challenge) {
       if (data.type === 'error') {
         const fail = tokenHandshake.reject;
@@ -103,13 +108,9 @@
       });
       return;
     }
-    if (event.source !== item.iframe.contentWindow) {
-      console.warn('[PSB Bridge] Respons diabaikan: sumber frame tidak cocok.', {
-        challenge: challenge.slice(0, 8),
-        origin: event.origin
-      });
-      return;
-    }
+    // RPC response is authenticated by trusted origin, unpredictable
+    // per-request challenge and exact request ID. Do not rely on
+    // event.source because Apps Script may deliver through a wrapper frame.
     if (String(data.id || '') !== item.requestId) {
       console.warn('[PSB Bridge] Respons diabaikan: request ID tidak cocok.', {
         challenge: challenge.slice(0, 8),
@@ -204,7 +205,7 @@
 
         iframe.src = BRIDGE_URL + '?bridge=1&origin=' +
           encodeURIComponent(location.origin) + '&challenge=' +
-          encodeURIComponent(challenge) + '&v=32.17.0&cb=' + Date.now();
+          encodeURIComponent(challenge) + '&v=' + BRIDGE_CLIENT_VERSION + '&cb=' + Date.now();
         document.body.appendChild(iframe);
       }
 
