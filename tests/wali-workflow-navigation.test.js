@@ -7,12 +7,18 @@ const css = fs.readFileSync('frontend/styles.css', 'utf8');
 const appScriptHtml = fs.readFileSync('apps-script/Index.html', 'utf8');
 
 for (const [name, source] of [['PWA', app], ['Apps Script shell', shell]]) {
-  assert.match(source, /WALI:\['home','registration','payments','documents','announcement'\]/,
-    name + ': Wali bottom navigation must show Pengumuman immediately after Dokumen, with Lainnya retained');
+  assert.match(source, /const waliIds=\['home','registration','payments','documents','announcement'\]/,
+    name + ': Wali bottom navigation must show exactly five direct menus, with Pengumuman after Dokumen');
   assert.match(source, /if\(wali\)return \[\s*\['home','Beranda','home'\],\['registration','Pendaftaran','clipboard'\],\['payments','Pembayaran','wallet'\],\['documents','Dokumen','file'\]/,
     name + ': Wali sidebar must put Pembayaran before Dokumen');
-  assert.match(source, /\['more','Lainnya','settings'\]/,
-    name + ': Wali navigation must retain More after its five direct buttons');
+  const mobileNavStart=source.indexOf('function buildMobileNav(){');
+  const mobileNavEnd=source.indexOf('\nfunction navButtonsHtml',mobileNavStart);
+  const mobileNav=source.slice(mobileNavStart,mobileNavEnd);
+  const waliBranch=mobileNav.slice(mobileNav.indexOf("if(role==='WALI')"),mobileNav.indexOf('if(all.length<=5)'));
+  assert.match(waliBranch,/return waliIds\.map/,
+    name + ': Wali bottom navigation must return only the five direct menus');
+  assert.doesNotMatch(waliBranch,/more|Lainnya/,
+    name + ': Wali bottom navigation must not add Lainnya');
   assert.match(source, /const stageActions=\['registration','payments','documents','verification','selection','announcement','reregistration'\]/,
     name + ': all seven workflow stages must map to their matching pages');
   assert.match(source, /class=\"wali-flow-item wali-flow-clickable[^\"]*\" onclick=\"waliFlowAction\(/,
@@ -32,13 +38,13 @@ for (const [name, source] of [['PWA', app], ['Apps Script shell', shell]]) {
     name + ': Wali More menu must not duplicate Pengumuman already in the bottom navigation');
   assert.match(source, /\['reregistration','Daftar Ulang'/,
     name + ': Wali More menu must include Daftar Ulang');
-  assert.match(source, /waliMorePages=\['verificationStatus','selection','reregistration'\]/,
-    name + ': More must remain active only for Wali pages still inside More');
+  assert.match(source, /page==='verificationStatus'\?'home':\['selection','reregistration'\]\.includes\(page\)\?'announcement':page/,
+    name + ': hidden Wali workflow pages must highlight their related visible bottom-nav destination');
 }
-assert.match(css, /\.nav-inner\.wali-nav \.nav-btn\{[^}]*font-size:9px/,
-  'PWA Wali bottom navigation must use compact styling for six buttons');
-assert.match(appScriptHtml, /\.nav-inner\.wali-nav \.nav-btn\{[^}]*font-size:9px/,
-  'Apps Script Wali bottom navigation must use the same compact styling');
+assert.match(css, /\.nav-inner\.wali-nav \.nav-btn\{[^}]*font-size:10px/,
+  'PWA Wali bottom navigation must use readable styling for five buttons');
+assert.match(appScriptHtml, /\.nav-inner\.wali-nav \.nav-btn\{[^}]*font-size:10px/,
+  'Apps Script Wali bottom navigation must use the same readable styling');
 assert.match(css, /\.header-action\{[^}]*overflow:visible/,
   'Header action must not clip the notification badge');
 assert.match(css, /\.notification-badge\{[^}]*z-index:3[^}]*min-width:22px[^}]*height:22px/,
