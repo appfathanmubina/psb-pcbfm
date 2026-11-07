@@ -9,12 +9,12 @@ assert.notEqual(start, -1, 'Selection page backend exists');
 assert.ok(end > start, 'Selection page function boundary exists');
 const page = code.slice(start, end);
 
-const viewDeclaration = code.match(/^const PSB_SELECTION_VIEW_ROLES = \\[([^\\]]+)\\];$/m);
+const viewDeclaration = code.match(/^const PSB_SELECTION_VIEW_ROLES = \[([^\]]+)\];$/m);
 assert.ok(viewDeclaration, 'Backend must declare the role allowlist used by getSelectionPageData');
 const viewRoles = viewDeclaration[1].split(',').map(value => value.trim().replace(/^['"]|['"]$/g, ''));
 assert.deepEqual(viewRoles, ['WALI', 'SUPERADMIN', 'ADMIN_PSB', 'SELEKSI', 'VERIFIKATOR'],
   'Tes page view roles must include Wali and the supported operational roles');
-const announcementDeclaration = code.match(/^const PSB_ANNOUNCEMENT_VIEW_ROLES = \\[([^\\]]+)\\];$/m);
+const announcementDeclaration = code.match(/^const PSB_ANNOUNCEMENT_VIEW_ROLES = \[([^\]]+)\];$/m);
 assert.ok(announcementDeclaration, 'Announcement view-role allowlist must exist');
 const announcementRoles = announcementDeclaration[1].split(',').map(value => value.trim().replace(/^['"]|['"]$/g, ''));
 assert.deepEqual(viewRoles, announcementRoles,
