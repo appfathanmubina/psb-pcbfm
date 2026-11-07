@@ -27,9 +27,10 @@ for (const sheetName of ['CANDIDATES','GUARDIANS','ADDRESSES','SCHOOLS']) {
 }
 assert.doesNotMatch(batchLookup, /readTable\(/,
   'Registration detail must not load full related tables');
-assert.match(batchLookup, /if \(!fallback\) fallback = found/,
+const indexedLookup = functionSource('findFirstIndexedRow_');
+assert.match(indexedLookup, /if \(!firstMatch\) firstMatch = rowNumber/,
   'Duplicate related rows must preserve the first-row fallback');
-assert.match(batchLookup, /preferPrimary && primaryIdx >= 0/,
+assert.match(indexedLookup, /preferPrimary \? headers\.indexOf\('isPrimary'\) : -1/,
   'Guardian, address, and school selection must preserve primary-row preference');
 
 const verification = functionSource('getVerificationDetail');
