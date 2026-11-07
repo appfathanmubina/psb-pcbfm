@@ -2065,9 +2065,7 @@ function getMyRegistrations(sessionToken) {
   const user = requireRole_(sessionToken, ['WALI','SUPERADMIN','ADMIN_PSB']);
   const sheet = getDatabaseSpreadsheet_().getSheetByName(PSB_SHEETS.REGISTRATIONS);
   if (!sheet || sheet.getLastRow() < 2) return { success:true, registrations:[] };
-  const headers = sheet.getRange(1,1,1,sheet.getLastColumn()).getValues()[0].map(String);
-  const rows = sheet.getRange(2,1,sheet.getLastRow()-1,sheet.getLastColumn()).getValues();
-  const items = rows.map((r,i) => rowObject_(headers,r,i+2)).filter(x => String(x.userId) === String(user.userId));
+  const items = sheetRowsMatchingValues_(sheet, 'userId', [user.userId]);
   return { success:true, registrations: enrichRegistrationList_(items) };
 }
 
