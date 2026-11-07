@@ -2541,7 +2541,10 @@ function getSelectionPageData(sessionToken, registrationId) {
   const regSheet = ss.getSheetByName(PSB_SHEETS.REGISTRATIONS);
   const registrationRows = isWali
     ? sheetRowsMatchingValues_(regSheet, 'userId', [actor.userId])
-    : sheetRows_(regSheet);
+    : sheetRowsByFields_(regSheet, [
+        'registrationId','candidateId','tahunAjaranId','gelombangId','jenjangId',
+        'registrationNumber','status','userId','updatedAt'
+      ]);
   const registrationById = {};
   registrationRows.forEach(r => {
     const key = String(r.registrationId || '');
@@ -2549,9 +2552,10 @@ function getSelectionPageData(sessionToken, registrationId) {
   });
 
   const candidateIds = registrationRows.map(r => String(r.candidateId || '')).filter(Boolean);
+  const candidateSheet = ss.getSheetByName(PSB_SHEETS.CANDIDATES);
   const candidateRows = isWali
-    ? sheetRowsMatchingValues_(ss.getSheetByName(PSB_SHEETS.CANDIDATES), 'candidateId', candidateIds)
-    : sheetRows_(ss.getSheetByName(PSB_SHEETS.CANDIDATES));
+    ? sheetRowsMatchingValues_(candidateSheet, 'candidateId', candidateIds)
+    : sheetRowsByFields_(candidateSheet, ['candidateId','name','fullName']);
   const candidateMap = {};
   candidateRows.forEach(r => {
     const key = String(r.candidateId || '');
@@ -2576,19 +2580,23 @@ function getSelectionPageData(sessionToken, registrationId) {
   const activeYearName = String(getConfig_('ACTIVE_YEAR') || '').trim();
   const activeYear = activeYearId ? findMasterItemById_('MASTER_TAHUN_AJARAN','tahunAjaranId',activeYearId) : getActiveMasterItems_('MASTER_TAHUN_AJARAN').find(x=>String(x.name)===activeYearName);
   const yearId = String(activeYear?.tahunAjaranId || activeYearId || '');
-  const schedules = sheetRows_(ss.getSheetByName(PSB_SHEETS.SELECTION_SCHEDULE))
+  const schedules = sheetRowsByFields_(ss.getSheetByName(PSB_SHEETS.SELECTION_SCHEDULE),
+    ['scheduleId','tahunAjaranId','name','selectionDate','location','isActive'])
     .filter(x=>x.isActive===true || String(x.isActive).toUpperCase()==='TRUE')
     .filter(x=>!yearId || String(x.tahunAjaranId)===yearId)
     .sort((a,b)=>String(a.selectionDate||'').localeCompare(String(b.selectionDate||'')));
 
   const visibleRegistrationIds = registrationRows.map(r => String(r.registrationId || '')).filter(Boolean);
+  const participantSheet = ss.getSheetByName(PSB_SHEETS.SELECTION_PARTICIPANTS);
+  const resultSheet = ss.getSheetByName(PSB_SHEETS.SELECTION_RESULTS);
   const participants = isWali
-    ? sheetRowsMatchingValues_(ss.getSheetByName(PSB_SHEETS.SELECTION_PARTICIPANTS), 'registrationId', visibleRegistrationIds)
-    : sheetRows_(ss.getSheetByName(PSB_SHEETS.SELECTION_PARTICIPANTS));
-  const scores = isWali ? [] : sheetRows_(ss.getSheetByName(PSB_SHEETS.SELECTION_SCORES));
+    ? sheetRowsMatchingValues_(participantSheet, 'registrationId', visibleRegistrationIds)
+    : sheetRowsByFields_(participantSheet, ['participantId','registrationId','scheduleId','status']);
+  const scores = isWali ? [] : sheetRowsByFields_(ss.getSheetByName(PSB_SHEETS.SELECTION_SCORES),
+    ['participantId','component','score','note']);
   const results = isWali
-    ? sheetRowsMatchingValues_(ss.getSheetByName(PSB_SHEETS.SELECTION_RESULTS), 'registrationId', visibleRegistrationIds)
-    : sheetRows_(ss.getSheetByName(PSB_SHEETS.SELECTION_RESULTS));
+    ? sheetRowsMatchingValues_(resultSheet, 'registrationId', visibleRegistrationIds)
+    : sheetRowsByFields_(resultSheet, ['registrationId','status','note','announcementDate']);
 
   // Request-local indexes avoid repeated full-array scans and per-participant
   // related-sheet lookups. Arrays retain sheet order and first-match behavior.
