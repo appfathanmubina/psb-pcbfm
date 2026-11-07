@@ -2247,6 +2247,57 @@ function sheetRowsAtRowNumbers_(sheet, rowNumbers) {
   return output;
 }
 
+/**
+ * Match requested keys using a narrow key-column scan, then fetch only the
+ * requested fields for matching rows. Keeps sheet order and rowNumber.
+ */
+function sheetRowsMatchingValuesByFields_(sheet, keyField, wantedValues, fields) {
+  if (!sheet || sheet.getLastRow() < 2) return [];
+  const wanted = Object.create(null);
+  (wantedValues || []).forEach(value => {
+    const key = String(value == null ? '' : value);
+    if (key) wanted[key] = true;
+  });
+  if (!Object.keys(wanted).length) return [];
+  const lastRow = sheet.getLastRow();
+  const lastColumn = sheet.getLastColumn();
+  if (lastColumn < 1) return [];
+  const headers = sheet.getRange(1, 1, 1, lastColumn).getValues()[0].map(String);
+  const keyIndex = headers.indexOf(String(keyField));
+  const requestedFields = Array.from(new Set([keyField].concat(fields || [])));
+  const indexes = requestedFields.map(field => headers.indexOf(String(field)));
+  if (keyIndex < 0 || indexes.some(index => index < 0)) return [];
+  const keys = sheet.getRange(2, keyIndex + 1, lastRow - 1, 1).getValues();
+  const matchingRows = [];
+  for (let i = 0; i < keys.length; i++) {
+    if (wanted[String(keys[i][0] == null ? '' : keys[i][0])]) matchingRows.push(i + 2);
+  }
+  if (!matchingRows.length) return [];
+  const minIndex = Math.min.apply(null, indexes);
+  const maxIndex = Math.max.apply(null, indexes);
+  const output = [];
+  let blockStart = matchingRows[0];
+  let previousRow = matchingRows[0];
+  function appendBlock_(startRow, endRow) {
+    const values = sheet.getRange(startRow, minIndex + 1, endRow - startRow + 1, maxIndex - minIndex + 1).getValues();
+    values.forEach((row, offset) => {
+      const item = { rowNumber: startRow + offset };
+      requestedFields.forEach((field, i) => { item[field] = row[indexes[i] - minIndex]; });
+      output.push(item);
+    });
+  }
+  for (let i = 1; i < matchingRows.length; i++) {
+    const rowNumber = matchingRows[i];
+    if (rowNumber !== previousRow + 1) {
+      appendBlock_(blockStart, previousRow);
+      blockStart = rowNumber;
+    }
+    previousRow = rowNumber;
+  }
+  appendBlock_(blockStart, previousRow);
+  return output;
+}
+
 function sheetRowsMatchingValues_(sheet, keyField, wantedValues) {
   if (!sheet || sheet.getLastRow() < 2) return [];
   const wanted = Object.create(null);
@@ -3827,7 +3878,7 @@ function getAdvancedReportingData(sessionToken, filters) {
   // Keep last-row-wins candidate mapping, matching the previous full-sheet map.
   const yearRegistrations=regs.filter(r=>String(r.tahunAjaranId||'')===String(yearId));
   const candidateIds=yearRegistrations.map(r=>String(r.candidateId||'')).filter(Boolean);
-  const candidates=sheetRowsMatchingValues_(ss.getSheetByName(PSB_SHEETS.CANDIDATES),'candidateId',candidateIds);
+  const candidates=sheetRowsMatchingValuesByFields_(ss.getSheetByName(PSB_SHEETS.CANDIDATES),'candidateId',candidateIds,['gender']);
   const cm={}; candidates.forEach(x=>cm[String(x.candidateId)]=x);
 
   let filtered=yearRegistrations;
@@ -3838,11 +3889,11 @@ function getAdvancedReportingData(sessionToken, filters) {
   if(fromDate||toDate) filtered=filtered.filter(r=>{const d=new Date(r.createdAt||r.submittedAt||0); return (!fromDate||d>=fromDate)&&(!toDate||d<=toDate);});
 
   const registrationIds=filtered.map(r=>String(r.registrationId||'')).filter(Boolean);
-  const scopedBills=sheetRowsMatchingValues_(ss.getSheetByName(PSB_SHEETS.BILLS),'registrationId',registrationIds);
-  const scopedPayments=sheetRowsMatchingValues_(ss.getSheetByName(PSB_SHEETS.PAYMENTS),'registrationId',registrationIds);
-  const scopedParticipants=sheetRowsMatchingValues_(ss.getSheetByName(PSB_SHEETS.SELECTION_PARTICIPANTS),'registrationId',registrationIds);
-  const scopedResults=sheetRowsMatchingValues_(ss.getSheetByName(PSB_SHEETS.SELECTION_RESULTS),'registrationId',registrationIds);
-  const scopedRereg=sheetRowsMatchingValues_(ss.getSheetByName(PSB_SHEETS.REREGISTRATIONS),'registrationId',registrationIds);
+  const scopedBills=sheetRowsMatchingValuesByFields_(ss.getSheetByName(PSB_SHEETS.BILLS),'registrationId',registrationIds,['status','amount','paymentTypeId']);
+  const scopedPayments=sheetRowsMatchingValuesByFields_(ss.getSheetByName(PSB_SHEETS.PAYMENTS),'registrationId',registrationIds,['status','submittedAt','createdAt']);
+  const scopedParticipants=sheetRowsMatchingValuesByFields_(ss.getSheetByName(PSB_SHEETS.SELECTION_PARTICIPANTS),'registrationId',registrationIds,['createdAt']);
+  const scopedResults=sheetRowsMatchingValuesByFields_(ss.getSheetByName(PSB_SHEETS.SELECTION_RESULTS),'registrationId',registrationIds,['status','announcementDate','createdAt']);
+  const scopedRereg=sheetRowsMatchingValuesByFields_(ss.getSheetByName(PSB_SHEETS.REREGISTRATIONS),'registrationId',registrationIds,['status','createdAt','completedAt','updatedAt']);
   const verifiedPayments=scopedPayments.filter(p=>String(p.status||'').toUpperCase()==='VERIFIED');
   const paidBills=scopedBills.filter(b=>String(b.status||'').toUpperCase()==='PAID');
   const passed=scopedResults.filter(r=>String(r.status||'').toUpperCase()==='PASSED');
