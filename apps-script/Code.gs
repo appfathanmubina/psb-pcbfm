@@ -2491,7 +2491,7 @@ function submitPayment(sessionToken,payload){
     }
 
     stage='WRITE_PAYMENT_RECORD';
-    const headers=latestHeaders, now=new Date(), paymentId=generateId_('PAY'), record={};
+    const headers=initialHeaders, now=new Date(), paymentId=generateId_('PAY'), record={};
     headers.forEach(h=>record[h]='');
     Object.assign(record,{paymentId,billId,registrationId:br.object.registrationId,amount:Number(br.object.amount||0),method:'TRANSFER',proofFileId:fileId,proofFileUrl:fileUrl,status:'SUBMITTED',submittedAt:now,createdAt:now,updatedAt:now});
     const savedRowNumber=paymentSheet.getLastRow()+1;
