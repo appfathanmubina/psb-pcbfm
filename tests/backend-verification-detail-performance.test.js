@@ -12,17 +12,11 @@ function functionSource(name) {
 }
 
 const currentDocs = functionSource('getCurrentDocuments_');
-assert.match(currentDocs, /getRange\(1,1,lastRow,lastColumn\)\.getValues\(\)/,
-  'Current documents must be read in one range request');
-assert.match(currentDocs, /headers\.indexOf\('registrationId'\)/,
-  'Document filtering must use the registrationId column');
-assert.match(currentDocs, /String\(row\[regIdx\] \|\| ''\) !== String\(registrationId\)/,
-  'Raw rows must be filtered to the requested registration before conversion');
-assert.match(currentDocs, /statusIdx >= 0 && String\(row\[statusIdx\] \|\| ''\)\.toUpperCase\(\) === 'REPLACED'/,
+assert.match(currentDocs, /sheetRowsMatchingValues_\(sheet,\s*'registrationId',\s*\[registrationId\]\)/,
+  'Current documents must be read only for the requested registration');
+assert.match(currentDocs, /filter\(document => String\(document\.status \|\| ''\)\.toUpperCase\(\) !== 'REPLACED'\)/,
   'REPLACED documents must remain excluded');
-assert.match(currentDocs, /documents\.push\(rowObject_\(headers,row,i\+1\)\)/,
-  'Only matching current document rows should be converted to objects');
-assert.match(currentDocs, /String\(b\.uploadedAt\|\|''\)\.localeCompare\(String\(a\.uploadedAt\|\|''\)\)/,
+assert.match(currentDocs, /sort\(\(a,b\)=>String\(b\.uploadedAt\|\|''\)\.localeCompare\(String\(a\.uploadedAt\|\|''\)\)\)/,
   'Current documents must remain sorted newest first');
 
 const batchLookup = functionSource('findRegistrationBatch_');
