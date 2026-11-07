@@ -44,8 +44,18 @@ assert.ok(queueEnd > queueStart, 'Staff payment queue backend boundary exists');
 const queue = code.slice(queueStart, queueEnd);
 assert.match(queue, /requireRole_\(sessionToken, PSB_PAYMENT_MANAGE_ROLES\)/,
   'Only payment-managing staff roles may read the global payment queue');
-assert.match(queue, /sheetRowsByFields_\(billSheet, \['status','createdAt'\]\)/,
-  'Queue must scan only status and createdAt columns for counting and ordering');
+assert.match(queue, /sheetRowsByFields_\(billSheet,\s*\['billId','registrationId','paymentTypeId','status','createdAt'\]\)/,
+  'Queue must build a narrow bill index for global search, filtering, and ordering');
+assert.match(queue, /sheetRowsByFields_\(ss\.getSheetByName\(PSB_SHEETS\.REGISTRATIONS\)/,
+  'Global search must index registration number and candidate ID without loading full registration rows');
+assert.match(queue, /sheetRowsByFields_\(ss\.getSheetByName\(PSB_SHEETS\.CANDIDATES\)/,
+  'Global search must index candidate names using a narrow projection');
+assert.match(queue, /sheetRowsByFields_\(ss\.getSheetByName\(PSB_SHEETS\.PAYMENTS\), \['billId','status'\]\)/,
+  'Global status filtering must derive normalized status across all payments');
+assert.match(queue, /\.filter\(item=>[\s\S]*statusFilter[\s\S]*query/,
+  'Status and search filters must be applied before pagination');
+assert.match(queue, /const pageItems = indexed\.slice/,
+  'Pagination must operate on the globally filtered result set');
 assert.match(queue, /sheetRowsAtRowNumbers_\(billSheet,pageBillRefs\.map\(x=>x\.rowNumber\)\)/,
   'Queue must fetch full bill rows only for the requested page');
 assert.doesNotMatch(queue, /sheetRowsByFields_\(billSheet,\s*\['billId','registrationId','paymentTypeId','amount','dueDate','status','createdAt'\]\)/,
@@ -63,3 +73,13 @@ assert.match(queue, /queueStatus/,
 console.log('PSB payment page performance and ownership safeguards: OK');
 
 // Staff queue authorization, bounded pagination, and batch-enrichment assertions are covered above.
+
+const frontend = fs.readFileSync('frontend/app.js', 'utf8');
+assert.match(frontend, /server\('getPaymentQueue',state\.token,state\.paymentQueuePage,filters\)/,
+  'Frontend must send global search and status filters to the backend');
+assert.match(frontend, /paymentQueueFilters:\{search:'',status:''\}/,
+  'Queue filters must persist in frontend state across pagination');
+assert.match(frontend, /value="\$\{esc\(filters\.search\|\|'\'\)\}"/,
+  'Search text must be restored when the queue page is re-rendered');
+assert.match(frontend, /state\.paymentQueueSearchTimer=setTimeout/,
+  'Search input must debounce global backend requests');
