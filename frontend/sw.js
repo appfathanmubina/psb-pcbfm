@@ -1,10 +1,10 @@
-// PSB PWA 32.38.0 — warm bridge transport before login and refresh shell assets.
-const CACHE='psb-pwa-shell-v32-39-0';
+// PSB PWA 32.39.0 — warm bridge transport before login and refresh shell assets.
+const CACHE='psb-pwa-shell-v32-40-0';
 const ASSETS=[
   './',
   './index.html',
-  './manifest.webmanifest?v=32.16.0',
-  './styles.css?v=32.24.0',
+  './manifest.webmanifest?v=32.17.0',
+  './styles.css?v=32.25.0',
   './api-bridge.js?v=32.19.0',
   './app.js?v=32.35.0',
   './assets/logo-fathanmubina.svg?v=32.7.0',
