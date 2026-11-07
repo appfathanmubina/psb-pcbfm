@@ -3319,7 +3319,7 @@ function ensureReregistration_(registrationId, actorUserId, createBill) {
   // Validate bill prerequisites before creating a new reregistration record.
   if (createBill) {
     const paymentType = getActiveMasterItems_('MASTER_JENIS_PEMBAYARAN')
-      .find(x => /daftar\\s*ulang/i.test(String(x.name || '')));
+      .find(x => /daftar\s*ulang/i.test(String(x.name || '')));
     const billSheet = ss.getSheetByName(PSB_SHEETS.BILLS);
     if (!paymentType || !billSheet) return null;
     const bill = ensureReregistrationBill_(found, actorUserId || 'SYSTEM');
