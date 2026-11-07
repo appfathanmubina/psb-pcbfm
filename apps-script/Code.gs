@@ -2986,8 +2986,6 @@ function publishAnnouncement(sessionToken,payload) {
   if(!initial)return fail_('Hasil seleksi belum tersedia.');
   const status=String(initial.object.status||'').toUpperCase();
   if(!['PASSED','NOT_PASSED','WAITLIST'].includes(status))return fail_('Hasil masih menunggu keputusan dan belum dapat diumumkan.');
-  const initialReg=findRegistration_(registrationId); if(!initialReg)return fail_('Pendaftaran tidak ditemukan.');
-  if(!['SELECTION','PASSED'].includes(String(initialReg.registration.status||'').toUpperCase()))return fail_('Pendaftaran belum berada pada tahap yang dapat diumumkan.');
   const headers=resultSheet.getRange(1,1,1,resultSheet.getLastColumn()).getValues()[0].map(String), dateIdx=headers.indexOf('announcementDate');
   if(dateIdx<0)return fail_('Kolom tanggal pengumuman belum tersedia.');
   const lock=LockService.getScriptLock(); try{lock.waitLock(10000);}catch(lockError){return fail_('Server sedang memproses permintaan lain. Silakan coba kembali beberapa saat lagi.');}
