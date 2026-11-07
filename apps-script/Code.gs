@@ -3887,38 +3887,34 @@ function getVerificationQueue(sessionToken, filters) {
   const actor = requireRole_(sessionToken, PSB_VERIFICATION_ROLES);
   const sheet = getDatabaseSpreadsheet_().getSheetByName(PSB_SHEETS.REGISTRATIONS);
   if (!sheet || sheet.getLastRow() < 2) return {success:true, registrations:[]};
-  const headers = sheet.getRange(1,1,1,sheet.getLastColumn()).getValues()[0].map(String);
-  const rows = sheet.getRange(2,1,sheet.getLastRow()-1,sheet.getLastColumn()).getValues();
   filters = filters || {};
   const allowed = filters.status ? [String(filters.status)] : ['SUBMITTED','UNDER_REVIEW','REVISION','VERIFIED','REREGISTRATION'];
-  const statusIdx = headers.indexOf('status');
-  const numberIdx = headers.indexOf('registrationNumber');
-  const idIdx = headers.indexOf('registrationId');
   const searchEnabled = !!filters.search;
   const query = searchEnabled ? String(filters.search).trim().toLowerCase() : '';
-  // Filter raw rows before allocating row objects. The previous implementation
-  // converted every registration to an object even though only a small queue
-  // subset was returned.
-  const items = [];
   const formPaidIds = getFormPaymentVerifiedRegistrationIds_();
-  rows.forEach((row, i) => {
-    const status = statusIdx >= 0 ? row[statusIdx] : undefined;
-    if (allowed.indexOf(String(status)) < 0) return;
-    const registrationId = idIdx >= 0 ? String(row[idIdx] || '') : '';
-    if (['SUBMITTED','UNDER_REVIEW','REVISION'].indexOf(String(status).toUpperCase()) >= 0 && !formPaidIds.has(registrationId)) return;
+
+  // Project only queue filter/search/sort fields before loading full records.
+  const projected = sheetRowsByFields_(sheet, [
+    'registrationId', 'registrationNumber', 'status', 'updatedAt'
+  ]);
+  const selected = projected.filter(item => {
+    const status = item.status;
+    if (allowed.indexOf(String(status)) < 0) return false;
+    const registrationId = String(item.registrationId || '');
+    if (['SUBMITTED','UNDER_REVIEW','REVISION'].indexOf(String(status).toUpperCase()) >= 0 && !formPaidIds.has(registrationId)) return false;
     if (searchEnabled) {
-      const registrationNumber = numberIdx >= 0 ? row[numberIdx] : '';
-      const registrationId = idIdx >= 0 ? row[idIdx] : '';
-      const matches = [registrationNumber, registrationId].some(value =>
+      const matches = [item.registrationNumber, item.registrationId].some(value =>
         String(value || '').toLowerCase().includes(query));
-      if (!matches) return;
+      if (!matches) return false;
     }
-    items.push(rowObject_(headers, row, i + 2));
+    return true;
   });
-  // Enrich only the newest 200 matching registrations; enrichment reads related
-  // payment/document sheets, so doing it after the cap avoids unnecessary work.
-  items.sort((a,b)=>String(b.updatedAt||'').localeCompare(String(a.updatedAt||'')));
-  const limitedItems=items.slice(0,200);
+
+  // Preserve newest-first order and the 200-item cap before enrichment.
+  selected.sort((a,b)=>String(b.updatedAt||'').localeCompare(String(a.updatedAt||'')));
+  const rowNumbers = selected.slice(0,200).map(item => item.rowNumber);
+  const limitedItems = sheetRowsAtRowNumbers_(sheet, rowNumbers);
+  limitedItems.sort((a,b)=>String(b.updatedAt||'').localeCompare(String(a.updatedAt||'')));
   return {success:true, registrations:enrichRegistrationList_(limitedItems)};
 }
 
