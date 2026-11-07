@@ -19,6 +19,6 @@ assert.match(sw, /keys\.filter\(key=>key!==CACHE\)/, 'Production worker must cle
 assert.match(sw, /self\.clients\.claim\(\)/, 'New worker must control existing tabs');
 assert.match(sw, /if\(url\.origin!==self\.location\.origin\)return/, 'Cross-origin Apps Script traffic must stay outside the service worker');
 assert.match(html, /api-bridge\.js\?v=32\.17\.0/, 'HTML must request the updated upload bridge');
-assert.match(sw, /api-bridge\.js\?v=32\.16\.0/, 'Service worker must precache the updated upload bridge');
+assert.match(sw, /api-bridge\.js\?v=32\.17\.0/, 'Service worker must precache the updated upload bridge');
 assert.match(bridge, /const BRIDGE_URL = "https:\/\/script\.google\.com\/macros\/s\//, 'Apps Script bridge endpoint must remain unchanged');
 console.log('PWA desktop cache refresh safeguards: OK');
