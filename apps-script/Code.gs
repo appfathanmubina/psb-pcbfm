@@ -2901,8 +2901,13 @@ function getSelectionPageData(sessionToken, registrationId) {
  * Keeps first-match behavior, role checks, Wali ownership, and unpublished-result privacy.
  */
 function getSelectionDetailData_(actor, isWali, ss, registrationId) {
-  const found = findRegistration_(registrationId);
-  const registration = found?.registration || null;
+  const registrationRow = findFirstIndexedRow_(
+    ss.getSheetByName(PSB_SHEETS.REGISTRATIONS),
+    'registrationId',
+    registrationId,
+    false
+  );
+  const registration = registrationRow?.object || null;
   if (!registration) return fail_('Pendaftaran tidak ditemukan.');
   if (!canAccessRegistration_(actor, registration) &&
       !hasRoleDirect_(actor, PSB_SELECTION_ADMIN_ROLES)) {
@@ -2914,7 +2919,7 @@ function getSelectionDetailData_(actor, isWali, ss, registrationId) {
   const candidateRows = candidateId
     ? sheetRowsMatchingValuesByFields_(candidateSheet, 'candidateId', [candidateId], ['name', 'fullName'])
     : [];
-  const candidate = candidateRows[0] || found.candidate || null;
+  const candidate = candidateRows[0] || null;
   const enrichedMaps = {
     candidates: candidateId ? { [candidateId]: candidate || {} } : {},
     years: sheetMapByIdForValues_(ss.getSheetByName(PSB_SHEETS.MASTER_TAHUN_AJARAN), 'tahunAjaranId', [registration.tahunAjaranId]),
