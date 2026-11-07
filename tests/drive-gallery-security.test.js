@@ -20,7 +20,8 @@ const documentRead = functionSource('getDocumentOptions');
 assert.match(documentRead, /canAccessRegistration_\(actor,\s*found\.registration\)/);
 assert.ok(documentRead.indexOf('canAccessRegistration_') < documentRead.indexOf('getCurrentDocuments_'));
 const documentPage = functionSource('getDocumentPageData');
-assert.match(documentPage, /if\s*\(isWali\)\s*items\s*=\s*items\.filter\(x\s*=>\s*String\(x\.userId\)\s*===\s*String\(actor\.userId\)\)/);
+assert.match(documentPage, /if\s*\(isWali\)\s*\{\s*items\s*=\s*sheetRowsMatchingValues_\(registrationSheet,\s*'userId',\s*\[actor\.userId\]\)/,
+  'Wali document page reads must be scoped to the authenticated user at the sheet query');
 const paymentUpload = functionSource('submitPayment');
 assert.match(paymentUpload, /canAccessRegistration_\(actor,found\.registration\)/);
 assert.match(paymentUpload, /getOrCreateFolderInParent_\(yearFolder,'Bukti Pembayaran'\)/);
