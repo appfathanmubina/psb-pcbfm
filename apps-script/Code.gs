@@ -4323,6 +4323,17 @@ function uploadDocument(sessionToken, payload) {
     const ss = getDatabaseSpreadsheet_();
     const sheet = ss.getSheetByName(PSB_SHEETS.DOCUMENTS);
     if (!sheet) return fail_('Sheet DOCUMENTS belum tersedia. Jalankan setup database terlebih dahulu.');
+    if (sheet.getLastColumn() < 1) return fail_('Struktur Sheet DOCUMENTS belum tersedia. Jalankan pemeriksaan database.');
+
+    // Validate the complete document schema before creating a Drive file. Without
+    // these columns, the upload could create an incomplete row or fail to replace
+    // the previous active document after the file has already been stored.
+    const headers = sheet.getRange(1,1,1,sheet.getLastColumn()).getValues()[0].map(String);
+    const requiredHeaders = ['documentId','registrationId','documentTypeId','fileId','fileName','fileUrl','mimeType','fileSize','status','uploadedAt','verifiedAt','verifiedBy','revisionNote'];
+    const missingHeaders = requiredHeaders.filter(header => headers.indexOf(header) < 0);
+    if (missingHeaders.length) {
+      return fail_('Struktur Sheet DOCUMENTS belum lengkap (' + missingHeaders.join(', ') + '). Jalankan pemeriksaan database sebelum mengunggah dokumen.');
+    }
 
     // Folder lookup/creation is serialized, but the potentially slow Drive file
     // upload runs without holding the global ScriptLock.
@@ -4364,7 +4375,6 @@ function uploadDocument(sessionToken, payload) {
     stage = 'WRITE_DOCUMENT_RECORD';
     const now = new Date();
     const documentId = generateId_('DOC');
-    const headers = sheet.getRange(1,1,1,sheet.getLastColumn()).getValues()[0].map(String);
     const rows = sheet.getLastRow() < 2 ? [] : sheet.getRange(2,1,sheet.getLastRow()-1,sheet.getLastColumn()).getValues();
     const regIdx = headers.indexOf('registrationId');
     const typeIdx = headers.indexOf('documentTypeId');
