@@ -1231,12 +1231,32 @@ async function renderVerification(force=false){
   $('content').innerHTML=`<section class="hero"><h2>Verifikasi</h2><p>Periksa data pendaftaran dan dokumen sebelum menetapkan hasil verifikasi.</p></section><div id="verificationPanel"><div class="empty-state">Memuat antrean verifikasi...</div></div>`;
   try{const r=force?await server('getVerificationQueue',state.token,{}):(pageDataCached('verification')||await warmPageData('verification',()=>server('getVerificationQueue',state.token,{})));if(!r?.success){$('verificationPanel').innerHTML=showMessage(r?.message||'Gagal memuat antrean verifikasi.');return}renderVerificationQueue(r.registrations||[]);}catch(e){$('verificationPanel').innerHTML=showMessage('Gagal memuat antrean verifikasi.')}
 }
+function renderStaffDataTable(rows, columns, emptyMessage){
+  const items=Array.isArray(rows)?rows:[];
+  if(!items.length)return `<div class="empty-state">${esc(emptyMessage||'Tidak ada data untuk ditampilkan.')}</div>`;
+  const heads=columns.map(col=>`<th scope="col" class="${esc(col.className||'')}">${esc(col.label||'')}</th>`).join('');
+  const body=items.map((row,rowIndex)=>`<tr>${columns.map(col=>`<td class="${esc(col.className||'')}">${typeof col.render==='function'?col.render(row,rowIndex):esc(row?.[col.key]??'-')}</td>`).join('')}</tr>`).join('');
+  return `<div class="staff-table-scroll" role="region" aria-label="Tabel data" tabindex="0"><table class="staff-data-table"><thead><tr>${heads}</tr></thead><tbody>${body}</tbody></table></div>`;
+}
 function renderVerificationQueue(items){
   const el=$('verificationPanel'); if(!el)return;
-  el.innerHTML=`<div class="verification-toolbar"><div class="search-box"><span class="search-icon">${ico('search')}</span><input id="verificationSearch" class="search-input" placeholder="Cari nama atau nomor pendaftaran..." autocomplete="off" oninput="filterVerificationQueue()"><button type="button" class="search-clear" id="verificationSearchClear" onclick="clearVerificationSearch()" aria-label="Hapus pencarian">×</button></div><div class="filter-box professional-filter"><span class="filter-label">Status</span><select id="verificationStatus" class="select-field compact professional-select" onchange="loadVerificationQueue()"><option value="">Semua status</option><option value="SUBMITTED">Menunggu verifikasi</option><option value="UNDER_REVIEW">Sedang diperiksa</option><option value="REVISION">Perlu revisi</option><option value="REREGISTRATION">Daftar ulang</option><option value="VERIFIED">Terverifikasi</option></select></div></div><div id="verificationList" class="registration-list"></div>`;
+  el.innerHTML=`<div class="verification-toolbar"><div class="search-box"><span class="search-icon">${ico('search')}</span><input id="verificationSearch" class="search-input" placeholder="Cari nama atau nomor pendaftaran..." autocomplete="off" oninput="filterVerificationQueue()"><button type="button" class="search-clear" id="verificationSearchClear" onclick="clearVerificationSearch()" aria-label="Hapus pencarian">×</button></div><div class="filter-box professional-filter"><span class="filter-label">Status</span><select id="verificationStatus" class="select-field compact professional-select" onchange="loadVerificationQueue()"><option value="">Semua status</option><option value="SUBMITTED">Menunggu verifikasi</option><option value="UNDER_REVIEW">Sedang diperiksa</option><option value="REVISION">Perlu revisi</option><option value="REREGISTRATION">Daftar ulang</option><option value="VERIFIED">Terverifikasi</option></select></div></div><div id="verificationList"></div>`;
   state.verificationQueue=items; renderVerificationList(items);
 }
-function renderVerificationList(items){const el=$('verificationList');if(!el)return; if(!items.length){el.innerHTML='<div class="empty-state">Tidak ada pendaftaran pada antrean verifikasi.</div>';return}el.innerHTML=items.map(x=>`<article class="registration-item"><div class="registration-item-top"><div><div class="registration-name">${esc(x.candidateName||'-')}</div><div class="registration-number">${esc(x.registrationNumber||'-')}</div></div><span class="pill ${String(x.status)==='VERIFIED'?'ok':''}">${esc(statusLabel(x.status))}</span></div><div class="registration-meta"><span>${esc(x.jenjangName||'-')} · ${esc(x.gelombangName||'-')}</span><span>Pembayaran: ${esc(x.formPaymentStatusLabel||'Belum diketahui')}</span><span>Dokumen: ${esc(x.documentsStatusLabel||'Belum diketahui')}</span></div><div class="registration-actions"><button class="btn btn-primary" onclick="openVerification('${esc(x.registrationId)}')">Periksa</button></div></article>`).join('')}
+function renderVerificationList(items){
+  const el=$('verificationList');if(!el)return;
+  const columns=[
+    {label:'No.',className:'staff-col-number',render:(x,i)=>String(i+1)},
+    {label:'Nama Calon Santri',render:x=>`<div class="staff-primary-text">${esc(x.candidateName||'-')}</div><div class="staff-secondary-text">${esc(x.registrationNumber||'-')}</div>`},
+    {label:'Jenjang / Gelombang',render:x=>`${esc(x.jenjangName||'-')}<div class="staff-secondary-text">${esc(x.gelombangName||'-')}</div>`},
+    {label:'Pembayaran',render:x=>esc(x.formPaymentStatusLabel||'Belum diketahui')},
+    {label:'Dokumen',render:x=>esc(x.documentsStatusLabel||'Belum diketahui')},
+    {label:'Status',render:x=>`<span class="pill ${String(x.status)==='VERIFIED'?'ok':''}">${esc(statusLabel(x.status))}</span>`},
+    {label:'Aksi',className:'staff-col-actions',render:x=>`<button class="btn btn-primary staff-table-action" onclick="openVerification('${esc(x.registrationId)}')">Periksa</button>`}
+  ];
+  const elHtml=renderStaffDataTable(items,columns,'Tidak ada pendaftaran pada antrean verifikasi.');
+  el.innerHTML=elHtml;
+}
 function filterVerificationQueue(){const q=String($('verificationSearch')?.value||'').trim().toLowerCase();const clear=$('verificationSearchClear');if(clear)clear.classList.toggle('show',!!q);renderVerificationList((state.verificationQueue||[]).filter(x=>String(x.registrationNumber||'').toLowerCase().includes(q)||String(x.candidateName||'').toLowerCase().includes(q)));}
 function clearVerificationSearch(){const el=$('verificationSearch');if(el){el.value='';el.focus();}filterVerificationQueue();}
 async function loadVerificationQueue(){loading(true,'Memuat antrean...');try{const r=await server('getVerificationQueue',state.token,{status:$('verificationStatus')?.value||''});if(r.success){state.verificationQueue=r.registrations||[];filterVerificationQueue();}else showToast(r.message,'error')}catch(e){showToast('Gagal memuat antrean.','error')}finally{loading(false)}}
