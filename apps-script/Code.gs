@@ -2547,52 +2547,74 @@ function verifyPayment(sessionToken,payload){
   const actor=requireRole_(sessionToken,PSB_PAYMENT_MANAGE_ROLES);
   assertOperationalMutation_(actor); payload=payload||{};
   const paymentId=String(payload.paymentId||'').trim(), status=String(payload.status||'').toUpperCase(), note=String(payload.note||'').trim();
-  if(!paymentId||['VERIFIED','REJECTED'].indexOf(status)<0) return fail_('Data verifikasi pembayaran tidak valid.');
-  if(status==='REJECTED' && !note) return fail_('Alasan penolakan pembayaran wajib diisi agar Wali mengetahui perbaikan yang harus dilakukan.');
-  if(note.length>500) return fail_('Alasan verifikasi maksimal 500 karakter.');
-  const lock=LockService.getScriptLock(); try { lock.waitLock(10000); } catch (lockError) { return fail_('Server sedang memproses permintaan lain. Silakan coba kembali beberapa saat lagi.'); }
-  let notificationPayload=null, reregistrationNotification=null;
-  try {
-    const sheet=getDatabaseSpreadsheet_().getSheetByName(PSB_SHEETS.PAYMENTS), found=findRowById_(sheet,'paymentId',paymentId); if(!found) return fail_('Pembayaran tidak ditemukan.');
-    if (['VERIFIED','REJECTED'].indexOf(String(found.object.status||'').toUpperCase())>=0) return fail_('Pembayaran ini sudah diverifikasi sebelumnya.');
-    const regFound=findRegistration_(String(found.object.registrationId||'')); if(!regFound) return fail_('Pendaftaran pembayaran tidak ditemukan.');
-    // Validate the linked bill before changing payment status or writing a verification record.
-    const bills=getDatabaseSpreadsheet_().getSheetByName(PSB_SHEETS.BILLS);
-    const br=findRowById_(bills,'billId',String(found.object.billId||''));
-    if(!br) return fail_('Tagihan terkait pembayaran tidak ditemukan. Verifikasi dibatalkan.');
-    if(String(br.object.registrationId||'')!==String(found.object.registrationId||'')) return fail_('Relasi tagihan dan pendaftaran tidak sesuai. Verifikasi dibatalkan.');
-    const now=new Date(), headers=sheet.getRange(1,1,1,sheet.getLastColumn()).getValues()[0].map(String);
+  if(!paymentId||['VERIFIED','REJECTED'].indexOf(status)<0)return fail_('Data verifikasi pembayaran tidak valid.');
+  if(status==='REJECTED'&&!note)return fail_('Alasan penolakan pembayaran wajib diisi agar Wali mengetahui perbaikan yang harus dilakukan.');
+  if(note.length>500)return fail_('Alasan verifikasi maksimal 500 karakter.');
+  const lock=LockService.getScriptLock();try{lock.waitLock(10000);}catch(lockError){return fail_('Server sedang memproses permintaan lain. Silakan coba kembali beberapa saat lagi.');}
+  let notificationPayload=null,reregistrationNotification=null;
+  try{
+    const ss=getDatabaseSpreadsheet_(),sheet=ss.getSheetByName(PSB_SHEETS.PAYMENTS);
+    const found=findRowById_(sheet,'paymentId',paymentId);if(!found)return fail_('Pembayaran tidak ditemukan.');
+    const currentStatus=String(found.object.status||'').toUpperCase();
+    const wasAlreadyFinalized=currentStatus===status;
+    if(['VERIFIED','REJECTED'].includes(currentStatus)&&currentStatus!==status)return fail_('Pembayaran ini sudah diputuskan dengan status '+currentStatus+'.');
+    const regFound=findRegistration_(String(found.object.registrationId||''));if(!regFound)return fail_('Pendaftaran pembayaran tidak ditemukan.');
+    const bills=ss.getSheetByName(PSB_SHEETS.BILLS),br=findRowById_(bills,'billId',String(found.object.billId||''));
+    if(!br)return fail_('Tagihan terkait pembayaran tidak ditemukan. Verifikasi dibatalkan.');
+    if(String(br.object.registrationId||'')!==String(found.object.registrationId||''))return fail_('Relasi tagihan dan pendaftaran tidak sesuai. Verifikasi dibatalkan.');
+    const headers=sheet.getRange(1,1,1,sheet.getLastColumn()).getValues()[0].map(String);
     const paymentStatusIdx=headers.indexOf('status'),paymentUpdatedIdx=headers.indexOf('updatedAt');
-    if(paymentStatusIdx<0||paymentUpdatedIdx<0) return fail_('Struktur kolom PAYMENTS belum lengkap. Verifikasi dibatalkan.');
+    if(paymentStatusIdx<0||paymentUpdatedIdx<0)return fail_('Struktur kolom PAYMENTS belum lengkap. Verifikasi dibatalkan.');
     const billHeaders=bills.getRange(1,1,1,bills.getLastColumn()).getValues()[0].map(String),billStatusIdx=billHeaders.indexOf('status');
-    if(billStatusIdx<0) return fail_('Struktur kolom BILLS belum lengkap. Verifikasi dibatalkan.');
+    if(billStatusIdx<0)return fail_('Struktur kolom BILLS belum lengkap. Verifikasi dibatalkan.');
+
+    // A prior attempt may have written the verification record or bill status
+    // before failing. Reuse that record and finish the remaining steps safely.
+    const verSheet=ss.getSheetByName(PSB_SHEETS.PAYMENT_VERIFICATIONS);
+    if(verSheet){
+      const verificationRows=sheetRowsMatchingValues_(verSheet,'paymentId',[paymentId]);
+      const conflicting=verificationRows.find(x=>String(x.status||'').toUpperCase()!==status);
+      if(conflicting)return fail_('Sudah ada catatan verifikasi dengan keputusan berbeda. Periksa riwayat pembayaran sebelum melanjutkan.');
+      if(!verificationRows.length){
+        const vh=verSheet.getRange(1,1,1,verSheet.getLastColumn()).getValues()[0].map(String),rec={};
+        vh.forEach(h=>rec[h]='');
+        Object.assign(rec,{verificationId:generateId_('PVF'),paymentId,status,verifiedBy:actor.userId,verifiedAt:new Date(),note});
+        verSheet.appendRow(vh.map(h=>rec[h]));
+      }
+    }
+
+    bills.getRange(br.rowNumber,billStatusIdx+1).setValue(status==='VERIFIED'?'PAID':'UNPAID');
+    if(status==='VERIFIED'){
+      const type=findMasterItemById_('MASTER_JENIS_PEMBAYARAN','paymentTypeId',br.object.paymentTypeId);
+      if(/formulir/i.test(String(type?.name||''))){
+        const reg=findRegistration_(String(br.object.registrationId));
+        if(reg&&String(reg.registration.status)==='VERIFIED'){
+          const moved=setRegistrationStatus_(reg.registration,'PAYMENT_VERIFIED',actor.userId,'Pembayaran Formulir terverifikasi; pendaftar dapat mengikuti proses tes.');
+          if(!moved?.success)return moved;
+        }
+      }
+      if(/daftar\s*ulang/i.test(String(type?.name||'')))reregistrationNotification=syncReregistrationAfterPayment_(String(br.object.registrationId),actor.userId,true);
+    }
+
+    // Payment status is the final commit marker, after linked records are ready.
     sheet.getRange(found.rowNumber,paymentStatusIdx+1).setValue(status);
-    sheet.getRange(found.rowNumber,paymentUpdatedIdx+1).setValue(now);
-    const verSheet=getDatabaseSpreadsheet_().getSheetByName(PSB_SHEETS.PAYMENT_VERIFICATIONS); if(verSheet){const vh=verSheet.getRange(1,1,1,verSheet.getLastColumn()).getValues()[0].map(String);const rec={};vh.forEach(h=>rec[h]='');Object.assign(rec,{verificationId:generateId_('PVF'),paymentId,status,verifiedBy:actor.userId,verifiedAt:now,note});verSheet.appendRow(vh.map(h=>rec[h]));}
-    bills.getRange(br.rowNumber,billStatusIdx+1).setValue(status==='VERIFIED'?'PAID':'UNPAID'); if(status==='VERIFIED'){const type=findMasterItemById_('MASTER_JENIS_PEMBAYARAN','paymentTypeId',br.object.paymentTypeId); if(/formulir/i.test(String(type?.name||''))){const reg=findRegistration_(String(br.object.registrationId)); if(reg && String(reg.registration.status)==='VERIFIED'){setRegistrationStatus_(reg.registration,'PAYMENT_VERIFIED',actor.userId,'Pembayaran Formulir terverifikasi; pendaftar dapat mengikuti proses tes.');}} if(/daftar\s*ulang/i.test(String(type?.name||''))){reregistrationNotification=syncReregistrationAfterPayment_(String(br.object.registrationId),actor.userId,true);}}
-    writeAudit_(actor.userId,'PAYMENT_VERIFY','PAYMENT',paymentId,'',JSON.stringify({status,note}),'Pembayaran diverifikasi');
-    const paymentType=findMasterItemById_('MASTER_JENIS_PEMBAYARAN','paymentTypeId',String(br?.object?.paymentTypeId||''));
-    notificationPayload={registrationId:String(regFound.registration.registrationId),candidateName:String(regFound.candidate?.fullName||'Calon santri'),paymentLabel:String(paymentType?.name||'pembayaran'),status,note,reregistrationNotification};
-  } finally { lock.releaseLock(); }
-  // Notification fanout is secondary work; do it after releasing the global lock.
+    sheet.getRange(found.rowNumber,paymentUpdatedIdx+1).setValue(new Date());
+    const verified=findRowById_(sheet,'paymentId',paymentId);
+    if(!verified||String(verified.object.status||'').toUpperCase()!==status)return fail_('Status pembayaran belum berhasil disimpan. Silakan coba kembali.');
+    if(!wasAlreadyFinalized)writeAudit_(actor.userId,'PAYMENT_VERIFY','PAYMENT',paymentId,'',JSON.stringify({status,note}),'Pembayaran diverifikasi');
+    const paymentType=findMasterItemById_('MASTER_JENIS_PEMBAYARAN','paymentTypeId',String(br.object.paymentTypeId||''));
+    if(!wasAlreadyFinalized)notificationPayload={registrationId:String(regFound.registration.registrationId),candidateName:String(regFound.candidate?.fullName||'Calon santri'),paymentLabel:String(paymentType?.name||'pembayaran'),status,note,reregistrationNotification};
+  }finally{lock.releaseLock();}
   if(notificationPayload){
     const p=notificationPayload;
     if(p.reregistrationNotification?.userId){try{createNotification_(p.reregistrationNotification.userId,'Daftar Ulang Selesai','Dokumen dan pembayaran daftar ulang telah lengkap.','SUCCESS');}catch(notificationError){console.error('Reregistration completion notification failed: '+notificationError);}}
-    if(p.status==='VERIFIED' && /formulir/i.test(p.paymentLabel)){
-      try { notifyUsersByRoles_(['SUPERADMIN','ADMIN_PSB','VERIFIKATOR'],'Pembayaran Formulir Terkonfirmasi',p.candidateName+' telah melunasi biaya formulir. Pendaftaran siap masuk antrean verifikasi PSB.','INFO'); } catch(notificationError) { console.error('Verification queue notification failed: '+notificationError); }
+    if(p.status==='VERIFIED'&&/formulir/i.test(p.paymentLabel)){
+      try{notifyUsersByRoles_(['SUPERADMIN','ADMIN_PSB','VERIFIKATOR'],'Pembayaran Formulir Terkonfirmasi',p.candidateName+' telah melunasi biaya formulir. Pendaftaran siap masuk antrean verifikasi PSB.','INFO');}catch(notificationError){console.error('Verification queue notification failed: '+notificationError);}
     }
-    try { notifyRegistrationOwner_(p.registrationId,'Pembayaran '+(p.status==='VERIFIED'?'Terverifikasi':'Ditolak'),p.status==='VERIFIED'?('Pembayaran '+p.paymentLabel+' telah terverifikasi.'):('Pembayaran '+p.paymentLabel+' ditolak.'+(p.note?' Catatan: '+p.note:'')),p.status==='VERIFIED'?'SUCCESS':'WARNING'); } catch(notificationError) { console.error('Payment owner notification failed after verification: '+notificationError); }
+    try{notifyRegistrationOwner_(p.registrationId,'Pembayaran '+(p.status==='VERIFIED'?'Terverifikasi':'Ditolak'),p.status==='VERIFIED'?('Pembayaran '+p.paymentLabel+' telah terverifikasi.'):('Pembayaran '+p.paymentLabel+' ditolak.'+(p.note?' Catatan: '+p.note:'')),p.status==='VERIFIED'?'SUCCESS':'WARNING');}catch(notificationError){console.error('Payment owner notification failed after verification: '+notificationError);}
   }
   return {success:true,message:status==='VERIFIED'?'Pembayaran berhasil diverifikasi.':'Pembayaran ditolak dan dapat diunggah ulang.'};
 }
-
-
-// =====================================================
-// STAGE 8 - TES & SELEKSI
-// =====================================================
-const PSB_SELECTION_ADMIN_ROLES = ['SUPERADMIN','ADMIN_PSB','SELEKSI'];
-const PSB_SELECTION_VIEW_ROLES = ['WALI','SUPERADMIN','ADMIN_PSB','SELEKSI','VERIFIKATOR'];
-
 function getSelectionPageData(sessionToken, registrationId) {
   const actor = requireRole_(sessionToken, PSB_SELECTION_VIEW_ROLES);
   const isWali = hasRoleDirect_(actor, ['WALI']);
