@@ -26,24 +26,18 @@ assert.match(warmScheduler, /timeout:10000/,
   'Navigation prefetch must wait for a browser idle window');
 
 const boot = functionSource('boot');
-assert.match(boot, /renderApp\(\{deferInitialPage:true\}\)/,
-  'Session restore must avoid starting an unawaited duplicate Home render');
-assert.match(boot, /await goPage\(savedPage\)/,
-  'Session restore must await the selected page data renderer before boot completion');
-assert.ok(boot.indexOf('renderPublicHome();') < boot.indexOf("await server('validateSession',state.token)"),
-  'The public landing page must render before saved-session validation');
-assert.doesNotMatch(boot, /loading\(false\)/,
-  'Boot must not close a loading counter it did not open');
+assert.match(boot, /renderPublicHome\(\)/,
+  'First-page boot must render the public landing page');
+assert.doesNotMatch(boot, /validateSession|renderApp\(|savedPage|psb_current_page/,
+  'First-page boot must not restore, inspect, or validate a saved login session');
 const renderApp = functionSource('renderApp');
 assert.match(renderApp, /if\(options\.deferInitialPage!==true\)goPage\('home'\)/,
   'App shell must support deferring its first route until the caller awaits the selected page');
 const processEnd = functionSource('processEnd');
 assert.match(processEnd, /setTimeout\([\s\S]*?850\)/,
   'Successful process popup must remain visible briefly after the response so the DOM renderer can commit');
-assert.match(boot, /const configTask\s*=\s*refreshPublicConfig\(\)/,
+assert.match(boot, /refreshPublicConfig\(\)\.catch\(/,
   'Public configuration refresh should start asynchronously');
-assert.doesNotMatch(boot, /await\s+configTask/,
-  'Public configuration refresh must not block the initial public page');
 
 const login = functionSource('submitLogin');
 assert.match(login, /server\('login',\s*identifier,\s*password\)/,
