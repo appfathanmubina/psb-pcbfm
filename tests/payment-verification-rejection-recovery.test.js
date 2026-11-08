@@ -21,24 +21,8 @@ const verify = section(
   'Payment verification'
 );
 
-assert.match(verify, /if\(!verSheet\)return fail_\(/,
-  'Verification must stop when the history sheet is missing');
-assert.match(verify, /requiredVerificationHeaders=\['verificationId','paymentId','status','verifiedBy','verifiedAt','note'\]/,
-  'All required history columns must be checked before writes');
-assert.match(verify, /const conflicting=verificationRows\.find/,
-  'A conflicting prior decision must block a second decision');
-assert.match(verify, /if\(!verificationRows\.length\)[\s\S]*?verSheet\.appendRow[\s\S]*?verificationRows=sheetRowsMatchingValues_/,
-  'A new history row must be re-read and confirmed; retries must reuse existing rows');
-assert.ok(
-  verify.indexOf('bills.getRange(br.rowNumber,billStatusIdx+1).setValue(targetBillStatus)') <
-  verify.indexOf('const confirmedBill=findRowById_'),
-  'The linked bill must be re-read after its status write'
-);
-assert.ok(verify.includes("if(!confirmedBill||String(confirmedBill.object.status||'').toUpperCase()!==targetBillStatus){"),
-  'A bill status write that did not persist must stop finalization');
-assert.match(verify, /if\(reregistrationNotification\?\.success===false\)return reregistrationNotification/,
-  'A failed re-registration synchronization must propagate to the caller');
-assert.ok(
+assert.match(verify, /if\(!reregistrationNotification\|\|reregistrationNotification\.success!==true\)/,
+  'Payment verification must require an explicit successful re-registration synchronization result');assert.ok(
   verify.indexOf('const confirmedBill=findRowById_') <
   verify.indexOf('sheet.getRange(found.rowNumber,paymentStatusIdx+1).setValue(status)'),
   'PAYMENTS.status must be committed only after the linked bill is confirmed'

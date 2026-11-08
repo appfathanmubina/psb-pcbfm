@@ -2566,6 +2566,11 @@ function submitPayment(sessionToken,payload){
   let paymentRowWritten=false;
   let savedPayment=null;
   let stage='VALIDATE_REQUEST';
+  const discardUploadedProof=()=>{
+    if(!uploadedFile)return;
+    try{uploadedFile.setTrashed(true);uploadedFile=null;}
+    catch(cleanupError){console.error('PSB_PAYMENT_UPLOAD_CLEANUP_FAILED: '+String(cleanupError&&cleanupError.message||cleanupError));}
+  };
 
   try {
     payload=payload||{};
@@ -2655,6 +2660,17 @@ function submitPayment(sessionToken,payload){
     lockAcquired=true;
 
     stage='RECHECK_DUPLICATE_PAYMENT';
+    // The bill may have changed while the proof file was being created in Drive.
+    // Re-read its durable state under the commit lock; never commit against the
+    // stale pre-upload snapshot.
+    const latestBill=findRowById_(bills,'billId',billId);
+    if(!latestBill){discardUploadedProof();return fail_('Tagihan tidak ditemukan saat penyimpanan bukti pembayaran.');}
+    if(String(latestBill.object.registrationId||'')!==String(br.object.registrationId||'')){discardUploadedProof();return fail_('Relasi tagihan dan pendaftaran berubah. Bukti pembayaran tidak disimpan.');}
+    const latestBillStatus=String(latestBill.object.status||'').toUpperCase();
+    if(latestBillStatus==='PAID'){discardUploadedProof();return fail_('Tagihan ini sudah lunas.');}
+    if(latestBillStatus==='CANCELLED'){discardUploadedProof();return fail_('Tagihan ini sudah dibatalkan dan tidak dapat dibayar.');}
+    const latestBillAmount=Number(latestBill.object.amount);
+    if(!Number.isFinite(latestBillAmount)||latestBillAmount<=0){discardUploadedProof();return fail_('Nominal tagihan sudah berubah atau tidak valid. Hubungi petugas PSB.');}
     const latestRows=sheetRowsMatchingValues_(paymentSheet,'billId',[billId]);
     if(latestRows.some(r=>['SUBMITTED','VERIFIED'].indexOf(String(r.status||'').toUpperCase())>=0)) {
       lock.releaseLock();
@@ -2666,7 +2682,7 @@ function submitPayment(sessionToken,payload){
     stage='WRITE_PAYMENT_RECORD';
     const headers=initialHeaders, now=new Date(), paymentId=generateId_('PAY'), record={};
     headers.forEach(h=>record[h]='');
-    Object.assign(record,{paymentId,billId,registrationId:br.object.registrationId,amount:Number(br.object.amount||0),method:'TRANSFER',proofFileId:fileId,proofFileUrl:fileUrl,status:'SUBMITTED',submittedAt:now,createdAt:now,updatedAt:now});
+    Object.assign(record,{paymentId,billId,registrationId:latestBill.object.registrationId,amount:latestBillAmount,method:'TRANSFER',proofFileId:fileId,proofFileUrl:fileUrl,status:'SUBMITTED',submittedAt:now,createdAt:now,updatedAt:now});
     const savedRowNumber=paymentSheet.getLastRow()+1;
     const recordRow=safeSheetRow_(headers.map(h=>record[h]!==undefined?record[h]:''));
     paymentSheet.appendRow(recordRow);
@@ -2676,7 +2692,7 @@ function submitPayment(sessionToken,payload){
     stage='UPDATE_BILL_STATUS';
     const billHeaders=bills.getRange(1,1,1,bills.getLastColumn()).getValues()[0].map(String);
     const billStatusIdx=billHeaders.indexOf('status');
-    if(billStatusIdx>=0)bills.getRange(br.rowNumber,billStatusIdx+1).setValue('PAYMENT_REVIEW');
+    if(billStatusIdx>=0)bills.getRange(latestBill.rowNumber,billStatusIdx+1).setValue('PAYMENT_REVIEW');
 
     lock.releaseLock();
     lockAcquired=false;
@@ -2801,7 +2817,9 @@ function verifyPayment(sessionToken,payload){
       }
       if(/daftar\s*ulang/i.test(String(type?.name||''))){
         reregistrationNotification=syncReregistrationAfterPayment_(String(br.object.registrationId),actor.userId,true);
-        if(reregistrationNotification?.success===false)return reregistrationNotification;
+        if(!reregistrationNotification||reregistrationNotification.success!==true) {
+          return reregistrationNotification||fail_('Sinkronisasi Daftar Ulang belum dapat dipastikan. Verifikasi pembayaran belum difinalisasi; silakan coba kembali.');
+        }
       }
     }
 
@@ -3718,9 +3736,11 @@ function finalizeReregistration(sessionToken, registrationId) {
     const now=new Date(), headers=rrSheet.getRange(1,1,1,rrSheet.getLastColumn()).getValues()[0].map(String);
     const statusIdx=headers.indexOf('status'), completedIdx=headers.indexOf('completedAt'), updatedIdx=headers.indexOf('updatedAt'), noteIdx=headers.indexOf('note');
     if(statusIdx<0||completedIdx<0)return fail_('Struktur sheet daftar ulang belum lengkap (status/completedAt).');
-    if(!rrCompleted){
-      rrSheet.getRange(rrFound.rowNumber,statusIdx+1).setValue('COMPLETED');
-      rrSheet.getRange(rrFound.rowNumber,completedIdx+1).setValue(now);
+    const completedAtMissing=!rrFound.object.completedAt;
+    if(!rrCompleted||completedAtMissing){
+      if(!rrCompleted)rrSheet.getRange(rrFound.rowNumber,statusIdx+1).setValue('COMPLETED');
+      // Repair the partial-commit case where status landed but completedAt did not.
+      if(completedAtMissing)rrSheet.getRange(rrFound.rowNumber,completedIdx+1).setValue(now);
       if(updatedIdx>=0)rrSheet.getRange(rrFound.rowNumber,updatedIdx+1).setValue(now);
       if(noteIdx>=0)rrSheet.getRange(rrFound.rowNumber,noteIdx+1).setValue('Daftar ulang selesai.');
     }
@@ -3743,12 +3763,12 @@ function syncReregistrationAfterPayment_(registrationId, actorUserId, deferNotif
   const id=String(registrationId||'');
   const rrSheet=getDatabaseSpreadsheet_().getSheetByName(PSB_SHEETS.REREGISTRATIONS);
   const rrFound=findRowById_(rrSheet,'registrationId',id);
-  if(!rrFound)return null;
+  if(!rrFound)return fail_('Data Daftar Ulang belum ditemukan. Verifikasi pembayaran belum dapat difinalisasi; buka kembali tahap Daftar Ulang lalu coba verifikasi ulang.');
   const docs=getCurrentDocuments_(id);
   const required=getActiveMasterItems_('MASTER_DOKUMEN').filter(x=>x.required);
   const docsReady=required.every(t=>{const d=docs.find(x=>String(x.documentTypeId)===String(t.documentTypeId));return d&&String(d.status||'').toUpperCase()==='VERIFIED';});
   const payment=buildPaymentData_(id).bills.find(b=>/daftar\s*ulang/i.test(String(b.paymentTypeName||'')));
-  if(!payment||String(payment.status||'').toUpperCase()!=='PAID')return null;
+  if(!payment||String(payment.status||'').toUpperCase()!=='PAID')return fail_('Tagihan Daftar Ulang belum terkonfirmasi lunas. Sinkronisasi belum dapat dilakukan.');
 
   let reg=null;
   if(docsReady){
@@ -3776,12 +3796,13 @@ function syncReregistrationAfterPayment_(registrationId, actorUserId, deferNotif
   if(!confirmedRereg||String(confirmedRereg.object.status||'').toUpperCase()!==targetStatus){
     return fail_('Status Daftar Ulang belum berhasil disimpan. Sinkronisasi dapat dicoba kembali.');
   }
-  if(!docsReady)return null;
+  if(!docsReady)return {success:true,completed:false,message:'Pembayaran terverifikasi; dokumen wajib masih perlu dilengkapi.'};
 
   const userId=String(reg?.registration?.userId||'');
-  if(!userId)return null;
-  const payload={userId,candidateName:String(reg?.candidate?.fullName||'calon santri')};
-  if(!deferNotification){createNotification_(userId,'Daftar Ulang Selesai','Dokumen dan pembayaran daftar ulang telah lengkap.','SUCCESS');return null;}
+  const payload={success:true,completed:true,userId,candidateName:String(reg?.candidate?.fullName||'calon santri')};
+  if(!deferNotification){
+    if(userId)createNotification_(userId,'Daftar Ulang Selesai','Dokumen dan pembayaran daftar ulang telah lengkap.','SUCCESS');
+  }
   return payload;
 }
 
@@ -5096,16 +5117,25 @@ function submitRegistration(sessionToken, registrationId) {
   let found = findRegistration_(String(registrationId || ''));
   if (!found) return fail_('Pendaftaran tidak ditemukan.');
   if (String(found.registration.userId) !== String(actor.userId) && !hasRoleDirect_(actor, ['SUPERADMIN','ADMIN_PSB'])) return fail_('Anda tidak memiliki akses untuk mengirim pendaftaran ini.');
-  if (PSB_REGISTRATION_EDITABLE_STATUSES.indexOf(String(found.registration.status)) < 0) return fail_('Pendaftaran tidak berada pada status yang dapat dikirim.');
-  const validation = validateCompleteRegistration_(found);
-  if (!validation.success) return validation;
+  const initialStatus=String(found.registration.status||'').toUpperCase();
+  if (PSB_REGISTRATION_EDITABLE_STATUSES.indexOf(initialStatus) < 0 && initialStatus!=='SUBMITTED') return fail_('Pendaftaran tidak berada pada status yang dapat dikirim.');
+  if(initialStatus!=='SUBMITTED'){
+    const validation = validateCompleteRegistration_(found);
+    if (!validation.success) return validation;
+  }
   const lock=LockService.getScriptLock(); try { lock.waitLock(10000); } catch (lockError) { return fail_('Server sedang memproses permintaan lain. Silakan coba kembali beberapa saat lagi.'); }
   let notificationPayload=null, response;
   try {
     const latest=findRegistration_(String(registrationId||''));
     if(!latest) return fail_('Pendaftaran tidak ditemukan.');
     if(String(latest.registration.userId)!==String(actor.userId) && !hasRoleDirect_(actor,['SUPERADMIN','ADMIN_PSB'])) return fail_('Anda tidak memiliki akses untuk mengirim pendaftaran ini.');
-    if(PSB_REGISTRATION_EDITABLE_STATUSES.indexOf(String(latest.registration.status))<0) return fail_('Pendaftaran tidak berada pada status yang dapat dikirim.');
+    const latestStatus=String(latest.registration.status||'').toUpperCase();
+    if(latestStatus==='SUBMITTED'){
+      const existingBill=ensureFormBillForRegistration_(latest.registration.registrationId,null,actor.userId,true);
+      if(!existingBill.success)return fail_('Pendaftaran sudah terkirim, tetapi tagihan formulir belum dapat dipastikan: '+existingBill.message);
+      return {success:true,message:'Pendaftaran sudah terkirim. Tagihan formulir telah dipastikan tersedia.',status:'SUBMITTED',bill:existingBill.bill,alreadySubmitted:true};
+    }
+    if(PSB_REGISTRATION_EDITABLE_STATUSES.indexOf(latestStatus)<0) return fail_('Pendaftaran tidak berada pada status yang dapat dikirim.');
     const latestValidation=validateCompleteRegistration_(latest); if(!latestValidation.success) return latestValidation;
     found=latest;
     const sheet = getDatabaseSpreadsheet_().getSheetByName(PSB_SHEETS.REGISTRATIONS);
