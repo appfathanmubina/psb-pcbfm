@@ -2286,6 +2286,31 @@ const PSB_SELECTION_ADMIN_ROLES = ['SUPERADMIN','ADMIN_PSB','SELEKSI'];
 const PSB_SELECTION_VIEW_ROLES = ['WALI','SUPERADMIN','ADMIN_PSB','SELEKSI','VERIFIKATOR'];
 const PSB_PAYMENT_EDITABLE_STATUSES = ['SUBMITTED','UNDER_REVIEW','REVISION','VERIFIED'];
 
+/**
+ * Persist a bill row and reconcile an ambiguous Sheets append outcome.
+ * A pre-generated billId is the idempotency key; never append a second row
+ * when the first append committed but the Apps Script call failed to return.
+ */
+function appendBillRecordWithRecovery_(sheet, headers, record) {
+  const billId=String(record&&record.billId||'').trim();
+  if(!sheet||!Array.isArray(headers)||!billId) throw new Error('INVALID_BILL_PERSISTENCE_INPUT');
+  const alreadyPersisted=findRowById_(sheet,'billId',billId);
+  if(alreadyPersisted) return alreadyPersisted;
+  try {
+    sheet.appendRow(headers.map(h=>record[h] == null ? '' : record[h]));
+  } catch(writeError) {
+    try {
+      const recovered=findRowById_(sheet,'billId',billId);
+      if(recovered) return recovered;
+    } catch(recoveryError) {
+      console.error('PSB_BILL_APPEND_RECOVERY_FAILED billId='+billId+': '+String(recoveryError&&recoveryError.message||recoveryError));
+    }
+    throw writeError;
+  }
+  SpreadsheetApp.flush();
+  return findRowById_(sheet,'billId',billId);
+}
+
 function ensureFormBillForRegistration_(registrationId, paymentTypes, actorUserId, suppressOwnerNotification) {
   const id=String(registrationId||'').trim();
   if(!id) return fail_('ID pendaftaran tidak valid.');
@@ -2314,12 +2339,13 @@ function ensureFormBillForRegistration_(registrationId, paymentTypes, actorUserI
   const now=new Date(),billId=generateId_('BIL'),record={};
   headers.forEach(h=>record[h]='');
   Object.assign(record,{billId,registrationId:id,paymentTypeId:String(formType.paymentTypeId),amount,dueDate:'',status:'UNPAID',createdAt:now,updatedAt:now});
-  sheet.appendRow(headers.map(h=>record[h]));
+  const confirmed=appendBillRecordWithRecovery_(sheet,headers,record);
+  if(!confirmed)return fail_('Tagihan formulir belum dapat dipastikan tersimpan. Silakan coba kembali.');
   try{writeAudit_(actorUserId||'SYSTEM','CREATE','PAYMENT',billId,'',JSON.stringify(record),'Tagihan formulir dibuat otomatis saat pendaftaran dikirim');}catch(auditError){console.error('Auto form bill audit failed: '+auditError);}
   if(!suppressOwnerNotification){
     try{notifyRegistrationOwner_(id,'Tagihan Formulir Telah Tersedia','Tagihan biaya formulir sebesar Rp '+amount.toLocaleString('id-ID')+' telah dibuat otomatis. Silakan buka menu Pembayaran untuk mengunggah bukti transfer. Menu Upload Dokumen akan aktif setelah pembayaran dikonfirmasi oleh Keuangan.','INFO');}catch(notificationError){console.error('Auto form bill notification failed: '+notificationError);}
   }
-  return {success:true,created:true,bill:record};
+  return {success:true,created:true,bill:confirmed.object};
 }
 
 function getPaymentPageData(sessionToken, registrationId) {
@@ -2711,8 +2737,7 @@ function createBill(sessionToken,payload){
     }
     const now=new Date(), billId=generateId_('BIL'), record={}; headers.forEach(h=>record[h]='');
     Object.assign(record,{billId,registrationId,paymentTypeId,amount,dueDate,status:'UNPAID',createdAt:now,updatedAt:now});
-    sheet.appendRow(headers.map(h=>record[h]));
-    const confirmed=findRowById_(sheet,'billId',billId);
+    const confirmed=appendBillRecordWithRecovery_(sheet,headers,record);
     if(!confirmed)return fail_('Tagihan belum dapat dikonfirmasi tersimpan. Silakan ulangi permintaan.');
     try{
       writeAudit_(actor.userId,'CREATE','PAYMENT',billId,'',JSON.stringify(record),'Tagihan pembayaran dibuat');
@@ -4065,9 +4090,10 @@ function ensureReregistrationBill_(found, actorUserId) {
   const now = new Date();
   const due = new Date(now.getTime() + 7 * 86400000);
   const record = {billId:generateId_('BIL'),registrationId:String(found.registration.registrationId),paymentTypeId:type.paymentTypeId,amount:amount,dueDate:due,status:'UNPAID',createdAt:now,updatedAt:now};
-  billSheet.appendRow(headers.map(h => record[h] == null ? '' : record[h]));
+  const confirmed=appendBillRecordWithRecovery_(billSheet,headers,record);
+  if(!confirmed)return null;
   try { writeAudit_(actorUserId || 'SYSTEM','CREATE','PAYMENT',record.billId,'',JSON.stringify(record),'Tagihan Daftar Ulang dibuat otomatis'); } catch(e) {}
-  return record;
+  return confirmed.object;
 }
 
 function findReregistrationBillPayment_(registrationId) {
