@@ -45,8 +45,16 @@ assert.match(page, /years: sheetMapById_/,
   'Academic year enrichment map must be preloaded');
 assert.match(page, /waves: sheetMapById_/,
   'Wave enrichment map must be preloaded');
-assert.match(page, /levels: sheetMapById_/,
-  'Level enrichment map must be preloaded');
+assert.match(page, /levels: sheetMapById_([^\n]+, \['name'\])/,
+  'Level enrichment map must be preloaded with only its display name');
+assert.match(page, /years: sheetMapById_([^\n]+, \['name'\])/,
+  'Academic year enrichment map must project only its display name');
+assert.match(page, /waves: sheetMapById_([^\n]+, \['name'\])/,
+  'Wave enrichment map must project only its display name');
+assert.match(page, /sheetRowsByFields_\(ss\.getSheetByName\(PSB_SHEETS\.SELECTION_SCHEDULE\)/,
+  'Selection schedules must use field projections');
+assert.match(page, /sheetRowsByFields_\(ss\.getSheetByName\(PSB_SHEETS\.SELECTION_SCORES\)/,
+  'Selection scores must use field projections');
 assert.match(page, /if \(isWali\) registrationItems = registrationItems\.filter\(x => String\(x\.userId\) === String\(actor\.userId\)\)/,
   'Wali registrations must remain restricted to the signed-in owner');
 assert.match(page, /const participantsByRegistration = \{\}/,
