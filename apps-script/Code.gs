@@ -3109,7 +3109,7 @@ function addSelectionParticipant(sessionToken,payload){
     sheet.appendRow(safeSheetRow_(headers.map(h=>record[h])));
     const confirmed=findRowById_(sheet,'participantId',record.participantId);
     if(!confirmed)return fail_('Data peserta belum berhasil disimpan. Silakan coba kembali.');
-    record=confirmed.object;
+    if(String(confirmed.object.registrationId)!==registrationId || String(confirmed.object.scheduleId)!==scheduleId)return fail_('Data peserta yang tersimpan tidak sesuai. Silakan periksa kembali.');
   } finally { lock.releaseLock(); }
   writeAudit_(actor.userId,'CREATE','SELECTION_PARTICIPANT',record.participantId,'',JSON.stringify(record),'Peserta tes ditambahkan');
   const scheduleName=String(schedule.object.name||'Tes Seleksi'), selectionDate=String(schedule.object.selectionDate||'');
