@@ -3999,7 +3999,7 @@ function finalizeReregistration(sessionToken, registrationId) {
   const id = String(registrationId || '').trim();
   if (!id) return fail_('Pendaftaran wajib dipilih.');
   const lock=LockService.getScriptLock(); try { lock.waitLock(10000); } catch (lockError) { return fail_('Server sedang memproses permintaan lain. Silakan coba kembali beberapa saat lagi.'); }
-  let notificationPayload=null;
+  let notificationPayload=null, wasAlreadyCompleted=false;
   try {
     const ss=getDatabaseSpreadsheet_(), rrSheet=ss.getSheetByName(PSB_SHEETS.REREGISTRATIONS);
     const rrFound=findRowById_(rrSheet,'registrationId',id), regFound=findRegistration_(id);
@@ -4007,6 +4007,7 @@ function finalizeReregistration(sessionToken, registrationId) {
     const rrCompleted=String(rrFound.object.status||'').toUpperCase()==='COMPLETED';
     const regStatus=String(regFound.registration.status||'').toUpperCase();
     const alreadyCompleted=rrCompleted&&regStatus==='COMPLETED';
+    wasAlreadyCompleted=alreadyCompleted;
     // A fully committed completion may be retried solely to recover its notification.
     if(!alreadyCompleted){
       // Permit retry when one sheet was committed before a previous attempt failed.
@@ -4048,7 +4049,7 @@ function finalizeReregistration(sessionToken, registrationId) {
     notificationPayload={userId:String(confirmedReg.registration.userId||''),candidateName:String(confirmedReg.candidate?.fullName||'calon santri')};
   } finally { lock.releaseLock(); }
   if(notificationPayload?.userId){try{createNotificationOnce_(notificationPayload.userId,'Daftar Ulang Selesai','Proses daftar ulang untuk '+notificationPayload.candidateName+' telah selesai.','SUCCESS');}catch(notificationError){console.error('Reregistration completion notification failed: '+notificationError);}}
-  return {success:true,message:notificationPayload?'Daftar ulang berhasil diselesaikan.':'Daftar ulang sudah selesai.',status:'COMPLETED',alreadyCompleted:!!notificationPayload};
+  return {success:true,message:wasAlreadyCompleted?'Daftar ulang sudah selesai.':'Daftar ulang berhasil diselesaikan.',status:'COMPLETED',alreadyCompleted:wasAlreadyCompleted};
 }
 function syncReregistrationAfterPayment_(registrationId, actorUserId, deferNotification, lockAlreadyHeld) {
   if(lockAlreadyHeld) return syncReregistrationAfterPaymentLocked_(registrationId,actorUserId,deferNotification);
