@@ -31,7 +31,7 @@ assert.match(verify, /const verified=findRowById_\(sheet,'paymentId',paymentId\)
   'The final payment status must still be re-read and confirmed');
 assert.match(verify, /if\(status==='REJECTED'&&currentBillStatus==='PAID'\)/,
   'A repeated rejection must detect a bill that has already become PAID');
-assert.match(verify, /newerVerifiedPayment=sheetRowsMatchingValues_\\(sheet,'billId',\\[String\\(found\\.object\\.billId\\|\\|''\\)\\]\\)/,
+assert.match(verify, /newerVerifiedPayment=sheetRowsMatchingValues_\(sheet,'billId',\[String\(found\.object\.billId\|\|''\)\]\)/,
   'A paid bill must be associated with a different verified payment before preserving it');
 assert.match(verify, /if\(!preservePaidBill\)bills\.getRange\(br\.rowNumber,billStatusIdx\+1\)\.setValue\(targetBillStatus\)/,
   'A rejection retry must never write UNPAID over a bill preserved as PAID');
