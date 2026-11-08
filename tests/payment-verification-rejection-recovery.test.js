@@ -89,9 +89,9 @@ assert.ok(render.includes("p?.status==='REJECTED'&&p?.verificationNote"),
   'The Wali must see the rejection reason');
 assert.match(render, /p\?\.status==='SUBMITTED'\?'PAYMENT_REVIEW'/,
   'A submitted payment must remain in review even if the bill write already says PAID');
-assert.match(render, /isWali&&p\?\.status!=='SUBMITTED'&&st!=='PAID'/,
+assert.match(render, /isWali&&!b\.reconciliationRequired&&p\?\.status!=='SUBMITTED'&&st!=='PAID'/,
   'The Wali must not be able to upload a duplicate proof while verification is pending');
-assert.match(render, /isWali&&p\?\.status!=='SUBMITTED'&&st!=='PAID'&&\(!p\|\|p\.status==='REJECTED'\)/,
+assert.match(render, /isWali&&!b\.reconciliationRequired&&p\?\.status!=='SUBMITTED'&&st!=='PAID'&&\(!p\|\|p\.status==='REJECTED'\)/,
   'The Wali must be able to upload again after rejection without allowing duplicate uploads while pending');
 
 console.log('Payment verification and rejection recovery safeguards: OK');
