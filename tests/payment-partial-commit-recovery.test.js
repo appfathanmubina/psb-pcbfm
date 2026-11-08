@@ -45,8 +45,8 @@ assert.match(dashboard, /state\?\.status==='WAITING'\|\|state\?\.requiresReview/
   'Dashboard verification queue must include submitted and inconsistent bill/payment states');
 
 const render = section(frontend, 'function renderPaymentContent(){', '\nfunction openPaymentUpload(billId)', 'Payment renderer');
-assert.match(render, /displayStatus=p\?\.status==='SUBMITTED'\?'PAYMENT_REVIEW':\(st==='PAID'\?'PAID'/,
-  'Wali payment UI must display a submitted proof as awaiting verification even if the bill was partially marked paid');
+assert.match(render, /displayStatus=p\?\.status==='SUBMITTED'\?'PAYMENT_REVIEW':b\.reconciliationRequired\?'RECONCILIATION_REQUIRED'/,
+  'Wali payment UI must display a submitted proof as awaiting verification before showing a bill-level reconciliation warning');
 assert.match(render, /isWali&&p\?\.status!=='SUBMITTED'&&st!=='PAID'&&\(!p\|\|p\.status==='REJECTED'\)/,
   'Wali must not be offered another upload while a proof is submitted or verified');
 
