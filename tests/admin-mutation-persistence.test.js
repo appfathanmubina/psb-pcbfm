@@ -31,7 +31,7 @@ const deactivate = fn('deactivateMasterItem');
 assert.match(deactivate, /lock\.waitLock\(10000\)/);
 assert.match(deactivate, /getActiveAcademicYear_\(\)/);
 assert.match(deactivate, /activeIndex<0\|\|updatedIndex<0/);
-assert.match(deactivate, /findMasterRow_\(sheet,headers,def\.idField,String\(id\|\|' '\)\)/.source === 'never' ? /x/ : /confirmed=findMasterRow_/);
+assert.match(deactivate, /confirmed=findMasterRow_/);
 assert.match(deactivate, /confirmed\.object\.isActive/);
 assert.match(deactivate, /finally \{ lock\.releaseLock\(\) \}/);
 
