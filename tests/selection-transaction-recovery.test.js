@@ -25,6 +25,13 @@ assert.match(publish, /if\(!alreadyPublished && !\['SELECTION','PASSED',expected
 assert.ok(publish.indexOf('setRegistrationStatus_(latestReg.registration,nextStatus') < publish.indexOf('resultSheet.getRange(latest.rowNumber,dateIdx+1).setValue(now)'),
   'Announcement marker must remain the final state commit after follow-up state is ready');
 
+assert.match(publish, /notificationPayload=\{userId,status:latestStatus,title,message\}/,
+  'Announcement retry must reconstruct the Wali notification payload from the committed result');
+assert.match(publish, /catch\(auditError\)/,
+  'Audit failure after announcement commit must not skip notification fan-out');
+assert.match(publish, /createNotificationOnce_\(p\.userId,p\.title,p\.message/,
+  'Announcement notification retries must use idempotent notification creation');
+
 assert.match(publish, /passedWorkflowAdvanced=latestStatus==='PASSED' && \['REREGISTRATION','PAYMENT_VERIFIED','COMPLETED'\]\.includes\(currentRegStatus\)/,
   'A published PASS result must recognize downstream re-registration and completion states');
 assert.match(publish, /if\(currentRegStatus!==nextStatus && !passedWorkflowAdvanced\)/,
@@ -97,5 +104,17 @@ assert.ok(verification.includes('catch(notificationError)'),
   'Notification failure after registration verification must not turn the committed decision into an apparent failure');
 assert.ok(verification.indexOf('catch(notificationError)') > verification.indexOf('setRegistrationStatus_('),
   'Verification notification isolation must occur after the registration status transition');
+
+const statusHelper = section(
+  'function setRegistrationStatus_(',
+  '\\n// =====================================================\\n// STAGE 5 - DOKUMEN',
+  'Registration status persistence helper'
+);
+assert.match(statusHelper, /if\(statusIdx<0\) return fail_/,
+  'Registration status helper must reject a missing status column');
+assert.match(statusHelper, /findRowById_\(sheet,'registrationId'/,
+  'Registration status helper must verify the persisted registration status');
+assert.match(statusHelper, /catch\(auditError\)/,
+  'Post-commit audit failure must not report a confirmed status transition as failed');
 
 console.log('Selection transaction recovery safeguards: OK');
