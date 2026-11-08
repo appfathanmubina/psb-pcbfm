@@ -2030,25 +2030,18 @@ function sheetRowsByFields_(sheet, fields) {
 }
 
 function getFormPaymentVerifiedRegistrationIds_() {
-  const ss = getDatabaseSpreadsheet_();
-  const formTypes = getActiveMasterItems_('MASTER_JENIS_PEMBAYARAN').filter(x => /formulir/i.test(String(x.name || '')));
-  const formTypeIds = Object.create(null);
-  formTypes.forEach(x => { formTypeIds[String(x.paymentTypeId)] = true; });
-  const bills = sheetRowsByFields_(ss.getSheetByName(PSB_SHEETS.BILLS), ['registrationId','billId','paymentTypeId','status']);
-  const payments = sheetRowsByFields_(ss.getSheetByName(PSB_SHEETS.PAYMENTS), ['billId','status']);
-  const verifiedPayments = Object.create(null);
-  payments.forEach(x => {
-    if (String(x.status || '').toUpperCase() === 'VERIFIED') verifiedPayments[String(x.billId || '')] = true;
+  const ss=getDatabaseSpreadsheet_();
+  // Inactive master types remain valid for bills created historically.
+  const formTypes=sheetRows_(ss.getSheetByName(PSB_SHEETS.MASTER_JENIS_PEMBAYARAN)).filter(x=>/formulir/i.test(String(x.name||'')));
+  const typeIds=Object.create(null);formTypes.forEach(x=>{typeIds[String(x.paymentTypeId)]=true;});
+  const bills=sheetRowsByFields_(ss.getSheetByName(PSB_SHEETS.BILLS),['billId','registrationId','paymentTypeId','status','amount']);
+  const payments=sheetRowsMatchingValuesByFields_(ss.getSheetByName(PSB_SHEETS.PAYMENTS),'billId',bills.map(x=>String(x.billId||'')).filter(Boolean),['billId','registrationId','amount','status']);
+  const ledger=reconcilePaymentLedger_(bills,payments),ids=Object.create(null);
+  bills.forEach(b=>{
+    const state=ledger.byBill[String(b.billId||'')];
+    if(typeIds[String(b.paymentTypeId||'')]&&state?.status==='PAID'&&!state.requiresReview)ids[String(b.registrationId||'')]=true;
   });
-  const registrationIds = Object.create(null);
-  bills.forEach(x => {
-    if (!formTypeIds[String(x.paymentTypeId || '')]) return;
-    if (String(x.status || '').toUpperCase() === 'CANCELLED') return;
-    if (String(x.status || '').toUpperCase() === 'PAID' || verifiedPayments[String(x.billId || '')]) {
-      registrationIds[String(x.registrationId || '')] = true;
-    }
-  });
-  return new Set(Object.keys(registrationIds).filter(Boolean));
+  return new Set(Object.keys(ids).filter(Boolean));
 }
 
 function isFormPaymentVerified_(registrationId) {
@@ -2703,17 +2696,82 @@ function paymentStatusPriority_(status) {
   return value==='VERIFIED'?3:value==='SUBMITTED'?2:value==='REJECTED'?1:0;
 }
 
-function preferredPaymentForBill_(current, candidate) {
+function paymentAmountMatchesBill_(bill,payment) {
+  const billAmount=Number(bill?.amount),paymentAmount=Number(payment?.amount);
+  if(payment?.amount===undefined||payment?.amount===null||String(payment.amount).trim()==='')return false;
+  return Number.isFinite(billAmount)&&billAmount>0&&Number.isFinite(paymentAmount)&&
+    Math.round(billAmount*100)===Math.round(paymentAmount*100);
+}
+
+/**
+ * Canonical payment ledger reconciliation. Bill PAID is never treated as
+ * proof of receipt without exactly linked VERIFIED payment rows.
+ */
+function reconcilePaymentLedger_(bills,payments) {
+  const allBills=bills||[],activeBills=allBills.filter(b=>String(b.status||'').toUpperCase()!=='CANCELLED');
+  const billById=Object.create(null),paymentsByBill=Object.create(null),issueByBill=Object.create(null),cancelledIds=Object.create(null);
+  const summary={billAmount:0,paidAmount:0,pendingAmount:0,unpaidAmount:0,paidBills:0,pendingBills:0,
+    rejectedPayments:0,orphanPayments:0,registrationMismatchPayments:0,amountMismatchPayments:0,
+    duplicateVerifiedBills:0,paidWithoutVerifiedBills:0,verifiedBillStatusMismatch:0,cancelledBillPayments:0,requiresReviewBills:0};
+  const result={summary,byBill:Object.create(null),verifiedPayments:[],paymentRows:payments||[]};
+  allBills.forEach(b=>{const id=String(b.billId||'').trim();if(id&&String(b.status||'').toUpperCase()==='CANCELLED')cancelledIds[id]=true;});
+  activeBills.forEach(b=>{
+    const id=String(b.billId||'').trim();if(!id)return;
+    billById[id]=b;
+    const amount=Number(b.amount);if(Number.isFinite(amount)&&amount>0)summary.billAmount+=amount;
+  });
+  (payments||[]).forEach(p=>{
+    const id=String(p.billId||'').trim(),bill=billById[id];
+    if(!bill){if(cancelledIds[id])summary.cancelledBillPayments++;else summary.orphanPayments++;return;}
+    if(String(p.registrationId||'')!==String(bill.registrationId||'')){summary.registrationMismatchPayments++;issueByBill[id]=true;return;}
+    if(!paymentAmountMatchesBill_(bill,p)){summary.amountMismatchPayments++;issueByBill[id]=true;return;}
+    if(!paymentsByBill[id])paymentsByBill[id]=[];
+    paymentsByBill[id].push(p);
+  });
+  activeBills.forEach(b=>{
+    const id=String(b.billId||'').trim();if(!id)return;
+    const attempts=paymentsByBill[id]||[];
+    const verified=attempts.filter(p=>String(p.status||'').toUpperCase()==='VERIFIED');
+    const submitted=attempts.filter(p=>String(p.status||'').toUpperCase()==='SUBMITTED');
+    const rejected=attempts.filter(p=>String(p.status||'').toUpperCase()==='REJECTED');
+    summary.rejectedPayments+=rejected.length;
+    const billStatus=String(b.status||'').toUpperCase();
+    let status='UNPAID',paidAmount=0,pendingAmount=0,requiresReview=!!issueByBill[id];
+    if(verified.length){
+      status='PAID';paidAmount=Number(b.amount)||0;summary.paidBills++;summary.paidAmount+=paidAmount;
+      result.verifiedPayments.push(verified[0]);
+      if(verified.length>1){summary.duplicateVerifiedBills++;requiresReview=true;}
+      if(billStatus!=='PAID'){summary.verifiedBillStatusMismatch++;requiresReview=true;}
+    }else if(submitted.length){
+      status='WAITING';pendingAmount=Number(b.amount)||0;summary.pendingBills++;summary.pendingAmount+=pendingAmount;
+      if(billStatus==='PAID'){summary.paidWithoutVerifiedBills++;requiresReview=true;}
+    }else if(rejected.length){
+      status='REJECTED';
+      if(billStatus==='PAID'){summary.paidWithoutVerifiedBills++;requiresReview=true;}
+    }else{
+      status='UNPAID';summary.unpaidAmount+=Number(b.amount)||0;
+      if(billStatus==='PAID'){summary.paidWithoutVerifiedBills++;requiresReview=true;}
+    }
+    if(requiresReview)summary.requiresReviewBills++;
+    result.byBill[id]={billId:id,registrationId:String(b.registrationId||''),status,paidAmount,pendingAmount,
+      rejectedAttempts:rejected.length,verifiedAttempts:verified.length,submittedAttempts:submitted.length,
+      requiresReview,billStatus};
+  });
+  return result;
+}
+
+function preferredPaymentForBill_(current,candidate) {
   if(!current)return candidate;
   return paymentStatusPriority_(candidate?.status)>paymentStatusPriority_(current?.status)?candidate:current;
 }
 
-function paymentQueueStatus_(billStatus, payments) {
+function paymentQueueStatus_(billStatus,payments,bill) {
+  if(bill)return reconcilePaymentLedger_([bill],payments).byBill[String(bill.billId||'')]?.status||'UNPAID';
   const statuses=(payments||[]).map(x=>String(x?.status||'').toUpperCase());
   if(statuses.includes('VERIFIED'))return 'PAID';
   if(statuses.includes('SUBMITTED'))return 'WAITING';
   if(statuses.includes('REJECTED'))return 'REJECTED';
-  return String(billStatus||'').toUpperCase()==='PAID'?'PAID':'UNPAID';
+  return 'UNPAID';
 }
 
 function buildPaymentData_(registrationId, paymentTypes) {
@@ -3078,6 +3136,7 @@ function verifyPayment(sessionToken,payload){
     if(!br)return fail_('Tagihan terkait pembayaran tidak ditemukan. Verifikasi dibatalkan.');
     if(String(br.object.registrationId||'')!==String(found.object.registrationId||''))return fail_('Relasi tagihan dan pendaftaran tidak sesuai. Verifikasi dibatalkan.');
     if(String(br.object.status||'').toUpperCase()==='CANCELLED')return fail_('Tagihan terkait pembayaran sudah dibatalkan. Verifikasi tidak dapat dilanjutkan.');
+    if(!paymentAmountMatchesBill_(br.object,found.object))return fail_('Nominal pembayaran tidak sesuai dengan tagihan. Verifikasi dibatalkan dan perlu pemeriksaan Keuangan.');
     if(status==='VERIFIED'){
       const otherVerifiedPayment=sheetRowsMatchingValues_(sheet,'billId',[String(found.object.billId||'')])
         .find(x=>String(x.paymentId||'')!==paymentId&&String(x.status||'').toUpperCase()==='VERIFIED');
