@@ -111,7 +111,7 @@ assert.match(verifyPayment,/paymentAmountMatchesBill_\(br\.object,found\.object\
 const verifyDocument=section(backend,'function verifyDocument(sessionToken, payload) {','\nfunction finalizeVerification', 'Document verification');
 assert.match(verifyDocument,/isFormPaymentVerified_\(/,
   'Document verification must use the same reconciled payment gate');
-assert.match(verifyDocument,/status==='REREGISTRATION'/,
+assert.match(verifyDocument,/String\(reg\.registration\.status\)\.toUpperCase\(\)!=='REREGISTRATION'/,
   'The separate re-registration document workflow remains supported');
 
 const finalize=section(backend,'function finalizeVerification(sessionToken, payload) {','\nfunction setRegistrationStatus_', 'Registration verification');
