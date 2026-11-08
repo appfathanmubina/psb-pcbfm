@@ -60,8 +60,8 @@ assert.equal(recovered.object.billId, record.billId, 'Recovery must return the c
 assert.equal(recovered.object.status, 'UNPAID', 'Recovery must return the persisted bill state');
 
 const retry = persist(sheet, headers, record);
-assert.equal(rows.length, 2, 'The helper only persists when called; higher-level idempotency must reuse existing bill before invoking it');
-assert.equal(retry.object.billId, record.billId, 'Readback must identify the bill by its stable ID');
+assert.equal(rows.length, 1, 'A repeated persistence call with the same bill ID must not append a duplicate row');
+assert.equal(retry.object.billId, record.billId, 'A repeated call must return the original committed bill');
 
 appendMode = 'fail-before-commit';
 const absentRecord = { ...record, billId: 'BIL-NOT-COMMITTED' };
