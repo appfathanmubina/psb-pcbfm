@@ -2929,9 +2929,20 @@ function verifyPayment(sessionToken,payload){
     // The bill is the linked financial state. Confirm it before committing
     // PAYMENTS.status, so retries can safely finish an interrupted decision.
     const targetBillStatus=status==='VERIFIED'?'PAID':'UNPAID';
-    bills.getRange(br.rowNumber,billStatusIdx+1).setValue(targetBillStatus);
+    const currentBillStatus=String(br.object.status||'').toUpperCase();
+    let preservePaidBill=false;
+    if(status==='REJECTED'&&currentBillStatus==='PAID'){
+      // A rejected older proof may be retried after a newer proof for the
+      // same bill has already been verified. Never downgrade that paid bill.
+      const newerVerifiedPayment=sheetRowsMatchingValues_(sheet,'billId',[String(found.object.billId||'')])
+        .find(x=>String(x.paymentId||'')!==paymentId&&String(x.status||'').toUpperCase()==='VERIFIED');
+      if(!newerVerifiedPayment)return fail_('Tagihan sudah berstatus LUNAS. Penolakan pembayaran ini tidak dapat mengubah status tagihan yang sudah lunas.');
+      preservePaidBill=true;
+    }
+    if(!preservePaidBill)bills.getRange(br.rowNumber,billStatusIdx+1).setValue(targetBillStatus);
     const confirmedBill=findRowById_(bills,'billId',String(found.object.billId||''));
-    if(!confirmedBill||String(confirmedBill.object.status||'').toUpperCase()!==targetBillStatus){
+    const expectedBillStatus=preservePaidBill?'PAID':targetBillStatus;
+    if(!confirmedBill||String(confirmedBill.object.status||'').toUpperCase()!==expectedBillStatus){
       return fail_('Status tagihan belum berhasil disimpan. Keputusan pembayaran belum difinalisasi; silakan coba kembali.');
     }
 
@@ -3804,6 +3815,14 @@ function openReregistration(sessionToken, registrationId) {
     const rrSheet=ss.getSheetByName(PSB_SHEETS.REREGISTRATIONS);
     const current=findRowById_(rrSheet,'registrationId',id);
     if(['PAYMENT_VERIFIED','COMPLETED'].includes(currentStatus) && !current)return fail_('Status pendaftaran sudah berlanjut, tetapi data Daftar Ulang tidak ditemukan. Perlu pemeriksaan administrator sebelum membuka ulang.');
+    const reregistrationType=getActiveMasterItems_('MASTER_JENIS_PEMBAYARAN')
+      .find(x=>/daftar\s*ulang/i.test(String(x.name||'')));
+    if(!reregistrationType)return fail_('Jenis pembayaran Daftar Ulang belum aktif pada Master Data → Jenis Pembayaran.');
+    const existingReregistrationBill=sheetRows_(ss.getSheetByName(PSB_SHEETS.BILLS))
+      .find(x=>String(x.registrationId)===id&&String(x.paymentTypeId)===String(reregistrationType.paymentTypeId)&&String(x.status||'').toUpperCase()!=='CANCELLED');
+    const reregistrationAmount=Number(reregistrationType.amount);
+    if(!existingReregistrationBill&&(!Number.isFinite(reregistrationAmount)||reregistrationAmount<=0))
+      return fail_('Nominal tagihan Daftar Ulang belum valid. Pastikan nominalnya lebih besar dari Rp0 pada Master Data → Jenis Pembayaran.');
     // Always run the idempotent helper, even when the reregistration row
     // already exists. This repairs a missing bill after an earlier partial
     // attempt instead of returning a misleading "already open" response.
@@ -3870,10 +3889,12 @@ function ensureReregistrationBill_(found, actorUserId) {
   const rows = sheetRows_(billSheet);
   const existing = rows.find(x => String(x.registrationId) === String(found.registration.registrationId) && String(x.paymentTypeId) === String(type.paymentTypeId) && String(x.status || '').toUpperCase() !== 'CANCELLED');
   if (existing) return existing;
+  const amount = Number(type.amount);
+  if (!Number.isFinite(amount) || amount <= 0) return null;
   const headers = billSheet.getRange(1,1,1,billSheet.getLastColumn()).getValues()[0].map(String);
   const now = new Date();
   const due = new Date(now.getTime() + 7 * 86400000);
-  const record = {billId:generateId_('BIL'),registrationId:String(found.registration.registrationId),paymentTypeId:type.paymentTypeId,amount:Number(type.amount || 0),dueDate:due,status:'UNPAID',createdAt:now,updatedAt:now};
+  const record = {billId:generateId_('BIL'),registrationId:String(found.registration.registrationId),paymentTypeId:type.paymentTypeId,amount:amount,dueDate:due,status:'UNPAID',createdAt:now,updatedAt:now};
   billSheet.appendRow(headers.map(h => record[h] == null ? '' : record[h]));
   try { writeAudit_(actorUserId || 'SYSTEM','CREATE','PAYMENT',record.billId,'',JSON.stringify(record),'Tagihan Daftar Ulang dibuat otomatis'); } catch(e) {}
   return record;

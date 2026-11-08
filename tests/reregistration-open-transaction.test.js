@@ -32,4 +32,32 @@ assert.match(open, /const confirmed=findRegistration_\(id\)/,
 assert.match(open, /finally \{ lock\.releaseLock\(\); \}/,
   'Opening re-registration must always release ScriptLock');
 
+const amountGuard = open.indexOf('reregistrationAmount=Number(reregistrationType.amount)');
+assert.ok(amountGuard > lock,
+  'Re-registration fee must be validated inside the transaction lock');
+assert.match(open, /!Number\.isFinite\(reregistrationAmount\)\|\|reregistrationAmount<=0/,
+  'Opening re-registration must reject missing, non-finite, zero, or negative fee amounts');
+assert.match(open, /Nominal tagihan Daftar Ulang belum valid/,
+  'Invalid fee configuration must return an actionable administrator message');
+
+const helperStart = backend.indexOf('function ensureReregistration_(registrationId, actorUserId, createBill) {');
+const helperEnd = backend.indexOf('\nfunction ensureReregistrationBill_(', helperStart);
+assert.ok(helperStart >= 0 && helperEnd > helperStart, 'ensureReregistration helper must exist');
+const ensure = backend.slice(helperStart, helperEnd);
+assert.match(ensure, /ensureReregistrationBill_\(found, actorUserId \|\| 'SYSTEM'\)/,
+  'The idempotent re-registration helper must delegate bill creation to the guarded bill helper');
+
+const billStart = backend.indexOf('function ensureReregistrationBill_(found, actorUserId) {');
+const billEnd = backend.indexOf('\nfunction finalizeReregistration(', billStart);
+assert.ok(billStart >= 0 && billEnd > billStart, 're-registration bill helper must exist');
+const billHelper = backend.slice(billStart, billEnd);
+assert.match(billHelper, /const amount = Number\(type\.amount\)/,
+  'Bill creation must normalize the configured amount');
+assert.match(billHelper, /!Number\.isFinite\(amount\) \|\| amount <= 0/,
+  'Bill creation must never persist zero, negative, or non-finite amounts');
+assert.match(billHelper, /amount:amount/,
+  'The validated amount must be the value persisted to BILLS');
+assert.ok(billHelper.indexOf('if (existing) return existing;') < billHelper.indexOf('if (!Number.isFinite(amount) || amount <= 0) return null;'),
+  'Existing valid bills must remain usable even if the master amount is later misconfigured');
+
 console.log('Re-registration opening transaction safeguards: OK');
