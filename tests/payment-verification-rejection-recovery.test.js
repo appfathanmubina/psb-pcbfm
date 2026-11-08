@@ -36,8 +36,8 @@ assert.ok(
 );
 assert.ok(verify.includes("if(!confirmedBill||String(confirmedBill.object.status||'').toUpperCase()!==targetBillStatus){"),
   'A bill status write that did not persist must stop finalization');
-assert.match(verify, /if\(reregistrationNotification\?\.success===false\)return reregistrationNotification/,
-  'A failed re-registration synchronization must propagate to the caller');
+assert.match(verify, /if\\(!reregistrationNotification\\|\\|reregistrationNotification\\.success!==true\\)/,
+  'Payment verification must require an explicit successful re-registration synchronization result');
 assert.ok(
   verify.indexOf('const confirmedBill=findRowById_') <
   verify.indexOf('sheet.getRange(found.rowNumber,paymentStatusIdx+1).setValue(status)'),
