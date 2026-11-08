@@ -59,7 +59,7 @@ function assertNotificationAfterLockRelease(name, notificationPattern) {
 for (const [name, pattern] of [
   ['verifyPayment', /notifyUsersByRoles_|notifyRegistrationOwner_|createNotification_/],
   ['addSelectionParticipantsBulk', /notifyRegistrationOwner_/],
-  ['publishAnnouncement', /createNotification_/],
+  ['publishAnnouncement', /createNotificationOnce_/],
   ['openReregistration', /createNotification_/],
   ['finalizeReregistration', /createNotification_/],
   ['submitRegistration', /notifyUsersByRoles_|notifyRegistrationOwner_/]
