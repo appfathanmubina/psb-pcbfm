@@ -576,3 +576,21 @@ Branch: `fix/notification-retry-recovery`
 - All notification writes occur after transaction ScriptLock release; the existing lock-protected `createNotificationOnce_()` helper serializes duplicate checks and append operations.
 - No Spreadsheet schema, role definitions, payment rules, stored production data, or Apps Script deployment changed.
 - Regression tests are static source-contract checks. Apps Script staging/runtime and failure-injection tests remain required before production rollout.
+
+
+## Repair batch 21 — event-keyed notification deduplication
+
+Branch: `fix/event-keyed-notification-deduplication`
+
+| ID | Finding | Change | Status |
+|---|---|---|---|
+| TXN-002 | `createNotificationOnce_()` deduplicated only by recipient, title, and message. A later legitimate transaction event with identical content could be suppressed as though it were a retry. | Add an optional durable event key. When supplied, derive a deterministic `notificationId` from the recipient and event key using SHA-256, then look up by that ID under ScriptLock. Migrate payment verification, registration verification, selection announcement, and re-registration notification paths to transaction-specific keys. Keep the prior content-based fallback only for legacy callers without an event key. | Implemented; regression test added; CI pending |
+
+### Scope and safety
+
+- No NOTIFICATIONS schema change is required; the existing `notificationId` field stores the deterministic event identity.
+- Retries of the same event for the same recipient resolve to one notification. New events with identical title/message receive distinct IDs; fan-out remains recipient-specific.
+- Payment event identity uses payment ID and decision. Registration verification uses registration ID, decision, and the persisted `updatedAt` transition timestamp. Selection announcements use the persisted announcement timestamp. Re-registration open/completion notifications use stable registration-scoped event identities.
+- The event-key lookup and append remain inside ScriptLock. Notification content, roles, and transaction state transitions are otherwise unchanged.
+- No production Spreadsheet data, schema, or Apps Script deployment was changed.
+- Regression coverage exercises duplicate retry, same-content new event, per-recipient fan-out, and legacy fallback. Apps Script staging/runtime and concurrency validation remain required before production rollout.
