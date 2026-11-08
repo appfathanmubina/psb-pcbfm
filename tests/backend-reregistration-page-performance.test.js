@@ -39,12 +39,14 @@ assert.match(page, /String\(b\.uploadedAt\|\|''\)\.localeCompare\(String\(a\.upl
   'Current documents must remain newest-first');
 assert.match(page, /requiredDocs = getActiveMasterItems_\('MASTER_DOKUMEN'\)\.filter\(x => x\.required\)/,
   'Only active required document types must be used');
-assert.match(page, /paymentTypeRows = getActiveMasterItems_\('MASTER_JENIS_PEMBAYARAN'\)/,
-  'Active payment types must be loaded once and reused');
+assert.match(page, /paymentTypeRows = sheetRows_\(ss\.getSheetByName\(PSB_SHEETS\.MASTER_JENIS_PEMBAYARAN\)\)/,
+  'All payment types must be loaded once so existing bills remain identifiable after master deactivation');
 assert.match(page, /paymentsByRegistrationAndBill\[id\]\[String\(payment\.billId\)\] = payment/,
   'Payment lookup must preserve last-row-wins behavior per registration and bill');
-assert.match(page, /bills\.find\(b => \/daftar\\s\*ulang\/i/,
-  'The first Daftar Ulang bill must remain the selected bill');
+assert.match(page, /reregistrationBills = bills\.filter\(b =>/,
+  'Only non-cancelled Daftar Ulang bills may be considered');
+assert.match(page, /reregistrationBills\.find\(b => String\(b\.status \|\| ''\)\.toUpperCase\(\) === 'PAID'\)/,
+  'A paid non-cancelled Daftar Ulang bill must take precedence over historical or unpaid bills');
 assert.match(page, /readyToComplete:ready/,
   'Readiness response must remain present');
 assert.match(page, /canManage:hasRoleDirect_\(actor,PSB_REREGISTRATION_ADMIN_ROLES\)/,
