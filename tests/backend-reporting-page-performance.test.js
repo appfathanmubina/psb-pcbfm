@@ -99,6 +99,10 @@ const context = {
   reportGroupName_: (level, gender) => level + ' · ' + (String(gender).toUpperCase() === 'L' ? 'Putra' : 'Putri')
 };
 vm.createContext(context);
+const ledgerHelperStart=code.indexOf('function paymentAmountMatchesBill_(');
+const ledgerHelperEnd=code.indexOf('\nfunction preferredPaymentForBill_(',ledgerHelperStart);
+assert.ok(ledgerHelperStart>=0&&ledgerHelperEnd>ledgerHelperStart,'Payment ledger helper exists');
+vm.runInContext(code.slice(ledgerHelperStart,ledgerHelperEnd),context);
 vm.runInContext(page, context);
 const result = JSON.parse(JSON.stringify(context.getReportingPageData('session-token', {})));
 
