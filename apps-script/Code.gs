@@ -5525,6 +5525,31 @@ function saveRegistration(sessionToken, payload) {
   } finally { lock.releaseLock(); }
 }
 
+function dispatchRegistrationSubmissionNotifications_(registrationId){
+  const found=findRegistration_(String(registrationId||''));
+  if(!found || String(found.registration.status||'').toUpperCase()!=='SUBMITTED')return false;
+  const eventKey='REGISTRATION_SUBMISSION:'+String(found.registration.registrationId);
+  const candidateName=String(found.candidate?.fullName||'calon santri');
+  const registrationNumber=String(found.registration.registrationNumber||found.registration.registrationId);
+  notifyUsersByRolesOnce_(
+    ['SUPERADMIN','ADMIN_PSB','KEUANGAN'],
+    'Pendaftaran Baru — Verifikasi Pembayaran Formulir',
+    candidateName+' telah mengirim pendaftaran '+registrationNumber+'. Tagihan formulir telah dibuat otomatis. Silakan periksa bukti pembayaran dan verifikasi setelah Wali mengunggahnya.',
+    'INFO',
+    eventKey
+  );
+  if(found.registration.userId){
+    createNotificationOnce_(
+      String(found.registration.userId),
+      'Pendaftaran Berhasil Dikirim',
+      'Formulir berhasil dikirim dan tagihan pembayaran formulir telah tersedia. Silakan unggah bukti pembayaran melalui menu Pembayaran. Menu Upload Dokumen akan aktif setelah pembayaran dikonfirmasi oleh Keuangan. Verifikasi PSB dimulai setelah pembayaran dikonfirmasi oleh bagian Keuangan.',
+      'SUCCESS',
+      eventKey
+    );
+  }
+  return true;
+}
+
 function submitRegistration(sessionToken, registrationId) {
   const actor = requireRole_(sessionToken, ['WALI','SUPERADMIN','ADMIN_PSB']);
   assertOperationalMutation_(actor);
@@ -5538,45 +5563,47 @@ function submitRegistration(sessionToken, registrationId) {
     if (!validation.success) return validation;
   }
   const lock=LockService.getScriptLock(); try { lock.waitLock(10000); } catch (lockError) { return fail_('Server sedang memproses permintaan lain. Silakan coba kembali beberapa saat lagi.'); }
-  let notificationPayload=null, response;
+  let response=null, shouldRecoverNotification=false;
   try {
     const latest=findRegistration_(String(registrationId||''));
-    if(!latest) return fail_('Pendaftaran tidak ditemukan.');
-    if(String(latest.registration.userId)!==String(actor.userId) && !hasRoleDirect_(actor,['SUPERADMIN','ADMIN_PSB'])) return fail_('Anda tidak memiliki akses untuk mengirim pendaftaran ini.');
+    if(!latest)return fail_('Pendaftaran tidak ditemukan.');
+    if(String(latest.registration.userId)!==String(actor.userId) && !hasRoleDirect_(actor,['SUPERADMIN','ADMIN_PSB']))return fail_('Anda tidak memiliki akses untuk mengirim pendaftaran ini.');
     const latestStatus=String(latest.registration.status||'').toUpperCase();
     if(latestStatus==='SUBMITTED'){
       const existingBill=ensureFormBillForRegistration_(latest.registration.registrationId,null,actor.userId,true);
       if(!existingBill.success)return fail_('Pendaftaran sudah terkirim, tetapi tagihan formulir belum dapat dipastikan: '+existingBill.message);
-      return {success:true,message:'Pendaftaran sudah terkirim. Tagihan formulir telah dipastikan tersedia.',status:'SUBMITTED',bill:existingBill.bill,alreadySubmitted:true};
+      response={success:true,message:'Pendaftaran sudah terkirim. Tagihan formulir telah dipastikan tersedia.',status:'SUBMITTED',bill:existingBill.bill,alreadySubmitted:true};
+      shouldRecoverNotification=true;
+    } else {
+      if(PSB_REGISTRATION_EDITABLE_STATUSES.indexOf(latestStatus)<0)return fail_('Pendaftaran tidak berada pada status yang dapat dikirim.');
+      const latestValidation=validateCompleteRegistration_(latest); if(!latestValidation.success)return latestValidation;
+      const sheet=getDatabaseSpreadsheet_().getSheetByName(PSB_SHEETS.REGISTRATIONS);
+      if(!sheet || sheet.getLastColumn()<1)return fail_('Struktur database pendaftaran belum tersedia.');
+      const headers=sheet.getRange(1,1,1,sheet.getLastColumn()).getValues()[0].map(String);
+      const row=latest.registration.rowNumber;
+      const statusIdx=headers.indexOf('status'), submittedIdx=headers.indexOf('submittedAt'), updatedIdx=headers.indexOf('updatedAt');
+      if(statusIdx<0)return fail_('Kolom status pendaftaran tidak tersedia.');
+      const autoBill=ensureFormBillForRegistration_(latest.registration.registrationId,null,actor.userId,true);
+      if(!autoBill.success)return fail_('Tagihan formulir belum dapat dibuat otomatis: '+autoBill.message+' Hubungi Superadmin untuk memeriksa Master Data → Jenis Pembayaran.');
+      const now=new Date();
+      sheet.getRange(row,statusIdx+1).setValue('SUBMITTED');
+      if(submittedIdx>=0)sheet.getRange(row,submittedIdx+1).setValue(now);
+      if(updatedIdx>=0)sheet.getRange(row,updatedIdx+1).setValue(now);
+      const confirmed=findRegistration_(String(registrationId||''));
+      if(!confirmed || String(confirmed.registration.status||'').toUpperCase()!=='SUBMITTED')return fail_('Status pendaftaran belum berhasil disimpan. Silakan coba kembali.');
+      try{
+        writeAudit_(actor.userId,'SUBMIT','REGISTRATION',confirmed.registration.registrationId,JSON.stringify({status:latest.registration.status}),JSON.stringify({status:'SUBMITTED'}),'Pendaftaran dikirim dan tagihan formulir dibuat otomatis');
+      }catch(auditError){console.error('Registration submission audit failed after confirmed save: '+String(auditError&&auditError.stack||auditError));}
+      response={success:true,message:'Pendaftaran berhasil dikirim. Tagihan formulir telah dibuat otomatis; silakan unggah bukti pembayaran terlebih dahulu. Menu Upload Dokumen akan aktif setelah pembayaran dikonfirmasi oleh Keuangan.',status:'SUBMITTED',bill:autoBill.bill};
+      shouldRecoverNotification=true;
     }
-    if(PSB_REGISTRATION_EDITABLE_STATUSES.indexOf(latestStatus)<0) return fail_('Pendaftaran tidak berada pada status yang dapat dikirim.');
-    const latestValidation=validateCompleteRegistration_(latest); if(!latestValidation.success) return latestValidation;
-    found=latest;
-    const sheet = getDatabaseSpreadsheet_().getSheetByName(PSB_SHEETS.REGISTRATIONS);
-    const headers = sheet.getRange(1,1,1,sheet.getLastColumn()).getValues()[0].map(String);
-    const row = found.registration.rowNumber;
-    const statusIdx = headers.indexOf('status'), submittedIdx = headers.indexOf('submittedAt'), updatedIdx = headers.indexOf('updatedAt');
-    const now = new Date();
-    const autoBill=ensureFormBillForRegistration_(found.registration.registrationId,null,actor.userId,true);
-    if(!autoBill.success) return fail_('Tagihan formulir belum dapat dibuat otomatis: '+autoBill.message+' Hubungi Superadmin untuk memeriksa Master Data → Jenis Pembayaran.');
-    if (statusIdx >= 0) sheet.getRange(row,statusIdx+1).setValue('SUBMITTED');
-    if (submittedIdx >= 0) sheet.getRange(row,submittedIdx+1).setValue(now);
-    if (updatedIdx >= 0) sheet.getRange(row,updatedIdx+1).setValue(now);
-    writeAudit_(actor.userId, 'SUBMIT', 'REGISTRATION', found.registration.registrationId, JSON.stringify({status:found.registration.status}), JSON.stringify({status:'SUBMITTED'}), 'Pendaftaran dikirim dan tagihan formulir dibuat otomatis');
-    notificationPayload={registrationId:found.registration.registrationId,candidateName:String(found.candidate?.fullName||'calon santri'),registrationNumber:String(found.registration.registrationNumber||found.registration.registrationId),bill:autoBill.bill};
-    response={success:true,message:'Pendaftaran berhasil dikirim. Tagihan formulir telah dibuat otomatis; silakan unggah bukti pembayaran terlebih dahulu. Menu Upload Dokumen akan aktif setelah pembayaran dikonfirmasi oleh Keuangan.',status:'SUBMITTED',bill:autoBill.bill};
   } finally { lock.releaseLock(); }
-  // Notification delivery is outside the critical section; saved registration and bill remain authoritative.
-  if(notificationPayload){
-    const p=notificationPayload;
-    try{
-      notifyUsersByRoles_(['SUPERADMIN','ADMIN_PSB','KEUANGAN'],'Pendaftaran Baru — Verifikasi Pembayaran Formulir',p.candidateName+' telah mengirim pendaftaran '+p.registrationNumber+'. Tagihan formulir telah dibuat otomatis. Silakan periksa bukti pembayaran dan verifikasi setelah Wali mengunggahnya.','INFO');
-      notifyRegistrationOwner_(p.registrationId,'Pendaftaran Berhasil Dikirim','Formulir berhasil dikirim dan tagihan pembayaran formulir telah tersedia. Silakan unggah bukti pembayaran melalui menu Pembayaran. Menu Upload Dokumen akan aktif setelah pembayaran dikonfirmasi oleh Keuangan. Verifikasi PSB dimulai setelah pembayaran dikonfirmasi oleh bagian Keuangan.','SUCCESS');
-    }catch(notificationError){console.error('Registration submission notifications failed after save: '+notificationError);}
+  if(shouldRecoverNotification){
+    try{dispatchRegistrationSubmissionNotifications_(registrationId);}
+    catch(notificationError){console.error('Registration submission notification recovery failed: '+String(notificationError&&notificationError.stack||notificationError));}
   }
   return response;
 }
-
 
 function validateRegistrationPayload_(payload, strict) {
   const c = payload.candidate || {}, g = payload.guardian || {}, a = payload.address || {}, s = payload.school || {};
