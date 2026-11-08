@@ -966,7 +966,7 @@ function cleanupPSBSessions_(limit) {
   }
   if (processed) {
     sheet.getRange(2,7,statusValues.length,1).setValues(statusValues);
-    expiredHashes.forEach(h=>{try{CacheService.getScriptCache().remove('PSB_SESSION_'+h.substring(0,40));}catch(e){}});
+    expiredHashes.forEach(h=>{try{CacheService.getScriptCache().remove('PSB_SESSION_ROW_V1_'+h.substring(0,40));}catch(e){}});
   }
   return {processed:processed,expired:expired,idle:idle};
 }
