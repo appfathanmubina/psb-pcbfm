@@ -20,7 +20,7 @@ const childSheets = [
 ];
 for (const sheet of childSheets) {
   const escaped = sheet.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  const reads = page.match(new RegExp('sheetRows_\\(ss\\.getSheetByName\\(PSB_SHEETS\\.' + escaped + '\\)\\)', 'g')) || [];
+  const reads = page.match(new RegExp('sheetRowsByFields_\\(ss\\.getSheetByName\\(PSB_SHEETS\\.' + escaped + '\\)\\)', 'g')) || [];
   assert.equal(reads.length, 1, sheet + ' must be read exactly once and reused');
 }
 assert.match(page, /allChildRows\.DOCUMENTS\.filter/,
@@ -52,6 +52,10 @@ assert.match(page, /const scheduleIds=\{\}/,
   'Schedule membership index must be built once');
 assert.match(page, /if\(!scheduleIds\[String\(p\.scheduleId\)\]\)/,
   'Participant schedule checks must use the schedule index');
+assert.match(page, /allRegistrationIds\[String\(x\[field\]\)\]/,
+  'Historical child rows must be checked against registrations from every academic year');
+assert.match(page, /allChildRows\.SELECTION_PARTICIPANTS\.forEach/,
+  'Score references must be checked against participants from every academic year');
 assert.match(page, /allChildRows\[sheet\]/,
   'Orphan checks must still inspect all child rows, not only active-year rows');
 assert.match(page, /writeAudit_\(actor\.userId,'MONITORING_VIEW'/,
