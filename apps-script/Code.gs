@@ -279,7 +279,7 @@ function login(identifier, password) {
     }
 
     enterTimingStage_('userLookup');
-    const user = findUser_(key);
+    let user = findUser_(key);
     if (!user || String(user.status).toUpperCase() !== 'ACTIVE') {
       registerLoginFailure_(key);
       return finishLoginTiming_(fail_('Login gagal. Periksa No. HP/email dan password.'), 'user_unavailable');
@@ -298,12 +298,35 @@ function login(identifier, password) {
       enterTimingStage_('pbkdf2ToSha256Migration');
       try { migratePbkdf2PasswordToLegacySha256AfterLogin_(user, password); }
       catch (migrationError) { console.warn('AUTH_PASSWORD_HASH_MIGRATION_SKIPPED'); }
+      // The migration may have replaced the stored hash. Refresh and verify
+      // again before the session commit so a concurrent password reset wins.
+      const refreshedUser=findUserById_(user.userId,true);
+      if(!refreshedUser || String(refreshedUser.status).toUpperCase()!=='ACTIVE' || !verifyPasswordForUser_(password,refreshedUser).valid){
+        registerLoginFailure_(key);
+        return finishLoginTiming_(fail_('Login gagal. Periksa No. HP/email dan password.'),'credentials_changed');
+      }
+      user=refreshedUser;
     }
 
-    // Buat sesi lebih dahulu. Kegagalan membersihkan penghitung percobaan
-    // tidak boleh membatalkan login yang sesinya sudah berhasil dibuat.
+    // Serialize the final credential check with password changes/resets.
+    // A login that verified an old hash before a reset must not create a
+    // fresh session after the reset has revoked existing sessions.
     enterTimingStage_('sessionCreation');
-    const session = createSession_(user.userId);
+    const sessionLock=LockService.getScriptLock();
+    try { sessionLock.waitLock(10000); } catch (sessionLockError) {
+      return finishLoginTiming_(fail_('Server sedang memproses permintaan lain. Silakan coba kembali.'),'session_lock_timeout');
+    }
+    let session;
+    try {
+      const currentUser=findUserById_(user.userId,true);
+      if(!currentUser || String(currentUser.status).toUpperCase()!=='ACTIVE' ||
+          currentUser.passwordHash!==user.passwordHash || currentUser.passwordSalt!==user.passwordSalt){
+        registerLoginFailure_(key);
+        return finishLoginTiming_(fail_('Login gagal. Periksa No. HP/email dan password.'),'credentials_changed');
+      }
+      user=currentUser;
+      session=createSession_(user.userId);
+    } finally { sessionLock.releaseLock(); }
     enterTimingStage_('clearLoginFailure');
     try { clearLoginFailure_(key); } catch (clearError) {
       console.warn('AUTH_LOGIN_FAILURE_COUNTER_CLEAR_FAILED');
@@ -849,11 +872,38 @@ function getSessionUser_(token, touch) {
   }
 
   // Batasi penulisan lastActivity maksimal sekali per 2 menit per sesi.
-  // Idle timeout tetap 30 menit; validasi status sesi tetap dilakukan setiap request.
+  // Gunakan lock yang sama dengan cleanup/logout agar penulisan aktivitas
+  // tidak berlomba dengan pencabutan atau timeout sesi.
   if (touch && (now.getTime() - lastActivity.getTime()) >= 2 * 60000) {
-    const touchedAt = now;
-    sheet.getRange(found.rowNumber, 6).setValue(touchedAt);
-    row[5] = touchedAt;
+    const touchLock=LockService.getScriptLock();
+    try { touchLock.waitLock(5000); } catch (touchLockError) {
+      return fail_('Server sedang memproses sesi. Silakan coba kembali.');
+    }
+    try {
+      const latestRow=sheet.getRange(found.rowNumber,1,1,7).getValues()[0];
+      if(!constantTimeEqual_(String(latestRow[2]||''),tokenHash) || String(latestRow[6]||'').toUpperCase()!=='ACTIVE'){
+        return fail_('Session sudah berakhir. Silakan login kembali.');
+      }
+      const touchNow=new Date();
+      const latestExpiry=latestRow[4]?new Date(latestRow[4]):null;
+      const latestActivity=latestRow[5]?new Date(latestRow[5]):(latestRow[3]?new Date(latestRow[3]):null);
+      let invalidStatus='';
+      if(!latestExpiry || !Number.isFinite(latestExpiry.getTime()))invalidStatus='INVALID_EXPIRY';
+      else if(latestExpiry<=touchNow)invalidStatus='EXPIRED';
+      else if(!latestActivity || !Number.isFinite(latestActivity.getTime()) || latestActivity.getTime()>touchNow.getTime()+5*60000)invalidStatus='INVALID_ACTIVITY';
+      else if((touchNow.getTime()-latestActivity.getTime())>idleMinutes*60000)invalidStatus='IDLE_TIMEOUT';
+      if(invalidStatus){
+        sheet.getRange(found.rowNumber,7).setValue(invalidStatus);
+        try{cache.remove(sessionCacheKey);}catch(cacheRemoveError){}
+        return fail_(invalidStatus==='IDLE_TIMEOUT'?'Session berakhir karena tidak aktif. Silakan login kembali.':'Session sudah berakhir. Silakan login kembali.');
+      }
+      if((touchNow.getTime()-latestActivity.getTime())>=2*60000){
+        sheet.getRange(found.rowNumber,6).setValue(touchNow);
+        row[5]=touchNow;
+      } else {
+        row[5]=latestRow[5];
+      }
+    } finally { touchLock.releaseLock(); }
   }
   return { success: true, user: user, sessionRow: found, expiresAt: expiresAt.toISOString() };
 }
@@ -879,7 +929,7 @@ function revokeOtherSessionsForUser_(userId, keepRowNumber) {
   }
   if (count) {
     sheet.getRange(2,7,statusValues.length,1).setValues(statusValues);
-    revokedHashes.forEach(h=>{try{CacheService.getScriptCache().remove('PSB_SESSION_'+h.substring(0,40));}catch(e){}});
+    revokedHashes.forEach(h=>{try{CacheService.getScriptCache().remove('PSB_SESSION_ROW_V1_'+h.substring(0,40));}catch(e){}});
   }
   return count;
 }
@@ -929,12 +979,24 @@ function runSecurityMaintenance(sessionToken) {
 }
 
 function invalidateSession_(found, status) {
-  if (!found || !found.rowNumber) return;
-  getDatabaseSpreadsheet_().getSheetByName('SESSIONS').getRange(found.rowNumber, 7).setValue(status || 'REVOKED');
+  if (!found || !found.rowNumber) return false;
+  const lock=LockService.getScriptLock();
+  try { lock.waitLock(5000); } catch (lockError) { return false; }
   try {
-    const tokenHash = String((found.row || [])[2] || '');
-    if (tokenHash) CacheService.getScriptCache().remove('PSB_SESSION_' + tokenHash.substring(0, 40));
-  } catch (e) {}
+    const sheet=getDatabaseSpreadsheet_().getSheetByName('SESSIONS');
+    if(!sheet || found.rowNumber>sheet.getLastRow())return false;
+    const current=sheet.getRange(found.rowNumber,1,1,7).getValues()[0];
+    const expectedHash=String((found.row||[])[2]||'');
+    if(expectedHash && !constantTimeEqual_(String(current[2]||''),expectedHash))return false;
+    // Never overwrite a terminal status written by logout, reset, or cleanup.
+    if(String(current[6]||'').toUpperCase()!=='ACTIVE')return false;
+    sheet.getRange(found.rowNumber,7).setValue(status || 'REVOKED');
+    try {
+      const tokenHash=String(current[2]||'');
+      if(tokenHash)CacheService.getScriptCache().remove('PSB_SESSION_ROW_V1_'+tokenHash.substring(0,40));
+    } catch (e) {}
+    return true;
+  } finally { lock.releaseLock(); }
 }
 
 // =====================================================
