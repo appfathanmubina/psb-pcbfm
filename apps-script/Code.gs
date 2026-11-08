@@ -2294,6 +2294,8 @@ const PSB_PAYMENT_EDITABLE_STATUSES = ['SUBMITTED','UNDER_REVIEW','REVISION','VE
 function appendBillRecordWithRecovery_(sheet, headers, record) {
   const billId=String(record&&record.billId||'').trim();
   if(!sheet||!Array.isArray(headers)||!billId) throw new Error('INVALID_BILL_PERSISTENCE_INPUT');
+  const alreadyPersisted=findRowById_(sheet,'billId',billId);
+  if(alreadyPersisted) return alreadyPersisted;
   try {
     sheet.appendRow(headers.map(h=>record[h] == null ? '' : record[h]));
   } catch(writeError) {
