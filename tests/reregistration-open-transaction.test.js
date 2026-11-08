@@ -44,8 +44,8 @@ const helperStart = backend.indexOf('function ensureReregistration_(registration
 const helperEnd = backend.indexOf('\nfunction ensureReregistrationBill_(', helperStart);
 assert.ok(helperStart >= 0 && helperEnd > helperStart, 'ensureReregistration helper must exist');
 const ensure = backend.slice(helperStart, helperEnd);
-assert.match(ensure, /!Number\.isFinite\(paymentAmount\) \|\| paymentAmount <= 0/,
-  'The idempotent re-registration helper must independently reject invalid fee amounts');
+assert.match(ensure, /ensureReregistrationBill_\(found, actorUserId \|\| 'SYSTEM'\)/,
+  'The idempotent re-registration helper must delegate bill creation to the guarded bill helper');
 
 const billStart = backend.indexOf('function ensureReregistrationBill_(found, actorUserId) {');
 const billEnd = backend.indexOf('\nfunction finalizeReregistration(', billStart);
@@ -57,5 +57,7 @@ assert.match(billHelper, /!Number\.isFinite\(amount\) \|\| amount <= 0/,
   'Bill creation must never persist zero, negative, or non-finite amounts');
 assert.match(billHelper, /amount:amount/,
   'The validated amount must be the value persisted to BILLS');
+assert.ok(billHelper.indexOf('if (existing) return existing;') < billHelper.indexOf('if (!Number.isFinite(amount) || amount <= 0) return null;'),
+  'Existing valid bills must remain usable even if the master amount is later misconfigured');
 
 console.log('Re-registration opening transaction safeguards: OK');
