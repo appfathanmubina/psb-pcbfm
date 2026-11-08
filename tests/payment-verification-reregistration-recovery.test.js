@@ -40,4 +40,18 @@ const verify = backend.slice(verifyStart, verifyEnd);
 assert.ok(verify.indexOf('syncReregistrationAfterPayment_(') < verify.indexOf("sheet.getRange(found.rowNumber,paymentStatusIdx+1).setValue(status)"),
   'Payment must remain unfinalized until linked registration records synchronize');
 
+const selectorStart = backend.indexOf('function findReregistrationBillPayment_(registrationId) {');
+const selectorEnd = backend.indexOf('\\nfunction finalizeReregistration(', selectorStart);
+assert.ok(selectorStart >= 0 && selectorEnd > selectorStart,
+  'A shared active re-registration bill selector must exist');
+const selector = backend.slice(selectorStart, selectorEnd);
+assert.ok(selector.includes('MASTER_JENIS_PEMBAYARAN'),
+  'Re-registration bill selection must resolve payment type IDs from the complete master list');
+assert.ok(selector.includes("toUpperCase()!=='CANCELLED'"),
+  'Cancelled historical re-registration bills must be excluded');
+assert.ok(selector.includes("toUpperCase()==='PAID'"),
+  'A paid non-cancelled replacement bill must take precedence over an older cancelled bill');
+assert.equal((backend.match(/findReregistrationBillPayment_\\(id\\)/g)||[]).length, 2,
+  'Both finalization and payment synchronization must use the shared safe bill selector');
+
 console.log('Payment verification and re-registration recovery safeguards: OK');
