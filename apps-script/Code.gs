@@ -3067,12 +3067,19 @@ function updateSelectionScheduleStatus(sessionToken,payload){
   const actor=requireRole_(sessionToken,PSB_SELECTION_ADMIN_ROLES);
   assertOperationalMutation_(actor); payload=payload||{};
   const scheduleId=String(payload.scheduleId||'').trim(), isActive=!!payload.isActive;
-  const sheet=getDatabaseSpreadsheet_().getSheetByName(PSB_SHEETS.SELECTION_SCHEDULE), found=findRowById_(sheet,'scheduleId',scheduleId);
-  if(!found)return fail_('Jadwal tes tidak ditemukan.');
-  const headers=sheet.getRange(1,1,1,sheet.getLastColumn()).getValues()[0].map(String), idx=headers.indexOf('isActive'), up=headers.indexOf('updatedAt');
-  if(idx>=0)sheet.getRange(found.rowNumber,idx+1).setValue(isActive); if(up>=0)sheet.getRange(found.rowNumber,up+1).setValue(new Date());
-  writeAudit_(actor.userId,'UPDATE','SELECTION_SCHEDULE',scheduleId,JSON.stringify({isActive:found.object.isActive}),JSON.stringify({isActive}),'Status jadwal tes diperbarui');
-  return {success:true,message:isActive?'Jadwal diaktifkan.':'Jadwal dinonaktifkan.'};
+  const lock=LockService.getScriptLock();
+  try{lock.waitLock(10000);}catch(lockError){return fail_('Server sedang memproses permintaan lain. Silakan coba kembali beberapa saat lagi.');}
+  try{
+    const sheet=getDatabaseSpreadsheet_().getSheetByName(PSB_SHEETS.SELECTION_SCHEDULE), found=findRowById_(sheet,'scheduleId',scheduleId);
+    if(!found)return fail_('Jadwal tes tidak ditemukan.');
+    const headers=sheet.getRange(1,1,1,sheet.getLastColumn()).getValues()[0].map(String), idx=headers.indexOf('isActive'), up=headers.indexOf('updatedAt'), now=new Date();
+    if(idx>=0)sheet.getRange(found.rowNumber,idx+1).setValue(isActive);
+    if(up>=0)sheet.getRange(found.rowNumber,up+1).setValue(now);
+    const confirmed=findRowById_(sheet,'scheduleId',scheduleId);
+    if(!confirmed || String(confirmed.object.isActive).toUpperCase()!==String(isActive).toUpperCase())return fail_('Status jadwal tes belum berhasil disimpan. Silakan coba kembali.');
+    writeAudit_(actor.userId,'UPDATE','SELECTION_SCHEDULE',scheduleId,JSON.stringify({isActive:found.object.isActive}),JSON.stringify({isActive}),'Status jadwal tes diperbarui');
+    return {success:true,message:isActive?'Jadwal diaktifkan.':'Jadwal dinonaktifkan.'};
+  }finally{lock.releaseLock();}
 }
 
 function addSelectionParticipant(sessionToken,payload){
@@ -3080,16 +3087,17 @@ function addSelectionParticipant(sessionToken,payload){
   assertOperationalMutation_(actor); payload=payload||{};
   const registrationId=String(payload.registrationId||'').trim(), scheduleId=String(payload.scheduleId||'').trim();
   if(!registrationId||!scheduleId)return fail_('Pendaftaran dan jadwal tes wajib dipilih.');
-  const found=findRegistration_(registrationId); if(!found)return fail_('Pendaftaran tidak ditemukan.');
-  if(!isRegistrationSelectionEligible_(registrationId))return fail_('Pendaftar belum memenuhi syarat mengikuti tes. Pastikan verifikasi pendaftaran dan Pembayaran Formulir sudah selesai.');
-  const schedule=findRowById_(getDatabaseSpreadsheet_().getSheetByName(PSB_SHEETS.SELECTION_SCHEDULE),'scheduleId',scheduleId);
-  if(!schedule)return fail_('Jadwal tes tidak ditemukan.');
-  if(!schedule.object.isActive && String(schedule.object.isActive).toUpperCase()!=='TRUE')return fail_('Jadwal tes tidak aktif.');
-  const sheet=getDatabaseSpreadsheet_().getSheetByName(PSB_SHEETS.SELECTION_PARTICIPANTS);
+  const ss=getDatabaseSpreadsheet_(), sheet=ss.getSheetByName(PSB_SHEETS.SELECTION_PARTICIPANTS);
   if(!sheet)return fail_('Sheet peserta seleksi belum tersedia.');
   const lock=LockService.getScriptLock(); try { lock.waitLock(15000); } catch (lockError) { return fail_('Server sedang memproses permintaan lain. Silakan coba kembali beberapa saat lagi.'); }
-  let record;
+  let record, schedule;
   try {
+    // All eligibility, schedule, and duplicate checks share the same lock as their writers.
+    const found=findRegistration_(registrationId); if(!found)return fail_('Pendaftaran tidak ditemukan.');
+    if(!isRegistrationSelectionEligible_(registrationId))return fail_('Pendaftar belum memenuhi syarat mengikuti tes. Pastikan verifikasi pendaftaran dan Pembayaran Formulir sudah selesai.');
+    schedule=findRowById_(ss.getSheetByName(PSB_SHEETS.SELECTION_SCHEDULE),'scheduleId',scheduleId);
+    if(!schedule)return fail_('Jadwal tes tidak ditemukan.');
+    if(!schedule.object.isActive && String(schedule.object.isActive).toUpperCase()!=='TRUE')return fail_('Jadwal tes tidak aktif.');
     const duplicate=sheetRowsMatchingValues_(sheet,'registrationId',[registrationId])[0] || null;
     if(duplicate){
       if(String(duplicate.scheduleId)===scheduleId)return fail_('Pendaftar sudah terdaftar pada jadwal ini.');
@@ -3099,10 +3107,14 @@ function addSelectionParticipant(sessionToken,payload){
     record={}; headers.forEach(h=>record[h]='');
     Object.assign(record,{participantId:generateId_('PTC'),registrationId,scheduleId,status:'SCHEDULED',createdAt:now,updatedAt:now});
     sheet.appendRow(safeSheetRow_(headers.map(h=>record[h])));
+    const confirmed=findRowById_(sheet,'participantId',record.participantId);
+    if(!confirmed)return fail_('Data peserta belum berhasil disimpan. Silakan coba kembali.');
+    record=confirmed.object;
   } finally { lock.releaseLock(); }
   writeAudit_(actor.userId,'CREATE','SELECTION_PARTICIPANT',record.participantId,'',JSON.stringify(record),'Peserta tes ditambahkan');
   const scheduleName=String(schedule.object.name||'Tes Seleksi'), selectionDate=String(schedule.object.selectionDate||'');
-  notifyRegistrationOwner_(registrationId,'Jadwal Tes Seleksi Ditentukan','Anda terdaftar pada '+scheduleName+(selectionDate?' pada '+selectionDate:'')+(schedule.object.location?' di '+String(schedule.object.location):'')+'. Silakan buka menu Tes untuk detail.','INFO');
+  try{notifyRegistrationOwner_(registrationId,'Jadwal Tes Seleksi Ditentukan','Anda terdaftar pada '+scheduleName+(selectionDate?' pada '+selectionDate:'')+(schedule.object.location?' di '+String(schedule.object.location):'')+'. Silakan buka menu Tes untuk detail.','INFO');}
+  catch(notificationError){console.error('Selection schedule notification failed: '+notificationError);}
   return {success:true,message:'Peserta berhasil ditambahkan ke jadwal tes.',participant:rpcSafe_(record)};
 }
 function addSelectionParticipantsBulk(sessionToken,payload){
@@ -3113,13 +3125,13 @@ function addSelectionParticipantsBulk(sessionToken,payload){
   if(!registrationIds.length)return fail_('Pilih minimal satu pendaftar.');
   if(!scheduleId)return fail_('Jadwal tes wajib dipilih.');
   const ss=getDatabaseSpreadsheet_();
-  const scheduleSheet=ss.getSheetByName(PSB_SHEETS.SELECTION_SCHEDULE), schedule=findRowById_(scheduleSheet,'scheduleId',scheduleId);
-  if(!schedule)return fail_('Jadwal tes tidak ditemukan.');
-  if(!schedule.object.isActive && String(schedule.object.isActive).toUpperCase()!=='TRUE')return fail_('Jadwal tes tidak aktif.');
   const sheet=ss.getSheetByName(PSB_SHEETS.SELECTION_PARTICIPANTS); if(!sheet)return fail_('Sheet peserta seleksi belum tersedia.');
   const lock=LockService.getScriptLock(); try { lock.waitLock(20000); } catch (lockError) { return fail_('Server sedang memproses permintaan lain. Silakan coba kembali beberapa saat lagi.'); }
-  let added=[], result;
+  let added=[], result, schedule;
   try{
+    schedule=findRowById_(ss.getSheetByName(PSB_SHEETS.SELECTION_SCHEDULE),'scheduleId',scheduleId);
+    if(!schedule)return fail_('Jadwal tes tidak ditemukan.');
+    if(!schedule.object.isActive && String(schedule.object.isActive).toUpperCase()!=='TRUE')return fail_('Jadwal tes tidak aktif.');
     const headers=sheet.getRange(1,1,1,sheet.getLastColumn()).getValues()[0].map(String);
     const rows=sheetRowsMatchingValues_(sheet,'registrationId',registrationIds);
     const existing={}; rows.forEach(x=>{existing[String(x.registrationId)]=x});
@@ -3324,7 +3336,9 @@ function publishAnnouncement(sessionToken,payload) {
     if(!latestReg)return fail_('Pendaftaran tidak ditemukan.');
     const currentRegStatus=String(latestReg.registration.status||'').toUpperCase();
     const alreadyPublished=String(latest.object.announcementDate||'').trim()!=='';
-    if(!alreadyPublished && !['SELECTION','PASSED'].includes(currentRegStatus))return fail_('Pendaftaran sudah berpindah tahap dan tidak dapat diumumkan dari status saat ini.');
+    const expectedStatus=latestStatus==='PASSED'?'REREGISTRATION':latestStatus==='NOT_PASSED'?'NOT_PASSED':'SELECTION';
+    // Allow retry when the registration transition committed but announcementDate did not.
+    if(!alreadyPublished && !['SELECTION','PASSED',expectedStatus].includes(currentRegStatus))return fail_('Pendaftaran sudah berpindah tahap dan tidak dapat diumumkan dari status saat ini.');
 
     // Prepare required follow-up data before committing the announcement marker.
     if(latestStatus==='PASSED'){
