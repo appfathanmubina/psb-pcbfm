@@ -5324,13 +5324,13 @@ function uploadDocument(sessionToken, payload) {
 
     // Calculate the row before append so a later display-mapping failure cannot
     // make a committed upload look like a failed upload to the caller.
+    oldDocumentRowNumbers = oldDocuments.map(old => old.rowNumber);
     const savedRowNumber = sheet.getLastRow() + 1;
     const recordRow = safeSheetRow_(headers.map(h => record[h] !== undefined ? record[h] : ''));
     sheet.appendRow(recordRow);
     documentRowWritten = true;
     savedDocument = rowObject_(headers, recordRow, savedRowNumber);
 
-    oldDocumentRowNumbers = oldDocuments.map(old => old.rowNumber);
     stage = 'REPLACE_OLD_DOCUMENTS';
     if (oldDocumentRowNumbers.length && !replaceCurrentDocumentStatuses_(sheet, oldDocumentRowNumbers, statusIdx + 1)) {
       throw new Error('Previous document status replacement could not be verified.');
