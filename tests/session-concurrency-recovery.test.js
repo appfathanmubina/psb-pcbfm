@@ -34,7 +34,7 @@ assert.ok(touchLock >= 0 && latestSession > touchLock,
   'Throttled session activity updates must re-read the session under ScriptLock');
 assert.match(touch.slice(touchLock), /constantTimeEqual_\(String\(latestRow\[2\]/,
   'Session touch must verify the indexed row still contains the same token hash');
-assert.match(touch.slice(touchLock), /String\(latestRow\[6\]\|\|'\)\.toUpperCase\(\)!=='ACTIVE'/,
+assert.match(touch.slice(touchLock), /String\(latestRow\[6\]\|\|''\)\.toUpperCase\(\)!=='ACTIVE'/,
   'Session touch must not update a revoked or expired session');
 assert.match(touch.slice(touchLock), /latestActivity\.getTime\(\)\)\>idleMinutes\*60000/,
   'Session touch must re-check idle timeout against the latest activity');
