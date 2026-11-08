@@ -60,6 +60,8 @@ jobs:
         run: node tests/payment-verification-rejection-recovery.test.js
       - name: Test payment and re-registration concurrency recovery
         run: node tests/payment-reregistration-transaction-recovery.test.js
+      - name: Test selection transaction recovery safeguards
+        run: node tests/selection-transaction-recovery.test.js
       - name: Test ScriptLock timeout and batch-write safeguards
         run: node tests/script-lock-safeguards.test.js
       - name: Test incident mutation ScriptLock and batch-write safeguards
