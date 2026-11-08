@@ -44,9 +44,9 @@ assert.match(dashboard, /status\|\|''\)\.toUpperCase\(\)==='PAYMENT_REVIEW'\|\|S
   'Dashboard verification queue must include a submitted payment even if its bill status is stale');
 
 const render = section(frontend, 'function renderPaymentContent(){', '\nfunction openPaymentUpload(billId)', 'Payment renderer');
-assert.match(render, /displayStatus=st==='PAID'\?'PAID':\(st==='PAYMENT_REVIEW'\|\|p\?\.status==='SUBMITTED'\?'PAYMENT_REVIEW':st\)/,
-  'Wali payment UI must display a submitted proof as awaiting verification');
-assert.match(render, /isWali&&st!=='PAID'&&\(!p\|\|p\.status==='REJECTED'\)/,
+assert.match(render, /displayStatus=p\?\.status==='SUBMITTED'\?'PAYMENT_REVIEW':\(st==='PAID'\?'PAID'/,
+  'Wali payment UI must display a submitted proof as awaiting verification even if the bill was partially marked paid');
+assert.match(render, /isWali&&p\?\.status!=='SUBMITTED'&&st!=='PAID'&&\(!p\|\|p\.status==='REJECTED'\)/,
   'Wali must not be offered another upload while a proof is submitted or verified');
 
 console.log('Payment partial-commit recovery safeguards: OK');
