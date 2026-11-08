@@ -16,8 +16,10 @@ function section(source, start, end) {
 const paymentGate = section(backend, 'function getFormPaymentVerifiedRegistrationIds_()', 'function getWaliHomeData(sessionToken)');
 assert.match(paymentGate, /MASTER_JENIS_PEMBAYARAN/);
 assert.match(paymentGate, /formulir/i);
-assert.match(paymentGate, /status.*VERIFIED/);
-assert.match(paymentGate, /status.*PAID/);
+assert.match(paymentGate, /reconcilePaymentLedger_\(bills,payments\)/);
+assert.match(backend, /verified\.length>1/,
+  'Multiple verified rows for one bill must be flagged as a duplicate rather than silently counted twice');
+assert.match(paymentGate, /state\?\.status==='PAID'&&!state\.requiresReview/);
 
 const queue = section(backend, 'function getVerificationQueue(sessionToken, filters)', 'function getVerificationDetail(sessionToken, registrationId)');
 assert.match(queue, /getFormPaymentVerifiedRegistrationIds_\(\)/);

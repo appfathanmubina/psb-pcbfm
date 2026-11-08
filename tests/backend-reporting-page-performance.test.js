@@ -18,7 +18,7 @@ assert.match(page, /sheetRowsByFields_\(ss\.getSheetByName\(PSB_SHEETS\.REGISTRA
   'Registrations must be loaded with a narrow field projection');
 assert.match(page, /sheetRowsMatchingValuesByFields_\([\s\S]*?PSB_SHEETS\.BILLS[\s\S]*?registrationIds/,
   'Bills must be scoped to filtered registration IDs');
-assert.match(page, /sheetRowsMatchingValuesByFields_\([\s\S]*?PSB_SHEETS\.PAYMENTS[\s\S]*?registrationIds/,
+assert.match(page, /PSB_SHEETS\.PAYMENTS[\s\S]*?'billId',bills\.map/,
   'Payments must be scoped to filtered registration IDs');
 assert.match(page, /sheetRowsMatchingValuesByFields_\([\s\S]*?PSB_SHEETS\.SELECTION_RESULTS[\s\S]*?registrationIds/,
   'Selection results must be scoped to filtered registration IDs');
@@ -48,18 +48,18 @@ const sheets = {
     { candidateId: 'c4', fullName: 'Calon Lama', gender: 'L' }
   ],
   BILLS: [
-    { registrationId: 'r1', status: 'PAID', amount: 100 },
-    { registrationId: 'r1', status: 'paid', amount: '200' },
-    { registrationId: 'r1', status: 'UNPAID', amount: 50 },
-    { registrationId: 'r2', status: 'UNPAID', amount: 75 }
+    { billId:'b1',registrationId:'r1',status:'PAID',amount:100 },
+    { billId:'b2',registrationId:'r1',status:'PAID',amount:'200' },
+    { billId:'b3',registrationId:'r1',status:'UNPAID',amount:50 },
+    { billId:'b4',registrationId:'r2',status:'UNPAID',amount:75 },
+    { billId:'b5',registrationId:'r3',status:'UNPAID',amount:60 }
   ],
   PAYMENTS: [
-    { registrationId: 'r1', status: 'OLD', createdAt: '2026-10-01T10:00:00Z' },
-    { registrationId: 'r1', status: 'LATEST_FIRST', createdAt: '2026-10-02T10:00:00Z' },
-    { registrationId: 'r1', status: 'LATEST_TIE', createdAt: '2026-10-02T10:00:00Z' },
-    { registrationId: 'r2', status: 'REJECTED', createdAt: '2026-10-03T10:00:00Z' },
-    { registrationId: 'r3', status: 'INVALID_FIRST', createdAt: 'not-a-date' },
-    { registrationId: 'r3', status: 'VALID_LATER', createdAt: '2026-10-04T10:00:00Z' }
+    { paymentId:'p1',billId:'b1',registrationId:'r1',amount:100,status:'VERIFIED',createdAt:'2026-10-01T10:00:00Z' },
+    { paymentId:'p2',billId:'b2',registrationId:'r1',amount:200,status:'SUBMITTED',createdAt:'2026-10-02T10:00:00Z' },
+    { paymentId:'p3',billId:'b4',registrationId:'r2',amount:75,status:'REJECTED',createdAt:'2026-10-03T10:00:00Z' },
+    { paymentId:'p4',billId:'b5',registrationId:'r3',amount:60,status:'INVALID_FIRST',createdAt:'not-a-date' },
+    { paymentId:'p5',billId:'b5',registrationId:'r3',amount:60,status:'VALID_LATER',createdAt:'2026-10-04T10:00:00Z' }
   ],
   SELECTION_PARTICIPANTS: [],
   SELECTION_RESULTS: [
@@ -99,6 +99,10 @@ const context = {
   reportGroupName_: (level, gender) => level + ' · ' + (String(gender).toUpperCase() === 'L' ? 'Putra' : 'Putri')
 };
 vm.createContext(context);
+const ledgerHelperStart=code.indexOf('function paymentAmountMatchesBill_(');
+const ledgerHelperEnd=code.indexOf('\nfunction preferredPaymentForBill_(',ledgerHelperStart);
+assert.ok(ledgerHelperStart>=0&&ledgerHelperEnd>ledgerHelperStart,'Payment ledger helper exists');
+vm.runInContext(code.slice(ledgerHelperStart,ledgerHelperEnd),context);
 vm.runInContext(page, context);
 const result = JSON.parse(JSON.stringify(context.getReportingPageData('session-token', {})));
 
@@ -108,8 +112,9 @@ assert.equal(result.success, true);
 assert.equal(result.rows.length, 3, 'Only active academic-year registrations should be reported');
 assert.deepEqual(result.summary, { total: 3, paid: 1, passed: 2, completed: 1 });
 assert.equal(result.rows[0].candidateName, 'Calon Satu');
-assert.equal(result.rows[0].paidAmount, 300, 'Paid bill amounts must be summed with numeric coercion');
-assert.equal(result.rows[0].paymentStatus, 'PAID', 'Any PAID bill must take precedence over payment status');
+assert.equal(result.rows[0].paidAmount, 100, 'Only a matching VERIFIED payment may contribute to reconciled paid amount');
+assert.equal(result.rows[0].paymentStatus, 'PAID', 'A matched verified bill must count as paid even when another bill is pending');
+assert.equal(result.rows[0].paymentReconciliationRequired, true, 'A PAID bill with only a submitted payment must be flagged for reconciliation');
 assert.equal(result.rows[1].paymentStatus, 'REJECTED', 'Latest payment status must be used when no bill is paid');
 assert.equal(result.rows[2].paymentStatus,
   sheets.PAYMENTS.filter(x => x.registrationId === 'r3').slice().sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0))[0].status,

@@ -38,15 +38,16 @@ const dashboard = section(
   '\nfunction findParticipantRegistration_',
   'Dashboard'
 );
-assert.match(dashboard, /latestPaymentStatus==='SUBMITTED'/,
-  'Dashboard payment summary must count persisted SUBMITTED payments as awaiting review');
-assert.match(dashboard, /status\|\|''\)\.toUpperCase\(\)==='PAYMENT_REVIEW'\|\|String\(latestPaymentByBill/,
-  'Dashboard verification queue must include a submitted payment even if its bill status is stale');
+assert.match(dashboard, /reconcilePaymentLedger_\(periodBills,periodPayments\)/);
+assert.match(dashboard, /state\.status==='WAITING'/,
+  'Dashboard payment summary must count a persisted SUBMITTED payment as awaiting review even when bill status is PAID');
+assert.match(dashboard, /state\?\.status==='WAITING'\|\|state\?\.requiresReview/,
+  'Dashboard verification queue must include submitted and inconsistent bill/payment states');
 
 const render = section(frontend, 'function renderPaymentContent(){', '\nfunction openPaymentUpload(billId)', 'Payment renderer');
-assert.match(render, /displayStatus=p\?\.status==='SUBMITTED'\?'PAYMENT_REVIEW':\(st==='PAID'\?'PAID'/,
-  'Wali payment UI must display a submitted proof as awaiting verification even if the bill was partially marked paid');
-assert.match(render, /isWali&&p\?\.status!=='SUBMITTED'&&st!=='PAID'&&\(!p\|\|p\.status==='REJECTED'\)/,
-  'Wali must not be offered another upload while a proof is submitted or verified');
+assert.match(render, /displayStatus=p\?\.status==='SUBMITTED'\?'PAYMENT_REVIEW':b\.reconciliationRequired\?'RECONCILIATION_REQUIRED'/,
+  'Wali payment UI must display a submitted proof as awaiting verification before showing a bill-level reconciliation warning');
+assert.match(render, /isWali&&!b\.reconciliationRequired&&p\?\.status!=='SUBMITTED'&&st!=='PAID'&&\(!p\|\|p\.status==='REJECTED'\)/,
+  'Wali may upload only when no proof is pending, bill is not paid, and ledger does not require reconciliation');
 
 console.log('Payment partial-commit recovery safeguards: OK');

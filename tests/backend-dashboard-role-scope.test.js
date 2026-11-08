@@ -44,7 +44,7 @@ const fixtures = {
   CANDIDATES: [{ candidateId: 'c1', fullName: 'Calon Satu' }, { candidateId: 'c2', fullName: 'Calon Dua' }],
   USERS: [{ status: 'ACTIVE' }],
   BILLS: [{ billId: 'b1', registrationId: 'r1', status: 'PAYMENT_REVIEW', amount: 100, updatedAt: '2026-11-03' }],
-  PAYMENTS: [],
+  PAYMENTS: [{ paymentId: 'p1', billId: 'b1', registrationId: 'r1', amount: 100, status: 'SUBMITTED', createdAt: '2026-11-03' }],
   SELECTION_PARTICIPANTS: [{ participantId: 'p1', registrationId: 'r2', status: 'SCHEDULED', scheduleId: 's1' }],
   SELECTION_RESULTS: [{ resultId: 'z1', registrationId: 'r2', status: 'PASSED' }],
   REREGISTRATIONS: [{ reregistrationId: 'rr1', registrationId: 'r2', status: 'PENDING' }],
@@ -86,8 +86,13 @@ const context = {
 const selectionAdminRolesDeclaration = code.match(/^const PSB_SELECTION_ADMIN_ROLES = \[[^\n]+\];$/m);
 assert.ok(selectionAdminRolesDeclaration,
   'Production backend must declare the selection admin role allowlist used by Dashboard');
+const ledgerHelperStart = code.indexOf('function paymentAmountMatchesBill_(');
+const ledgerHelperEnd = code.indexOf('\nfunction preferredPaymentForBill_(', ledgerHelperStart);
+assert.ok(ledgerHelperStart >= 0 && ledgerHelperEnd > ledgerHelperStart,
+  'Dashboard test must load the canonical payment ledger helpers');
+const ledgerHelpers = code.slice(ledgerHelperStart, ledgerHelperEnd);
 vm.createContext(context);
-vm.runInContext(selectionAdminRolesDeclaration[0] + '\n' + page, context);
+vm.runInContext(selectionAdminRolesDeclaration[0] + '\n' + ledgerHelpers + '\n' + page, context);
 
 function response(role) {
   return JSON.parse(JSON.stringify(context.getDashboardPageData(role)));
