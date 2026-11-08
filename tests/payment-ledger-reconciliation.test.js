@@ -46,6 +46,7 @@ ledger = sandbox.reconcilePaymentLedger_(
 );
 assert.equal(ledger.byBill.b4.status,'REJECTED');
 assert.equal(ledger.summary.rejectedPayments,1);
+assert.equal(ledger.summary.rejectedAmount,400000);
 assert.equal(ledger.summary.paidAmount,0);
 
 ledger = sandbox.reconcilePaymentLedger_(
