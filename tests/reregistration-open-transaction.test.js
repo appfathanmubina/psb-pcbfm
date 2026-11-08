@@ -51,7 +51,7 @@ const billStart = backend.indexOf('function ensureReregistrationBill_(found, act
 const billEnd = backend.indexOf('\nfunction finalizeReregistration(', billStart);
 assert.ok(billStart >= 0 && billEnd > billStart, 're-registration bill helper must exist');
 const billHelper = backend.slice(billStart, billEnd);
-assert.match(billHelper, /const amount = Number\(type\?\.amount\)/,
+assert.match(billHelper, /const amount = Number\\(type\\.amount\\)/,
   'Bill creation must normalize the configured amount');
 assert.match(billHelper, /!Number\.isFinite\(amount\) \|\| amount <= 0/,
   'Bill creation must never persist zero, negative, or non-finite amounts');
