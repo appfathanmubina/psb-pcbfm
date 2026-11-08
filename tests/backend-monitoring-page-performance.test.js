@@ -20,7 +20,7 @@ const childSheets = [
 ];
 for (const sheet of childSheets) {
   const escaped = sheet.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  const reads = page.match(new RegExp('sheetRowsByFields_\\(ss\\.getSheetByName\\(PSB_SHEETS\\.' + escaped + '\\)\\)', 'g')) || [];
+  const reads = page.match(new RegExp('sheetRowsByFields_\\(ss\\.getSheetByName\\(PSB_SHEETS\\.' + escaped + '\\)', 'g')) || [];
   assert.equal(reads.length, 1, sheet + ' must be read exactly once and reused');
 }
 assert.match(page, /allChildRows\.DOCUMENTS\.filter/,
