@@ -10,7 +10,7 @@ const end = backend.indexOf('\n\nfunction submitPayment(sessionToken,payload){',
 assert.ok(start >= 0 && end > start, 'Manual bill creation function must exist');
 const source = backend.slice(start, end);
 const helperStart = backend.indexOf('function appendBillRecordWithRecovery_(sheet, headers, record) {');
-const helperEnd = backend.indexOf('\\nfunction ensureFormBillForRegistration_', helperStart);
+const helperEnd = backend.indexOf('\nfunction ensureFormBillForRegistration_', helperStart);
 assert.ok(helperStart >= 0 && helperEnd > helperStart, 'Bill persistence recovery helper must exist');
 const helperSource = backend.slice(helperStart, helperEnd);
 
