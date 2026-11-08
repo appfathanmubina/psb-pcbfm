@@ -66,8 +66,9 @@ const queue = section(
   '\nfunction ',
   'Payment queue'
 );
-assert.match(queue, /paymentQueueStatus_\(bill\.status,billPayments\)/,
-  'Queue status must be derived from all payments rather than bill PAID alone');
+assert.match(queue, /paymentLedgerForQueue\.byBill/);
+assert.match(queue, /reconcilePaymentLedger_\(activeBillRefs,paymentsForStatus\)/,
+  'Queue status must be derived from all bill-linked payments and their registration/amount matches');
 
 const submit = section(
   backend,
