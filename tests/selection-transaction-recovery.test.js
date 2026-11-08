@@ -25,7 +25,7 @@ assert.match(publish, /if\(!alreadyPublished && !\['SELECTION','PASSED',expected
 assert.ok(publish.indexOf('setRegistrationStatus_(latestReg.registration,nextStatus') < publish.indexOf('resultSheet.getRange(latest.rowNumber,dateIdx+1).setValue(now)'),
   'Announcement marker must remain the final state commit after follow-up state is ready');
 
-assert.match(publish, /notificationPayload=\{userId,status:latestStatus,title,message\}/,
+assert.match(publish, /notificationPayload=\{userId,status:latestStatus,title,message,eventKey:/,
   'Announcement retry must reconstruct the Wali notification payload from the committed result');
 assert.match(publish, /catch\(auditError\)/,
   'Audit failure after announcement commit must not skip notification fan-out');
