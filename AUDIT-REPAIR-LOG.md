@@ -555,3 +555,24 @@ Branch: `fix/registration-sync-announcement-recovery`
 - Announcement retries rebuild the exact notification content from the persisted selection result. Notification lookup and append are serialized, and duplicate user/title/message notifications are not appended.
 - No Spreadsheet schema, stored data, role definitions, payment rules, or production deployment changed.
 - No Apps Script deployment or production data mutation was performed. Static CI tests do not replace Apps Script staging/runtime and concurrency validation.
+
+## Repair batch 20 — committed transaction notification retry recovery
+
+Branch: `fix/notification-retry-recovery`
+
+| ID | Finding | Change | Status |
+|---|---|---|---|
+| PAY-008 | A same-decision retry of a finalized payment skipped notification payload construction, so a notification failure after the payment commit could not be recovered. | Rebuild the owner and related workflow notification payload from the persisted payment, registration, and verification-history rows on every successful same-decision call. Use idempotent notification creation for owner and Formulir queue recipients. | Implemented; regression tests added; CI pending; Apps Script staging/runtime test pending |
+| RRG-011 | `finalizeReregistration()` returned early when both completion statuses were already committed, so it could not retry a failed completion notification. | Treat a fully completed state as a notification-recovery retry; skip mutable prerequisite checks only for that already-committed state, re-confirm both completion records, and rebuild the notification payload from persisted registration data. | Implemented; regression tests added; CI pending; Apps Script staging/runtime test pending |
+| RRG-012 | `openReregistration()` prepared its notification only when the re-registration row was first created; an existing row prevented notification retry. | Rebuild the notification payload after the locked state/bill checks for both new and existing re-registration rows, then deliver through idempotent notification creation after releasing ScriptLock. | Implemented; regression tests added; CI pending; Apps Script staging/runtime test pending |
+| VER-004 | `finalizeVerification()` rejected a repeated request with the same already-committed decision, preventing recovery of a failed Wali notification. | Accept only an exact same-status retry as idempotent success; reject conflicting final decisions; reconstruct the owner notification from persisted registration ownership and send it idempotently after releasing ScriptLock. | Implemented; regression tests added; CI pending; Apps Script staging/runtime test pending |
+
+### Scope and safety
+
+- No transaction status is changed by a notification retry. Payment retries continue to reject a conflicting decision; verification retries only accept the exact already-persisted decision.
+- Payment rejection notification text is rebuilt using the note in the durable `PAYMENT_VERIFICATIONS` history row, not a potentially different retry payload.
+- Re-registration opening and completion notifications are reconstructed only after the relevant persisted workflow states have been re-read and confirmed.
+- Notification fan-out for Formulir verification now uses idempotent creation per eligible active recipient.
+- All notification writes occur after transaction ScriptLock release; the existing lock-protected `createNotificationOnce_()` helper serializes duplicate checks and append operations.
+- No Spreadsheet schema, role definitions, payment rules, stored production data, or Apps Script deployment changed.
+- Regression tests are static source-contract checks. Apps Script staging/runtime and failure-injection tests remain required before production rollout.
