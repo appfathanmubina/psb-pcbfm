@@ -70,6 +70,8 @@ jobs:
         run: node tests/payment-verification-rejection-recovery.test.js
       - name: Test payment verification state consistency and partial-failure recovery
         run: node tests/payment-verification-state-consistency.test.js
+      - name: Test payment ledger reconciliation and full registration workflow
+        run: node tests/payment-ledger-reconciliation.test.js
       - name: Test event-keyed notification idempotency and transaction event identity
         run: node tests/notification-event-idempotency.test.js
       - name: Test payment and re-registration concurrency recovery
