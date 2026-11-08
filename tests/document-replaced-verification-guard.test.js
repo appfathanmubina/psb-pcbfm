@@ -16,7 +16,7 @@ function section(text, start, end, label) {
 const verify = section(
   source,
   'function verifyDocument(sessionToken, payload) {',
-  '\\nfunction finalizeVerification',
+  '\nfunction finalizeVerification',
   'Document verification'
 );
 
@@ -35,12 +35,12 @@ assert.match(verify, /Dokumen ini sudah digantikan oleh unggahan terbaru dan tid
 const audit = section(
   source,
   'function writeAudit_(userId, action, module, recordId, oldValue, newValue, description) {',
-  '\\nfunction getAuditLogPageData',
+  '\nfunction getAuditLogPageData',
   'Audit writer'
 );
-assert.match(audit, /try\\s*\\{[\\s\\S]*?sheet\\.appendRow/);
-assert.match(audit, /catch\\s*\\(e\\)\\s*\\{[\\s\\S]*?console\\.error\\('AUDIT_LOG_WRITE_FAILED'\\)/,
+assert.match(audit, /try\s*\{[\s\S]*?sheet\.appendRow/);
+assert.match(audit, /catch\s*\(e\)\s*\{[\s\S]*?console\.error\('AUDIT_LOG_WRITE_FAILED'\)/,
   'audit logging failures must be contained and must not escape into the primary transaction');
-assert.doesNotMatch(audit, /throw\\s+e/);
+assert.doesNotMatch(audit, /throw\s+e/);
 
 console.log('Replaced-document verification and non-blocking audit safeguards passed.');
