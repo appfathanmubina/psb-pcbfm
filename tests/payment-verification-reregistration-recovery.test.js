@@ -27,8 +27,12 @@ assert.match(sync, /status belum tersimpan sebagai COMPLETED/,
   'A registration write that did not persist must be retryable');
 assert.match(sync, /if\(!confirmedRereg\|\|String\(confirmedRereg\.object\.status\|\|''\)\.toUpperCase\(\)!==targetStatus\)/,
   'Reregistration status must be confirmed after writing');
-assert.match(sync, /if\(!docsReady\)return null/,
+assert.match(sync, /if\(!docsReady\)return \{success:true,completed:false/,
   'Payment-only completion must remain PAYMENT_VERIFIED while required documents are incomplete');
+assert.match(sync, /if\(!rrFound\)return fail_\(/,
+  'A missing re-registration record must block payment finalization with an actionable error');
+assert.match(sync, /if\(!payment\|\|String\(payment\.status\|\|''\)\.toUpperCase\(\)!=='PAID'\)return fail_\(/,
+  'A missing or unpaid re-registration bill must not be treated as a successful synchronization');
 
 const verifyStart = backend.indexOf('function verifyPayment(sessionToken,payload){');
 const verifyEnd = backend.indexOf('\nfunction getSelectionPageData(sessionToken, registrationId)', verifyStart);
