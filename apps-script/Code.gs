@@ -2223,30 +2223,79 @@ function getPaymentPageData(sessionToken, registrationId) {
 
 
 
-function getPaymentQueue(sessionToken, page) {
+function getPaymentQueue(sessionToken, page, filters) {
   const actor = requireRole_(sessionToken, PSB_PAYMENT_MANAGE_ROLES);
+  filters = filters && typeof filters === 'object' ? filters : {};
   page = Math.max(1, Math.floor(Number(page)||1));
   const pageSize = 50;
+  const query = String(filters.search || '').trim().toLowerCase().slice(0,120);
+  const requestedStatus = String(filters.status || '').trim().toUpperCase();
+  const allowedStatuses = ['WAITING','REJECTED','PAID','UNPAID'];
+  const statusFilter = allowedStatuses.indexOf(requestedStatus) >= 0 ? requestedStatus : '';
   const ss = getDatabaseSpreadsheet_();
   const billSheet = ss.getSheetByName(PSB_SHEETS.BILLS);
   const paymentTypes = getActiveMasterItems_('MASTER_JENIS_PEMBAYARAN');
-  if (!billSheet || billSheet.getLastRow() < 2) {
-    return { success:true, items:[], paymentTypes, totalBills:0, page:1, pageSize, pageCount:1, hasMore:false };
+  const emptyResult = { success:true, items:[], paymentTypes, totalBills:0, allBills:0, page:1, pageSize, pageCount:1, hasMore:false, hasPrevious:false };
+  if (!billSheet || billSheet.getLastRow() < 2) return emptyResult;
+
+  // Build a lightweight global search/filter index from narrow projections.
+  // Full bill rows and related detail are still fetched only for the selected page.
+  const billFields = query
+    ? ['billId','registrationId','paymentTypeId','status','createdAt']
+    : statusFilter ? ['billId','status','createdAt'] : ['status','createdAt'];
+  const billRefs = sheetRowsByFields_(billSheet, billFields);
+  const activeBillRefs = billRefs.filter(x=>String(x.status||'').toUpperCase()!=='CANCELLED');
+  const allBills = activeBillRefs.length;
+  if (!activeBillRefs.length) return emptyResult;
+
+  let registrationById = Object.create(null);
+  let candidateById = Object.create(null);
+  if (query) {
+    const registrationRows = sheetRowsByFields_(ss.getSheetByName(PSB_SHEETS.REGISTRATIONS),
+      ['registrationId','candidateId','registrationNumber']);
+    registrationRows.forEach(x=>{registrationById[String(x.registrationId||'')]=x;});
+    const candidateRows = sheetRowsByFields_(ss.getSheetByName(PSB_SHEETS.CANDIDATES),
+      ['candidateId','fullName','name']);
+    candidateRows.forEach(x=>{candidateById[String(x.candidateId||'')]=x;});
   }
 
-  // Scan only the adjacent status/createdAt columns for the global count and
-  // exact newest-first ordering. Fetch full bill rows only for the requested page.
-  const billRefs = sheetRowsByFields_(billSheet, ['status','createdAt']);
-  const activeBillRefs = billRefs.filter(x=>String(x.status||'').toUpperCase()!=='CANCELLED');
-  activeBillRefs.sort((a,b)=>{
-    const aTime=new Date(a.createdAt||0).getTime(), bTime=new Date(b.createdAt||0).getTime();
+  const paymentStatusByBill = Object.create(null);
+  if (statusFilter) {
+    sheetRowsByFields_(ss.getSheetByName(PSB_SHEETS.PAYMENTS), ['billId','status'])
+      .forEach(x=>{paymentStatusByBill[String(x.billId||'')]=String(x.status||'').toUpperCase();});
+  }
+  const paymentTypeNameById = Object.create(null);
+  if (query) paymentTypes.forEach(x=>{paymentTypeNameById[String(x.paymentTypeId||'')]=String(x.name||'');});
+
+  const indexed = activeBillRefs.map(bill=>{
+    const registration=query?registrationById[String(bill.registrationId||'')]||{}:{};
+    const candidate=query?candidateById[String(registration.candidateId||'')]||{}:{};
+    const paymentStatus=statusFilter?paymentStatusByBill[String(bill.billId||'')]||'':'';
+    const billStatus=String(bill.status||'').toUpperCase();
+    const queueStatus=billStatus==='PAID'||paymentStatus==='VERIFIED'?'PAID':
+      paymentStatus==='SUBMITTED'?'WAITING':
+      paymentStatus==='REJECTED'?'REJECTED':'UNPAID';
+    const paymentTypeName=query?paymentTypeNameById[String(bill.paymentTypeId||'')]||String(bill.paymentTypeId||'Tagihan'):'';
+    const searchValues=query?[
+      candidate.fullName,candidate.name,registration.registrationNumber,
+      bill.registrationId,paymentTypeName
+    ]:[];
+    return {bill,queueStatus,searchValues};
+  }).filter(item=>
+    (!statusFilter||item.queueStatus===statusFilter)&&
+    (!query||item.searchValues.some(value=>String(value||'').toLowerCase().includes(query)))
+  );
+
+  indexed.sort((a,b)=>{
+    const aTime=new Date(a.bill.createdAt||0).getTime(), bTime=new Date(b.bill.createdAt||0).getTime();
     if(Number.isFinite(aTime)&&Number.isFinite(bTime))return bTime-aTime;
-    return String(b.createdAt||'').localeCompare(String(a.createdAt||''));
+    return String(b.bill.createdAt||'').localeCompare(String(a.bill.createdAt||''));
   });
-  const totalBills = activeBillRefs.length;
+  const totalBills = indexed.length;
   const pageCount = Math.max(1,Math.ceil(totalBills/pageSize));
   page = Math.min(page,pageCount);
-  const pageBillRefs = activeBillRefs.slice((page-1)*pageSize,page*pageSize);
+  const pageItems = indexed.slice((page-1)*pageSize,page*pageSize);
+  const pageBillRefs = pageItems.map(x=>x.bill);
   const pageRowsByNumber = Object.create(null);
   sheetRowsAtRowNumbers_(billSheet,pageBillRefs.map(x=>x.rowNumber))
     .forEach(x=>{pageRowsByNumber[String(x.rowNumber)]=x;});
@@ -2258,9 +2307,9 @@ function getPaymentQueue(sessionToken, page) {
   );
   const registrationMap = Object.create(null);
   registrations.forEach(x=>{registrationMap[String(x.registrationId||'')]=x;});
-  const candidateIds = Array.from(new Set(registrations.map(x=>String(x.candidateId||'')).filter(Boolean)));
+  const candidateIdsForPage = Array.from(new Set(registrations.map(x=>String(x.candidateId||'')).filter(Boolean)));
   const candidates = sheetRowsMatchingValuesByFields_(
-    ss.getSheetByName(PSB_SHEETS.CANDIDATES), 'candidateId', candidateIds, ['fullName']
+    ss.getSheetByName(PSB_SHEETS.CANDIDATES), 'candidateId', candidateIdsForPage, ['fullName','name']
   );
   const candidateMap = Object.create(null);
   candidates.forEach(x=>{candidateMap[String(x.candidateId||'')]=x;});
@@ -2302,15 +2351,14 @@ function getPaymentQueue(sessionToken, page) {
       billId:String(bill.billId||''),
       registrationId:String(bill.registrationId||''),
       registrationNumber:String(registration.registrationNumber||'-'),
-      candidateName:String(candidate.name||candidate.fullName||'-'),
+      candidateName:String(candidate.fullName||candidate.name||'-'),
       jenjangName:levels[String(registration.jenjangId||'')]?.name||registration.jenjangId||'-',
       gelombangName:waves[String(registration.gelombangId||'')]?.name||registration.gelombangId||'-',
       tahunAjaranName:years[String(registration.tahunAjaranId||'')]?.name||registration.tahunAjaranId||'-',
       paymentTypeName:String(paymentType.name||bill.paymentTypeId||'Tagihan'),
       amount:Number(bill.amount||0),
       dueDate:String(bill.dueDate||''),
-      billStatus,
-      queueStatus,
+      billStatus,queueStatus,
       paymentId:String(payment?.paymentId||''),
       paymentStatus,
       proofFileUrl:String(payment?.proofFileUrl||''),
@@ -2318,9 +2366,9 @@ function getPaymentQueue(sessionToken, page) {
       verificationNote:String(verification?.note||'')
     };
   });
-  return { success:true, items, paymentTypes, totalBills, page, pageSize, pageCount, hasMore:page<pageCount, hasPrevious:page>1 };
+  return {success:true,items,paymentTypes,totalBills,allBills,page,pageSize,pageCount,
+    hasMore:page<pageCount,hasPrevious:page>1,search:query,status:statusFilter};
 }
-
 
 function getPaymentsForRegistration(sessionToken, registrationId) {
   const actor=requireRole_(sessionToken,PSB_PAYMENT_VIEW_ROLES);
