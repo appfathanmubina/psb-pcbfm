@@ -673,12 +673,12 @@ function getDataIntegrityReport(sessionToken) {
   // Business keys protect one-to-one workflow relationships even when row IDs differ.
   const businessUniqueSpecs=[
     {key:'unique_registration_number',label:'REGISTRATIONS.registrationNumber',sheet:'REGISTRATIONS',getKey:r=>String(r.registrationNumber||'').trim()},
-    {key:'unique_active_bill_type',label:'BILLS.registrationId + paymentTypeId (non-CANCELLED)',sheet:'BILLS',getKey:r=>String(r.status||'').toUpperCase()==='CANCELLED'?'':[String(r.registrationId||'').trim(),String(r.paymentTypeId||'').trim()].join('|')},
+    {key:'unique_active_bill_type',label:'BILLS.registrationId + paymentTypeId (non-CANCELLED)',sheet:'BILLS',getKey:r=>{const registrationId=String(r.registrationId||'').trim(),paymentTypeId=String(r.paymentTypeId||'').trim();return String(r.status||'').toUpperCase()==='CANCELLED'||!registrationId||!paymentTypeId?'':[registrationId,paymentTypeId].join('|');}},
     {key:'unique_active_payment_per_bill',label:'PAYMENTS.billId (SUBMITTED/VERIFIED)',sheet:'PAYMENTS',getKey:r=>['SUBMITTED','VERIFIED'].includes(String(r.status||'').toUpperCase())?String(r.billId||'').trim():''},
     {key:'unique_payment_verification',label:'PAYMENT_VERIFICATIONS.paymentId',sheet:'PAYMENT_VERIFICATIONS',getKey:r=>String(r.paymentId||'').trim()},
-    {key:'unique_current_document_type',label:'DOCUMENTS.registrationId + documentTypeId (non-REPLACED)',sheet:'DOCUMENTS',getKey:r=>String(r.status||'').toUpperCase()==='REPLACED'?'':[String(r.registrationId||'').trim(),String(r.documentTypeId||'').trim()].join('|')},
+    {key:'unique_current_document_type',label:'DOCUMENTS.registrationId + documentTypeId (non-REPLACED)',sheet:'DOCUMENTS',getKey:r=>{const registrationId=String(r.registrationId||'').trim(),documentTypeId=String(r.documentTypeId||'').trim();return String(r.status||'').toUpperCase()==='REPLACED'||!registrationId||!documentTypeId?'':[registrationId,documentTypeId].join('|');}},
     {key:'unique_selection_participant',label:'SELECTION_PARTICIPANTS.registrationId',sheet:'SELECTION_PARTICIPANTS',getKey:r=>String(r.registrationId||'').trim()},
-    {key:'unique_selection_score_component',label:'SELECTION_SCORES.participantId + component',sheet:'SELECTION_SCORES',getKey:r=>[String(r.participantId||'').trim(),String(r.component||'').trim().toLowerCase()].join('|')},
+    {key:'unique_selection_score_component',label:'SELECTION_SCORES.participantId + component',sheet:'SELECTION_SCORES',getKey:r=>{const participantId=String(r.participantId||'').trim(),component=String(r.component||'').trim().toLowerCase();return participantId&&component?[participantId,component].join('|'):'';}},
     {key:'unique_selection_result',label:'SELECTION_RESULTS.registrationId',sheet:'SELECTION_RESULTS',getKey:r=>String(r.registrationId||'').trim()},
     {key:'unique_reregistration',label:'REREGISTRATIONS.registrationId',sheet:'REREGISTRATIONS',getKey:r=>String(r.registrationId||'').trim()}
   ];
