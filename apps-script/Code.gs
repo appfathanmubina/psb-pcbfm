@@ -2983,7 +2983,7 @@ function verifyPayment(sessionToken,payload){
     if(!verified||String(verified.object.status||'').toUpperCase()!==status)return fail_('Status pembayaran belum berhasil disimpan. Silakan coba kembali.');
     if(!wasAlreadyFinalized)writeAudit_(actor.userId,'PAYMENT_VERIFY','PAYMENT',paymentId,'',JSON.stringify({status,note}),'Pembayaran diverifikasi');
     const paymentType=findMasterItemById_('MASTER_JENIS_PEMBAYARAN','paymentTypeId',String(br.object.paymentTypeId||''));
-    notificationPayload={registrationId:String(regFound.registration.registrationId),candidateName:String(regFound.candidate?.fullName||'Calon santri'),paymentLabel:String(paymentType?.name||'pembayaran'),status,note:String(confirmedHistory.note||''),reregistrationNotification,paymentCreatedAt:found.object.createdAt};
+    notificationPayload={registrationId:String(regFound.registration.registrationId),userId:String(regFound.registration.userId||''),candidateName:String(regFound.candidate?.fullName||'Calon santri'),paymentLabel:String(paymentType?.name||'pembayaran'),status,note:String(confirmedHistory.note||''),reregistrationNotification,paymentCreatedAt:found.object.createdAt};
   }finally{lock.releaseLock();}
   if(notificationPayload){
     const p=notificationPayload;
@@ -2991,7 +2991,7 @@ function verifyPayment(sessionToken,payload){
     if(p.status==='VERIFIED'&&/formulir/i.test(p.paymentLabel)){
       try{notifyUsersByRolesOnce_(['SUPERADMIN','ADMIN_PSB','VERIFIKATOR'],'Pembayaran Formulir Terkonfirmasi',p.candidateName+' telah melunasi biaya formulir. Pendaftaran siap masuk antrean verifikasi PSB.','INFO');}catch(notificationError){console.error('Verification queue notification failed: '+notificationError);}
     }
-    try{createNotificationOnce_(String(regFound?.registration?.userId||''),'Pembayaran '+(p.status==='VERIFIED'?'Terverifikasi':'Ditolak'),p.status==='VERIFIED'?('Pembayaran '+p.paymentLabel+' untuk '+p.candidateName+' telah terverifikasi.'):('Pembayaran '+p.paymentLabel+' untuk '+p.candidateName+' ditolak.'+(p.note?' Catatan: '+p.note:'')),p.status==='VERIFIED'?'SUCCESS':'WARNING');}catch(notificationError){console.error('Payment owner notification failed after verification: '+notificationError);}
+    try{createNotificationOnce_(p.userId,'Pembayaran '+(p.status==='VERIFIED'?'Terverifikasi':'Ditolak'),p.status==='VERIFIED'?('Pembayaran '+p.paymentLabel+' untuk '+p.candidateName+' telah terverifikasi.'):('Pembayaran '+p.paymentLabel+' untuk '+p.candidateName+' ditolak.'+(p.note?' Catatan: '+p.note:'')),p.status==='VERIFIED'?'SUCCESS':'WARNING');}catch(notificationError){console.error('Payment owner notification failed after verification: '+notificationError);}
   }
   return {success:true,message:status==='VERIFIED'?'Pembayaran berhasil diverifikasi.':'Pembayaran ditolak dan dapat diunggah ulang.'};
 }
@@ -4846,10 +4846,12 @@ function finalizeVerification(sessionToken, payload) {
   if(['VERIFIED','REVISION'].indexOf(decision)<0) return fail_('Keputusan verifikasi tidak valid.');
   const lock=LockService.getScriptLock();
   try { lock.waitLock(10000); } catch (lockError) { return fail_('Server sedang memproses permintaan lain. Silakan coba kembali beberapa saat lagi.'); }
-  let result;
+  let result, notificationUserId='', notificationCandidateName='calon santri';
   try {
     const found=findRegistration_(registrationId);
     if(!found) return fail_('Pendaftaran tidak ditemukan.');
+    notificationUserId=String(found.registration.userId||'');
+    notificationCandidateName=String(found.candidate?.fullName||'calon santri');
     const currentStatus=String(found.registration.status||'').toUpperCase();
     const alreadyFinalized=currentStatus===decision;
     if(!alreadyFinalized && ['SUBMITTED','UNDER_REVIEW','REVISION'].indexOf(currentStatus)<0) return fail_('Pendaftaran sudah memiliki keputusan berbeda atau tidak berada pada status verifikasi.');
@@ -4869,7 +4871,7 @@ function finalizeVerification(sessionToken, payload) {
   } finally { lock.releaseLock(); }
   if(result?.success){
     try {
-      createNotificationOnce_(String(found?.registration?.userId||''),decision==='VERIFIED'?'Pendaftaran Terverifikasi':'Pendaftaran Perlu Perbaikan',decision==='VERIFIED'?'Pendaftaran '+String(found.candidate?.fullName||'calon santri')+' dan dokumen wajib telah terverifikasi. Silakan menunggu informasi jadwal tes dan seleksi.':'Pendaftaran '+String(found.candidate?.fullName||'calon santri')+' dikembalikan untuk perbaikan.'+(note?' Catatan: '+note:''),decision==='VERIFIED'?'SUCCESS':'WARNING');
+      createNotificationOnce_(notificationUserId,decision==='VERIFIED'?'Pendaftaran Terverifikasi':'Pendaftaran Perlu Perbaikan',decision==='VERIFIED'?'Pendaftaran '+notificationCandidateName+' dan dokumen wajib telah terverifikasi. Silakan menunggu informasi jadwal tes dan seleksi.':'Pendaftaran '+notificationCandidateName+' dikembalikan untuk perbaikan.'+(note?' Catatan: '+note:''),decision==='VERIFIED'?'SUCCESS':'WARNING');
     } catch(notificationError) {
       // Registration status is already committed. A notification failure must
       // not turn a successful verification into an apparent failed request.
