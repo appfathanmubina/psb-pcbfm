@@ -74,4 +74,28 @@ assert.ok(bulk.indexOf('findRegistration_(registrationId)') > bulkLock &&
 assert.match(bulk, /finally\{lock\.releaseLock\(\)\}/,
   'Bulk participant generation must always release its lock');
 
+const participantStatus = section(
+  'function updateSelectionParticipantStatus(sessionToken,payload){',
+  '\nfunction saveSelectionScore(sessionToken,payload){',
+  'Participant status update'
+);
+assert.ok(participantStatus.includes("if(idx<0)return fail_('Kolom status"),
+  'Participant status update must fail clearly when the required status column is missing');
+assert.ok(participantStatus.includes("const confirmed=findRowById_(sheet,'participantId',participantId)"),
+  'Participant status update must re-read the participant after writing');
+assert.ok(participantStatus.includes("String(confirmed.object.status||'').toUpperCase()!==status"),
+  'Participant status update must compare the persisted status with the requested status');
+assert.ok(participantStatus.includes('catch(auditError)'),
+  'Audit logging failure after a confirmed participant status write must not mask the committed update');
+
+const verification = section(
+  'function finalizeVerification(sessionToken, payload) {',
+  '\nfunction setRegistrationStatus_(',
+  'Registration verification finalization'
+);
+assert.ok(verification.includes('catch(notificationError)'),
+  'Notification failure after registration verification must not turn the committed decision into an apparent failure');
+assert.ok(verification.indexOf('catch(notificationError)') > verification.indexOf('setRegistrationStatus_('),
+  'Verification notification isolation must occur after the registration status transition');
+
 console.log('Selection transaction recovery safeguards: OK');

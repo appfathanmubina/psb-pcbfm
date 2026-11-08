@@ -516,3 +516,23 @@ Branch: `fix/payment-bill-reregistration-state-guards`
 - The changes do not alter Spreadsheet schemas, create or delete production records, or deploy Apps Script.
 - Regression tests are static source-contract checks; Apps Script runtime and staging transaction tests remain required before a production release.
 - The broader state-machine review `TXN-001` remains open until remaining payment, selection, and re-registration transitions are audited.
+
+
+## Repair batch 18 — selection and re-registration recovery guards
+
+Branch: `fix/selection-reregistration-recovery-guards`
+
+| ID | Finding | Change | Status |
+|---|---|---|---|
+| VER-002 | A notification write failure after `finalizeVerification()` had committed the registration status could make the API appear to fail, encouraging an unsafe retry. | Isolate the post-commit notification in `try/catch`; log notification failure while returning the already-committed verification result. | Regression assertions added; CI pending |
+| RRG-008 | `getReregistrationPageData()` could select the first historical Daftar Ulang bill even when cancelled, masking a paid replacement bill. | Resolve bill type names from the full master list, exclude `CANCELLED` bills, and prefer a `PAID` non-cancelled bill. | Regression assertions added; CI pending |
+| RRG-009 | Opening/repairing Daftar Ulang required an active payment type before checking whether a valid existing bill already existed. | Resolve the type from the full master list; reuse an existing non-cancelled bill regardless of later master deactivation; require active status and a valid amount only for a newly created bill. | Regression assertions added; CI pending |
+| SEL-004 | `updateSelectionParticipantStatus()` could return success without writing when the status column was missing and did not confirm the persisted value. | Require the status column, write the status, re-read the participant, and compare the stored value before success. Audit logging failure after the confirmed write is isolated from the committed update. | Regression assertions added; CI pending |
+
+### Scope and safety
+
+- Existing role checks, ScriptLock boundaries, ownership checks, status transition rules, bill identifiers, payment history, and response shapes remain unchanged.
+- Existing non-cancelled Daftar Ulang bills are preserved; no duplicate bill is created by this repair.
+- No Spreadsheet schema, production records, or Apps Script deployment changed.
+- Regression tests are static source-contract checks. Apps Script runtime and staging tests remain required before production rollout.
+- The broader state-machine review `TXN-001` remains open for the remaining payment, selection, and re-registration transitions.

@@ -3320,9 +3320,17 @@ function updateSelectionParticipantStatus(sessionToken,payload){
     const sheet=getDatabaseSpreadsheet_().getSheetByName(PSB_SHEETS.SELECTION_PARTICIPANTS);
     const found=findRowById_(sheet,'participantId',participantId); if(!found)return fail_('Peserta tes tidak ditemukan.');
     const headers=sheet.getRange(1,1,1,sheet.getLastColumn()).getValues()[0].map(String), idx=headers.indexOf('status'), up=headers.indexOf('updatedAt');
-    if(idx>=0)sheet.getRange(found.rowNumber,idx+1).setValue(status);
+    if(idx<0)return fail_('Kolom status pada sheet peserta seleksi belum tersedia.');
+    sheet.getRange(found.rowNumber,idx+1).setValue(status);
     if(up>=0)sheet.getRange(found.rowNumber,up+1).setValue(new Date());
-    writeAudit_(actor.userId,'UPDATE','SELECTION_PARTICIPANT',participantId,JSON.stringify({status:found.object.status}),JSON.stringify({status}),'Status peserta tes diperbarui');
+    const confirmed=findRowById_(sheet,'participantId',participantId);
+    if(!confirmed||String(confirmed.object.status||'').toUpperCase()!==status)
+      return fail_('Status peserta belum berhasil tersimpan. Silakan muat ulang dan periksa data sebelum mencoba kembali.');
+    try {
+      writeAudit_(actor.userId,'UPDATE','SELECTION_PARTICIPANT',participantId,JSON.stringify({status:found.object.status}),JSON.stringify({status}),'Status peserta tes diperbarui');
+    } catch(auditError) {
+      console.error('Selection participant status audit failed: '+auditError);
+    }
     return {success:true,message:'Status peserta diperbarui.'};
   } finally { lock.releaseLock(); }
 }
@@ -3745,7 +3753,7 @@ function getReregistrationPageData(sessionToken) {
     });
 
     requiredDocs = getActiveMasterItems_('MASTER_DOKUMEN').filter(x => x.required);
-    const paymentTypeRows = getActiveMasterItems_('MASTER_JENIS_PEMBAYARAN');
+    const paymentTypeRows = sheetRows_(ss.getSheetByName(PSB_SHEETS.MASTER_JENIS_PEMBAYARAN));
     paymentTypeRows.forEach(type => { paymentTypes[String(type.paymentTypeId)] = type; });
 
     const billTable = readTable(ss.getSheetByName(PSB_SHEETS.BILLS));
@@ -3788,7 +3796,11 @@ function getReregistrationPageData(sessionToken) {
       return !document || String(document.status || '').toUpperCase() !== 'VERIFIED';
     }).map(type => String(type.name || type.documentTypeId));
     const bills = billsByRegistration[id] || [];
-    const reregBill = bills.find(b => /daftar\s*ulang/i.test(String(b.paymentTypeName || '')));
+    const reregistrationBills = bills.filter(b =>
+      /daftar\s*ulang/i.test(String(b.paymentTypeName || '')) &&
+      String(b.status || '').toUpperCase() !== 'CANCELLED'
+    );
+    const reregBill = reregistrationBills.find(b => String(b.status || '').toUpperCase() === 'PAID') || reregistrationBills[0] || null;
     const paymentStatus = reregBill ? String(reregBill.status || '').toUpperCase() : 'NOT_CREATED';
     const payment = reregBill ? reregBill.payment : null;
     const ready = missingDocs.length === 0 && paymentStatus === 'PAID';
@@ -3827,12 +3839,14 @@ function openReregistration(sessionToken, registrationId) {
     const rrSheet=ss.getSheetByName(PSB_SHEETS.REREGISTRATIONS);
     const current=findRowById_(rrSheet,'registrationId',id);
     if(['PAYMENT_VERIFIED','COMPLETED'].includes(currentStatus) && !current)return fail_('Status pendaftaran sudah berlanjut, tetapi data Daftar Ulang tidak ditemukan. Perlu pemeriksaan administrator sebelum membuka ulang.');
-    const reregistrationType=getActiveMasterItems_('MASTER_JENIS_PEMBAYARAN')
+    const reregistrationType=sheetRows_(ss.getSheetByName(PSB_SHEETS.MASTER_JENIS_PEMBAYARAN))
       .find(x=>/daftar\s*ulang/i.test(String(x.name||'')));
-    if(!reregistrationType)return fail_('Jenis pembayaran Daftar Ulang belum aktif pada Master Data → Jenis Pembayaran.');
+    if(!reregistrationType)return fail_('Jenis pembayaran Daftar Ulang tidak ditemukan pada Master Data → Jenis Pembayaran.');
     const existingReregistrationBill=sheetRows_(ss.getSheetByName(PSB_SHEETS.BILLS))
       .find(x=>String(x.registrationId)===id&&String(x.paymentTypeId)===String(reregistrationType.paymentTypeId)&&String(x.status||'').toUpperCase()!=='CANCELLED');
     const reregistrationAmount=Number(reregistrationType.amount);
+    if(!existingReregistrationBill&&reregistrationType.isActive!==true)
+      return fail_('Jenis pembayaran Daftar Ulang tidak aktif pada Master Data. Aktifkan kembali sebelum membuat tagihan baru.');
     if(!existingReregistrationBill&&(!Number.isFinite(reregistrationAmount)||reregistrationAmount<=0))
       return fail_('Nominal tagihan Daftar Ulang belum valid. Pastikan nominalnya lebih besar dari Rp0 pada Master Data → Jenis Pembayaran.');
     // Always run the idempotent helper, even when the reregistration row
@@ -3870,7 +3884,7 @@ function ensureReregistration_(registrationId, actorUserId, createBill) {
   // created the reregistration row but failed before its bill was committed.
   // Validate bill prerequisites before creating a new reregistration record.
   if (createBill) {
-    const paymentType = getActiveMasterItems_('MASTER_JENIS_PEMBAYARAN')
+    const paymentType = sheetRows_(ss.getSheetByName(PSB_SHEETS.MASTER_JENIS_PEMBAYARAN))
       .find(x => /daftar\s*ulang/i.test(String(x.name || '')));
     const billSheet = ss.getSheetByName(PSB_SHEETS.BILLS);
     if (!paymentType || !billSheet) return null;
@@ -3893,14 +3907,15 @@ function ensureReregistration_(registrationId, actorUserId, createBill) {
 }
 
 function ensureReregistrationBill_(found, actorUserId) {
-  const typeItems = getActiveMasterItems_('MASTER_JENIS_PEMBAYARAN');
-  const type = typeItems.find(x => /daftar\s*ulang/i.test(String(x.name || '')));
+  const type = sheetRows_(getDatabaseSpreadsheet_().getSheetByName(PSB_SHEETS.MASTER_JENIS_PEMBAYARAN))
+    .find(x => /daftar\s*ulang/i.test(String(x.name || '')));
   if (!type) return null;
   const billSheet = getDatabaseSpreadsheet_().getSheetByName(PSB_SHEETS.BILLS);
   if (!billSheet) return null;
   const rows = sheetRows_(billSheet);
   const existing = rows.find(x => String(x.registrationId) === String(found.registration.registrationId) && String(x.paymentTypeId) === String(type.paymentTypeId) && String(x.status || '').toUpperCase() !== 'CANCELLED');
   if (existing) return existing;
+  if (type.isActive !== true) return null;
   const amount = Number(type.amount);
   if (!Number.isFinite(amount) || amount <= 0) return null;
   const headers = billSheet.getRange(1,1,1,billSheet.getLastColumn()).getValues()[0].map(String);
@@ -4765,7 +4780,13 @@ function finalizeVerification(sessionToken, payload) {
     result=setRegistrationStatus_(found.registration,decision,actor.userId,note||(decision==='VERIFIED'?'Pendaftaran terverifikasi':'Pendaftaran dikembalikan untuk perbaikan'));
   } finally { lock.releaseLock(); }
   if(result?.success){
-    notifyRegistrationOwner_(registrationId,decision==='VERIFIED'?'Pendaftaran Terverifikasi':'Pendaftaran Perlu Perbaikan',decision==='VERIFIED'?'Pendaftaran dan dokumen wajib telah terverifikasi. Silakan menunggu informasi jadwal tes dan seleksi.':'Pendaftaran dikembalikan untuk perbaikan.'+(note?' Catatan: '+note:''),decision==='VERIFIED'?'SUCCESS':'WARNING');
+    try {
+      notifyRegistrationOwner_(registrationId,decision==='VERIFIED'?'Pendaftaran Terverifikasi':'Pendaftaran Perlu Perbaikan',decision==='VERIFIED'?'Pendaftaran dan dokumen wajib telah terverifikasi. Silakan menunggu informasi jadwal tes dan seleksi.':'Pendaftaran dikembalikan untuk perbaikan.'+(note?' Catatan: '+note:''),decision==='VERIFIED'?'SUCCESS':'WARNING');
+    } catch(notificationError) {
+      // Registration status is already committed. A notification failure must
+      // not turn a successful verification into an apparent failed request.
+      console.error('Registration verification notification failed: '+notificationError);
+    }
   }
   return result;
 }
