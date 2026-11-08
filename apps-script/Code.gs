@@ -316,17 +316,21 @@ function login(identifier, password) {
     try { sessionLock.waitLock(10000); } catch (sessionLockError) {
       return finishLoginTiming_(fail_('Server sedang memproses permintaan lain. Silakan coba kembali.'),'session_lock_timeout');
     }
-    let session;
+    let session, credentialsChanged=false;
     try {
       const currentUser=findUserById_(user.userId,true);
       if(!currentUser || String(currentUser.status).toUpperCase()!=='ACTIVE' ||
           currentUser.passwordHash!==user.passwordHash || currentUser.passwordSalt!==user.passwordSalt){
-        registerLoginFailure_(key);
-        return finishLoginTiming_(fail_('Login gagal. Periksa No. HP/email dan password.'),'credentials_changed');
+        credentialsChanged=true;
+      } else {
+        user=currentUser;
+        session=createSession_(user.userId);
       }
-      user=currentUser;
-      session=createSession_(user.userId);
     } finally { sessionLock.releaseLock(); }
+    if(credentialsChanged){
+      registerLoginFailure_(key);
+      return finishLoginTiming_(fail_('Login gagal. Periksa No. HP/email dan password.'),'credentials_changed');
+    }
     enterTimingStage_('clearLoginFailure');
     try { clearLoginFailure_(key); } catch (clearError) {
       console.warn('AUTH_LOGIN_FAILURE_COUNTER_CLEAR_FAILED');
