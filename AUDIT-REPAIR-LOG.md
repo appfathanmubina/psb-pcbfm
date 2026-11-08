@@ -584,7 +584,7 @@ Branch: `fix/event-keyed-notification-deduplication`
 
 | ID | Finding | Change | Status |
 |---|---|---|---|
-| TXN-002 | `createNotificationOnce_()` deduplicated only by recipient, title, and message. A later legitimate transaction event with identical content could be suppressed as though it were a retry. | Add an optional durable event key. When supplied, derive a deterministic `notificationId` from the recipient and event key using SHA-256, then look up by that ID under ScriptLock. Migrate payment verification, registration verification, selection announcement, and re-registration notification paths to transaction-specific keys. Keep the prior content-based fallback only for legacy callers without an event key. | Implemented; regression test added; CI pending |
+| TXN-002 | `createNotificationOnce_()` deduplicated only by recipient, title, and message. A later legitimate transaction event with identical content could be suppressed as though it were a retry. | Add an optional durable event key. When supplied, derive a deterministic `notificationId` from the recipient and event key using SHA-256, then look up by that ID under ScriptLock. Migrate payment verification, registration verification, selection announcement, and re-registration notification paths to transaction-specific keys. Keep the prior content-based fallback only for legacy callers without an event key. | Implemented; regression test added; CI passed (PR #202 checks 2535/2536) |
 
 ### Scope and safety
 
