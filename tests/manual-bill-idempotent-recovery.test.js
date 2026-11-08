@@ -76,7 +76,7 @@ const sandbox = {
   Session: { getScriptTimeZone: () => 'Asia/Jakarta' },
   console: { error() {} }
 };
-vm.runInNewContext(helperSource + '\\n' + source, sandbox, { timeout: 1000 });
+vm.runInNewContext(helperSource + '\n' + source, sandbox, { timeout: 1000 });
 const createBill = sandbox.createBill;
 const payload = { registrationId: 'REG-1', paymentTypeId: 'TYPE-FORM', amount: 250000, dueDate: '2027-01-15' };
 
