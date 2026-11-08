@@ -17,6 +17,7 @@ assert.match(helper, /findRowById_\([\s\S]*?'paymentId'/);
 assert.match(helper, /PAYMENT_SUBMISSION:\s*'\+String\(payment\.paymentId\)/);
 assert.match(helper, /notifyUsersByRolesOnce_\(\['SUPERADMIN','ADMIN_PSB','KEUANGAN'\]/);
 assert.match(helper, /createNotificationOnce_\(String\(registrationFound\.registration\.userId\)/);
+assert.match(helper, /status!=='SUBMITTED'/, 'Do not emit a pending-submission alert after the payment is already verified');
 assert.match(helper, /actorRole[\s\S]*?WALI/);
 
 const submit = section(backend, 'function submitPayment(sessionToken,payload){', '\nfunction verifyPayment(sessionToken,payload){', 'Payment submission');
