@@ -118,8 +118,10 @@ jobs:
         run: node tests/backend-verification-detail-performance.test.js
       - name: Test reregistration page performance and ownership safeguards
         run: node tests/backend-reregistration-page-performance.test.js
-      - name: Test monitoring page batch-read and authorization safeguards
+      - name: Test monitoring page batch-read and historical reconciliation safeguards
         run: node tests/backend-monitoring-page-performance.test.js
+      - name: Test academic year lifecycle projection safeguards
+        run: node tests/backend-academic-year-lifecycle-projection.test.js
       - name: Test selection page batch-read, indexing, and authorization safeguards
         run: node tests/backend-selection-page-performance.test.js
       - name: Test sparse Google Sheets column projections
