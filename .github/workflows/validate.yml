@@ -56,6 +56,8 @@ jobs:
         run: node tests/payment-upload-resilience.test.js
       - name: Test payment partial-commit recovery safeguards
         run: node tests/payment-partial-commit-recovery.test.js
+      - name: Test manual bill idempotent creation and notification recovery
+        run: node tests/manual-bill-idempotent-recovery.test.js
       - name: Test payment verification and rejection recovery safeguards
         run: node tests/payment-verification-rejection-recovery.test.js
       - name: Test event-keyed notification idempotency and transaction event identity
