@@ -4889,10 +4889,15 @@ function verifyDocument(sessionToken, payload) {
     ownerUserId=String(reg.registration.userId||'');
     const statusIdx=headers.indexOf('status'), verifiedIdx=headers.indexOf('verifiedAt'), byIdx=headers.indexOf('verifiedBy'), noteIdx=headers.indexOf('revisionNote');
     const now=new Date();
-    if(statusIdx>=0) sheet.getRange(found.rowNumber,statusIdx+1).setValue(status);
-    if(verifiedIdx>=0) sheet.getRange(found.rowNumber,verifiedIdx+1).setValue(status==='VERIFIED'?now:'');
-    if(byIdx>=0) sheet.getRange(found.rowNumber,byIdx+1).setValue(status==='VERIFIED'?actor.userId:'');
-    if(noteIdx>=0) sheet.getRange(found.rowNumber,noteIdx+1).setValue(status==='REVISION'?note:'');
+    // Persist the decision and its metadata in one row write. ScriptLock
+    // serializes PSB mutations; one setValues call minimizes partial state.
+    const verificationRow=sheet.getRange(found.rowNumber,1,1,headers.length).getValues()[0];
+    verificationRow[statusIdx]=status;
+    verificationRow[verifiedIdx]=status==='VERIFIED'?now:'';
+    verificationRow[byIdx]=status==='VERIFIED'?actor.userId:'';
+    verificationRow[noteIdx]=status==='REVISION'?note:'';
+    sheet.getRange(found.rowNumber,1,1,headers.length).setValues([verificationRow]);
+    SpreadsheetApp.flush();
     const confirmed=findRowById_(sheet,'documentId',documentId);
     const confirmedVerifiedAt=confirmed&&confirmed.object.verifiedAt?new Date(confirmed.object.verifiedAt):null;
     const verificationFieldsMatch=confirmed &&
@@ -4914,7 +4919,7 @@ function verifyDocument(sessionToken, payload) {
   const docType=findMasterItemById_('MASTER_DOKUMEN','documentTypeId',documentTypeId);
   if(status==='REVISION' && ownerUserId) {
     try {
-      createNotificationOnce_(ownerUserId,'Dokumen Perlu Diperbaiki','Dokumen '+String(docType?.name||'yang diunggah')+' perlu diperbaiki.'+(note?' Catatan: '+note:''),'WARNING','DOCUMENT_VERIFICATION:'+documentId+':REVISION');
+      createNotificationOnce_(ownerUserId,'Dokumen Perlu Diperbaiki','Dokumen '+String(docType?.name||'yang diunggah')+' perlu diperbaiki.'+(note?' Catatan: '+note:''),'WARNING','DOCUMENT_VERIFICATION:'+documentId+':REVISION:'+Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256,note,Utilities.Charset.UTF_8).map(byte=>(byte<0?byte+256:byte).toString(16).padStart(2,'0')).join(''));
     } catch(notificationError) {
       console.error('Document revision notification recovery pending: '+notificationError);
     }
