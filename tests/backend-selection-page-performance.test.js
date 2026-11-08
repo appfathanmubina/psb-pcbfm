@@ -47,7 +47,8 @@ assert.match(page, /waves: sheetMapById_/,
   'Wave enrichment map must be preloaded');
 assert.match(page, /levels: sheetMapById_([^\n]+, \['name'\])/,
   'Level enrichment map must be preloaded with only its display name');
-assert.match(page, /years: sheetMapById_([^\n]+, \['name','isActive'\])/ ,
+assert.match(page, /years: sheetMapById_([^\n]+, \['name','isActive'\])/,
+  'Academic year enrichment map must preserve active-year lookup while projecting required fields');
 assert.match(page, /waves: sheetMapById_([^\n]+, \['name'\])/,
   'Wave enrichment map must project only its display name');
 assert.match(page, /sheetRowsByFields_\(ss\.getSheetByName\(PSB_SHEETS\.SELECTION_SCHEDULE\)/,
