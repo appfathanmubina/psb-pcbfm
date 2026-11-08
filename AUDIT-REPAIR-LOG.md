@@ -594,3 +594,21 @@ Branch: `fix/event-keyed-notification-deduplication`
 - The event-key lookup and append remain inside ScriptLock. Notification content, roles, and transaction state transitions are otherwise unchanged.
 - No production Spreadsheet data, schema, or Apps Script deployment was changed.
 - Regression coverage exercises duplicate retry, same-content new event, per-recipient fan-out, and legacy fallback. Apps Script staging/runtime and concurrency validation remain required before production rollout.
+
+
+## Repair batch 22 — manual bill idempotent recovery
+
+Branch: `fix/manual-bill-idempotent-recovery`
+
+| ID | Finding | Change | Status |
+|---|---|---|---|
+| TXN-003 | `createBill()` treated every active bill of the same payment type as a duplicate error, so a retry after a successful write but lost response could not recover the original result or its notification. | Return the existing bill as idempotent success when payment type, amount, and due date match. Reject conflicting amount/due-date requests. Read back the appended row by `billId` before success. Isolate audit-log failure after confirmed persistence. Recover the Formulir owner notification using `MANUAL_BILL_CREATED:<billId>` as its idempotency event key. | Implemented; regression test added; CI pending |
+
+### Scope and safety
+
+- Cancelled bills remain excluded from duplicate detection, preserving the existing reissue behavior.
+- Existing non-cancelled bills with a different amount or due date are not overwritten.
+- Notification retries reuse the persisted bill ID and therefore resolve to one owner notification.
+- No Spreadsheet schema change, production data change, or Apps Script deployment was made.
+- Regression coverage includes repeated creation, amount/due-date conflicts, persistence readback, non-blocking audit failure, and bill-scoped notification retry.
+- Apps Script staging/runtime and concurrent request validation remain required before production rollout.

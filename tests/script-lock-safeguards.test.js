@@ -67,8 +67,8 @@ for (const [name, pattern] of [
   assertNotificationAfterLockRelease(name, pattern);
 }
 
-assert.match(functionSource('createBill'), /const result=withScriptLock_\([\s\S]*?\);\s*if\(result\?\.success[\s\S]*?notifyRegistrationOwner_/,
-  'Manual bill notification must be delivered after the withScriptLock callback completes');
+assert.match(functionSource('createBill'), /const result=withScriptLock_\([\s\S]*?\);\s*if\(result\?\.success[\s\S]*?createNotificationOnce_\([\s\S]*?MANUAL_BILL_CREATED:/,
+  'Manual bill notification recovery must use a bill-scoped idempotent event key after the withScriptLock callback completes');
 assert.match(functionSource('getPaymentPageData'), /ensureFormBillForRegistration_\(selected,paymentTypes,actor\.userId,true\)/,
   'Automatic bill creation from payment page must suppress notification inside the lock');
 assert.match(functionSource('getPaymentPageData'), /if\(autoBillResult\?\.success && autoBillResult\.created\)[\s\S]*?notifyRegistrationOwner_/,
