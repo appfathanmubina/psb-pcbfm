@@ -536,3 +536,22 @@ Branch: `fix/selection-reregistration-recovery-guards`
 - No Spreadsheet schema, production records, or Apps Script deployment changed.
 - Regression tests are static source-contract checks. Apps Script runtime and staging tests remain required before production rollout.
 - The broader state-machine review `TXN-001` remains open for the remaining payment, selection, and re-registration transitions.
+
+## Repair batch 19 — registration status, re-registration sync, and announcement recovery
+
+Branch: `fix/registration-sync-announcement-recovery`
+
+| ID | Finding | Change | Status |
+|---|---|---|---|
+| VER-003 | `setRegistrationStatus_()` could skip the status write when the required column was missing and still return success; audit failure after a confirmed write could also create a false-negative API response. | Require the status column and valid row, re-read and confirm the persisted registration status, and isolate audit failure only after the state commit is confirmed. | Implemented; regression test added; CI pending; Apps Script staging/runtime test pending |
+| RRG-010 | Document verification ignored the Daftar Ulang synchronization result, while the shared synchronization helper ran outside ScriptLock for document-triggered calls and could race payment verification. | Split synchronization into a lock-aware wrapper and lock-held implementation. Payment verification reuses its existing lock; document verification acquires the lock through the wrapper and reports when the document is committed but follow-up synchronization remains pending. | Implemented; regression test added; CI pending; Apps Script concurrency test pending |
+| ANN-001 | An announcement marker could be committed before audit logging failed, preventing notification fan-out; retries recognized the marker but did not reconstruct the Wali notification payload. | Rebuild notification payload on published retries, confirm the announcement marker, isolate post-commit audit failure, and use lock-protected idempotent notification creation to avoid duplicate Wali notifications. | Implemented; regression test added; CI pending; Apps Script retry/concurrency test pending |
+
+### Scope and safety
+
+- The registration status helper now confirms the durable status before returning success. Audit logging is best-effort only after that confirmation; failures are logged for operational review.
+- Payment verification calls the lock-held synchronization implementation while already holding ScriptLock. Document verification uses the outer wrapper, which serializes synchronization and sends completion notification after releasing the lock.
+- If document verification commits but Daftar Ulang synchronization cannot complete, the API response explicitly reports that the document is saved and the synchronization can be retried.
+- Announcement retries rebuild the exact notification content from the persisted selection result. Notification lookup and append are serialized, and duplicate user/title/message notifications are not appended.
+- No Spreadsheet schema, stored data, role definitions, payment rules, or production deployment changed.
+- No Apps Script deployment or production data mutation was performed. Static CI tests do not replace Apps Script staging/runtime and concurrency validation.
