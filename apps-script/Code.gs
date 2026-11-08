@@ -4472,6 +4472,9 @@ function verifyDocument(sessionToken, payload) {
     const headers=sheet.getRange(1,1,1,sheet.getLastColumn()).getValues()[0].map(String);
     const found=findRowById_(sheet,'documentId',documentId);
     if(!found) return fail_('Dokumen tidak ditemukan.');
+    // A replaced document is historical only and must never be reactivated
+    // by a direct verification RPC. This check runs under ScriptLock.
+    if(String(found.object.status||'').toUpperCase()==='REPLACED') return fail_('Dokumen ini sudah digantikan oleh unggahan terbaru dan tidak dapat diverifikasi.');
     const reg=findRegistration_(String(found.object.registrationId||''));
     if(!reg) return fail_('Pendaftaran dokumen tidak ditemukan.');
     if(PSB_VERIFICATION_REGISTRATION_STATUSES.indexOf(String(reg.registration.status))<0) return fail_('Pendaftaran tidak sedang dalam proses verifikasi.');
