@@ -95,12 +95,16 @@ assert.ok(loginSessionOrder >= 0 && login.indexOf('clearLoginFailure_(key)') > l
 const failureContention = fn('registerLoginFailure_');
 assert.match(failureContention, /PSB_LOGIN_LOCK_V2_[\s\S]*Date\.now\(\) \+ 60000/,
   'Login failure counter lock contention must create a short fail-closed lock marker');
-const migration = fn('migratePbkdf2PasswordToLegacySha256AfterLogin_');
+const migration = fn('upgradePasswordHashAfterLogin_');
 assert.ok(migration.indexOf('hashPassword_(') < migration.indexOf('lock.waitLock(20000)'),
-  'PBKDF2-to-SHA migration must derive the hash before taking the global lock');
+  'Legacy/weak hash upgrade must derive PBKDF2 before taking the global lock');
 assert.match(migration.slice(migration.indexOf('lock.waitLock(20000)')),
   /findUserById_\(verifiedUser\.userId, true\)[\s\S]*?passwordHash !== verifiedUser\.passwordHash[\s\S]*?return false/,
-  'Password migration must recheck current credentials under lock');
+  'Password upgrade must recheck current credentials under lock');
+assert.match(migration, /confirmed\.passwordHash !== hash/,
+  'Password upgrade must confirm the persisted PBKDF2 hash');
+assert.doesNotMatch(source, /migratePbkdf2PasswordToLegacySha256AfterLogin_/,
+  'No PBKDF2-to-SHA downgrade path may remain');
 const passwordChange = fn('changePassword');
 const passwordLockAt = passwordChange.indexOf('lock.waitLock(20000)');
 assert.ok(passwordChange.indexOf('verifyPasswordForUser_(') < passwordLockAt,
