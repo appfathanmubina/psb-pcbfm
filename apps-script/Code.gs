@@ -1492,11 +1492,11 @@ function getActiveAcademicYear_() {
 function getAcademicYearLifecycleData(sessionToken) {
   const actor = requireRole_(sessionToken, PSB_MASTER_ACCESS_ROLES);
   const ss = getDatabaseSpreadsheet_();
-  const years = sheetRows_(ss.getSheetByName(PSB_SHEETS.MASTER_TAHUN_AJARAN));
-  const waves = sheetRows_(ss.getSheetByName(PSB_SHEETS.MASTER_GELOMBANG));
-  const regs = sheetRows_(ss.getSheetByName(PSB_SHEETS.REGISTRATIONS));
-  const bills = sheetRows_(ss.getSheetByName(PSB_SHEETS.BILLS));
-  const schedules = sheetRows_(ss.getSheetByName(PSB_SHEETS.SELECTION_SCHEDULE));
+  const years = sheetRowsByFields_(ss.getSheetByName(PSB_SHEETS.MASTER_TAHUN_AJARAN), ['tahunAjaranId','name','isActive']);
+  const waves = sheetRowsByFields_(ss.getSheetByName(PSB_SHEETS.MASTER_GELOMBANG), ['tahunAjaranId']);
+  const regs = sheetRowsByFields_(ss.getSheetByName(PSB_SHEETS.REGISTRATIONS), ['tahunAjaranId','registrationId']);
+  const bills = sheetRowsByFields_(ss.getSheetByName(PSB_SHEETS.BILLS), ['registrationId']);
+  const schedules = sheetRowsByFields_(ss.getSheetByName(PSB_SHEETS.SELECTION_SCHEDULE), ['tahunAjaranId']);
   const configuredId = String(getConfig_('ACTIVE_YEAR_ID') || '').trim();
   const configuredName = String(getConfig_('ACTIVE_YEAR') || '').trim();
   const active = years.find(x => configuredId && String(x.tahunAjaranId) === configuredId) ||
@@ -4032,17 +4032,22 @@ function getMonitoringPageData(sessionToken){
   const ss=getDatabaseSpreadsheet_();
   const period=psbActiveYearRegistrationSet_(ss);
   const regs=period.period, regIds=period.ids;
-  const candidates=sheetRows_(ss.getSheetByName(PSB_SHEETS.CANDIDATES));
-  const users=sheetRows_(ss.getSheetByName(PSB_SHEETS.USERS));
+  // Operational queues stay scoped to the active year, while integrity
+  // reconciliation uses complete relationship indexes across all years.
+  const allRegistrations=sheetRowsByFields_(ss.getSheetByName(PSB_SHEETS.REGISTRATIONS),['registrationId']);
+  const allRegistrationIds=Object.create(null);
+  allRegistrations.forEach(r=>{const id=String(r.registrationId||'').trim();if(id)allRegistrationIds[id]=true;});
+  const candidates=sheetRowsByFields_(ss.getSheetByName(PSB_SHEETS.CANDIDATES),['candidateId','fullName']);
+  const users=sheetRowsByFields_(ss.getSheetByName(PSB_SHEETS.USERS),['userId']);
   // Read each child table once; reuse the same rows for active-period processing
   // and orphan reconciliation below.
   const allChildRows={
-    DOCUMENTS:sheetRows_(ss.getSheetByName(PSB_SHEETS.DOCUMENTS)),
-    BILLS:sheetRows_(ss.getSheetByName(PSB_SHEETS.BILLS)),
-    PAYMENTS:sheetRows_(ss.getSheetByName(PSB_SHEETS.PAYMENTS)),
-    SELECTION_PARTICIPANTS:sheetRows_(ss.getSheetByName(PSB_SHEETS.SELECTION_PARTICIPANTS)),
-    SELECTION_RESULTS:sheetRows_(ss.getSheetByName(PSB_SHEETS.SELECTION_RESULTS)),
-    REREGISTRATIONS:sheetRows_(ss.getSheetByName(PSB_SHEETS.REREGISTRATIONS))
+    DOCUMENTS:sheetRowsByFields_(ss.getSheetByName(PSB_SHEETS.DOCUMENTS),['registrationId','documentId','fileId']),
+    BILLS:sheetRowsByFields_(ss.getSheetByName(PSB_SHEETS.BILLS),['registrationId','billId','paymentTypeId','status','amount','updatedAt','createdAt']),
+    PAYMENTS:sheetRowsByFields_(ss.getSheetByName(PSB_SHEETS.PAYMENTS),['registrationId','paymentId','billId','createdAt','submittedAt','amount']),
+    SELECTION_PARTICIPANTS:sheetRowsByFields_(ss.getSheetByName(PSB_SHEETS.SELECTION_PARTICIPANTS),['registrationId','participantId','status','scheduleId','createdAt','updatedAt']),
+    SELECTION_RESULTS:sheetRowsByFields_(ss.getSheetByName(PSB_SHEETS.SELECTION_RESULTS),['registrationId','status','announcementDate','createdAt','updatedAt','resultId']),
+    REREGISTRATIONS:sheetRowsByFields_(ss.getSheetByName(PSB_SHEETS.REREGISTRATIONS),['registrationId','status','updatedAt','createdAt','completedAt','reregistrationId'])
   };
   const bills=allChildRows.BILLS.filter(x=>regIds[String(x.registrationId)]);
   const payments=allChildRows.PAYMENTS.filter(x=>regIds[String(x.registrationId)]);
@@ -4050,10 +4055,11 @@ function getMonitoringPageData(sessionToken){
   const participants=allChildRows.SELECTION_PARTICIPANTS.filter(x=>regIds[String(x.registrationId)]);
   const results=allChildRows.SELECTION_RESULTS.filter(x=>regIds[String(x.registrationId)]);
   const rereg=allChildRows.REREGISTRATIONS.filter(x=>regIds[String(x.registrationId)]);
-  const verificationsAll=sheetRows_(ss.getSheetByName(PSB_SHEETS.PAYMENT_VERIFICATIONS));
-  const schedules=sheetRows_(ss.getSheetByName(PSB_SHEETS.SELECTION_SCHEDULE));
-  const scores=sheetRows_(ss.getSheetByName(PSB_SHEETS.SELECTION_SCORES));
-  const incidents=sheetRows_(ss.getSheetByName(PSB_SHEETS.INCIDENTS));
+  const verificationsAll=sheetRowsByFields_(ss.getSheetByName(PSB_SHEETS.PAYMENT_VERIFICATIONS),['paymentId','verificationId','status','verifiedAt']);
+  const schedules=sheetRowsByFields_(ss.getSheetByName(PSB_SHEETS.SELECTION_SCHEDULE),['scheduleId']);
+  const scores=sheetRowsByFields_(ss.getSheetByName(PSB_SHEETS.SELECTION_SCORES),['participantId','scoreId']);
+  const allParticipants=sheetRowsByFields_(ss.getSheetByName(PSB_SHEETS.SELECTION_PARTICIPANTS),['participantId']);
+  const incidents=sheetRowsByFields_(ss.getSheetByName(PSB_SHEETS.INCIDENTS),['status']);
   const candidateMap={};candidates.forEach(x=>candidateMap[String(x.candidateId)]=x);
   const regMap={};regs.forEach(x=>regMap[String(x.registrationId)]=x);
   const paymentMap={};payments.forEach(x=>paymentMap[String(x.paymentId)]=x);
@@ -4073,7 +4079,7 @@ function getMonitoringPageData(sessionToken){
     latestPaymentByBill[k]=paymentsByBill[k].slice().sort((a,z)=>new Date(z.createdAt||0)-new Date(a.createdAt||0))[0];
   });
   const billMap={};bills.forEach(x=>billMap[String(x.billId)]=x);
-  const participantMap={};participants.forEach(x=>participantMap[String(x.participantId)]=x);
+  const participantMap={};allParticipants.forEach(x=>{participantMap[String(x.participantId)]=x;});
   const scheduleIds={};schedules.forEach(x=>{scheduleIds[String(x.scheduleId)]=true;});
   const userMap={};users.forEach(x=>userMap[String(x.userId)]=x);
   const now=new Date();
@@ -4097,7 +4103,7 @@ function getMonitoringPageData(sessionToken){
   const regExceptions=[]; const childSheets=[['DOCUMENTS','registrationId'],['BILLS','registrationId'],['PAYMENTS','registrationId'],['SELECTION_PARTICIPANTS','registrationId'],['SELECTION_RESULTS','registrationId'],['REREGISTRATIONS','registrationId']];
   regs.forEach(r=>{if(!String(r.userId||'').trim()||!userMap[String(r.userId)]) regExceptions.push({type:'REGISTRATION_USER_MISSING',severity:'ERROR',recordId:r.registrationId,detail:'Pendaftaran tidak memiliki user wali yang valid.'}); if(!String(r.candidateId||'').trim()||!candidateMap[String(r.candidateId)]) regExceptions.push({type:'REGISTRATION_CANDIDATE_MISSING',severity:'ERROR',recordId:r.registrationId,detail:'Pendaftaran tidak memiliki calon santri yang valid.'});});
   // allChildRows was batch-read above and is reused for orphan checks.
-  childSheets.forEach(([sheet,field])=>{(allChildRows[sheet]||[]).filter(x=>String(x[field]||'').trim()&&!regIds[String(x[field])]).slice(0,50).forEach(x=>{const idField=Object.keys(x).find(k=>/Id$/.test(k))||field;regExceptions.push({type:'ORPHAN_'+sheet,severity:'ERROR',recordId:x[idField]||x[field],detail:sheet+' mengarah ke registrationId yang tidak ada pada periode aktif.'});});});
+  childSheets.forEach(([sheet,field])=>{(allChildRows[sheet]||[]).filter(x=>String(x[field]||'').trim()&&!allRegistrationIds[String(x[field])]).slice(0,50).forEach(x=>{const idField=Object.keys(x).find(k=>/Id$/.test(k))||field;regExceptions.push({type:'ORPHAN_'+sheet,severity:'ERROR',recordId:x[idField]||x[field],detail:sheet+' mengarah ke registrationId yang tidak ada pada seluruh data pendaftaran.'});});});
   docs.forEach(d=>{if(!String(d.fileId||'').trim()) regExceptions.push({type:'DOCUMENT_FILE_MISSING',severity:'WARNING',recordId:d.documentId,detail:'Dokumen memiliki record tetapi fileId kosong.'});});
   participants.forEach(p=>{if(!scheduleIds[String(p.scheduleId)]) regExceptions.push({type:'PARTICIPANT_SCHEDULE_MISSING',severity:'ERROR',recordId:p.participantId,detail:'Peserta tes mengarah ke jadwal yang tidak tersedia.'});});
   scores.forEach(sc=>{if(!participantMap[String(sc.participantId)]) regExceptions.push({type:'SCORE_PARTICIPANT_MISSING',severity:'ERROR',recordId:sc.scoreId,detail:'Nilai mengarah ke peserta tes yang tidak tersedia.'});});
