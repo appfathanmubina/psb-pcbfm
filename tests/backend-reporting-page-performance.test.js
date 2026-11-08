@@ -12,6 +12,16 @@ const page = code.slice(start, end);
 
 assert.match(page, /requireRole_\(sessionToken, PSB_REPORT_ROLES\)/,
   'Reporting role gate must remain at the start of the endpoint');
+assert.doesNotMatch(page, /sheetRows_\(/,
+  'Primary report must not read complete sheet rows');
+assert.match(page, /sheetRowsByFields_\(ss\.getSheetByName\(PSB_SHEETS\.REGISTRATIONS\)/,
+  'Registrations must be loaded with a narrow field projection');
+assert.match(page, /sheetRowsMatchingValuesByFields_\([\s\S]*?PSB_SHEETS\.BILLS[\s\S]*?registrationIds/,
+  'Bills must be scoped to filtered registration IDs');
+assert.match(page, /sheetRowsMatchingValuesByFields_\([\s\S]*?PSB_SHEETS\.PAYMENTS[\s\S]*?registrationIds/,
+  'Payments must be scoped to filtered registration IDs');
+assert.match(page, /sheetRowsMatchingValuesByFields_\([\s\S]*?PSB_SHEETS\.SELECTION_RESULTS[\s\S]*?registrationIds/,
+  'Selection results must be scoped to filtered registration IDs');
 assert.match(page, /billSummaryByRegistration/,
   'Bills must be aggregated once by registration');
 assert.match(page, /latestPaymentByRegistration/,
@@ -82,6 +92,8 @@ const context = {
   },
   getConfig_: () => '2027/2028',
   sheetRows_: name => sheets[name] || [],
+  sheetRowsByFields_: (name, fields) => (sheets[name] || []).map((row, index) => Object.assign({ rowNumber: index + 2 }, Object.fromEntries(fields.map(field => [field, row[field]])))),
+  sheetRowsMatchingValuesByFields_: (name, key, wanted, fields) => (sheets[name] || []).filter(row => wanted.map(String).includes(String(row[key] || ''))).map((row, index) => Object.assign({ rowNumber: index + 2 }, Object.fromEntries([key].concat(fields || []).map(field => [field, row[field]])))),
   normalizeReportGender_: value => String(value || '').trim().toUpperCase(),
   reportGenderName_: value => String(value || '').toUpperCase() === 'L' ? 'Laki-laki' : 'Perempuan',
   reportGroupName_: (level, gender) => level + ' · ' + (String(gender).toUpperCase() === 'L' ? 'Putra' : 'Putri')

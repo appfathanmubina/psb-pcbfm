@@ -1866,20 +1866,13 @@ function getRegistrationFormOptions(sessionToken) {
 }
 
 function sheetRowsByFields_(sheet, fields) {
-  if (!sheet || sheet.getLastRow() < 2) return [];
+  if (!sheet || !fields || !fields.length || !sheet || sheet.getLastRow() < 2) return [];
   const lastColumn = sheet.getLastColumn();
   if (lastColumn < 1) return [];
   const headers = sheet.getRange(1, 1, 1, lastColumn).getValues()[0].map(String);
-  const indexes = (fields || []).map(field => headers.indexOf(String(field)));
+  const indexes = fields.map(field => headers.indexOf(String(field)));
   if (indexes.some(index => index < 0)) return [];
-  const minIndex = Math.min.apply(null, indexes);
-  const maxIndex = Math.max.apply(null, indexes);
-  const values = sheet.getRange(2, minIndex + 1, sheet.getLastRow() - 1, maxIndex - minIndex + 1).getValues();
-  return values.map((row, rowIndex) => {
-    const item = { rowNumber: rowIndex + 2 };
-    (fields || []).forEach((field, i) => { item[field] = row[indexes[i] - minIndex]; });
-    return item;
-  });
+  return sheetRowsProjectedAll_(sheet, fields, headers);
 }
 
 function getFormPaymentVerifiedRegistrationIds_() {
@@ -2439,29 +2432,7 @@ function sheetRowsMatchingValuesByFields_(sheet, keyField, wantedValues, fields)
     if (wanted[String(keys[i][0] == null ? '' : keys[i][0])]) matchingRows.push(i + 2);
   }
   if (!matchingRows.length) return [];
-  const minIndex = Math.min.apply(null, indexes);
-  const maxIndex = Math.max.apply(null, indexes);
-  const output = [];
-  let blockStart = matchingRows[0];
-  let previousRow = matchingRows[0];
-  function appendBlock_(startRow, endRow) {
-    const values = sheet.getRange(startRow, minIndex + 1, endRow - startRow + 1, maxIndex - minIndex + 1).getValues();
-    values.forEach((row, offset) => {
-      const item = { rowNumber: startRow + offset };
-      requestedFields.forEach((field, i) => { item[field] = row[indexes[i] - minIndex]; });
-      output.push(item);
-    });
-  }
-  for (let i = 1; i < matchingRows.length; i++) {
-    const rowNumber = matchingRows[i];
-    if (rowNumber !== previousRow + 1) {
-      appendBlock_(blockStart, previousRow);
-      blockStart = rowNumber;
-    }
-    previousRow = rowNumber;
-  }
-  appendBlock_(blockStart, previousRow);
-  return output;
+  return sheetRowsProjected_(sheet, matchingRows, requestedFields, headers);
 }
 
 function sheetRowsProjected_(sheet, rowNumbers, fields, headers) {
@@ -2881,7 +2852,7 @@ function getSelectionPageData(sessionToken, registrationId) {
   const candidateIds = registrationRows.map(r => String(r.candidateId || '')).filter(Boolean);
   const candidateSheet = ss.getSheetByName(PSB_SHEETS.CANDIDATES);
   const candidateRows = isWali
-    ? sheetRowsMatchingValues_(candidateSheet, 'candidateId', candidateIds)
+    ? sheetRowsMatchingValuesByFields_(candidateSheet, 'candidateId', candidateIds, ['name','fullName'])
     : sheetRowsByFields_(candidateSheet, ['candidateId','name','fullName']);
   const candidateMap = {};
   candidateRows.forEach(r => {
@@ -2890,9 +2861,9 @@ function getSelectionPageData(sessionToken, registrationId) {
   });
   const enrichmentMaps = {
     candidates: candidateMap,
-    years: sheetMapById_(ss.getSheetByName(PSB_SHEETS.MASTER_TAHUN_AJARAN), 'tahunAjaranId'),
-    waves: sheetMapById_(ss.getSheetByName(PSB_SHEETS.MASTER_GELOMBANG), 'gelombangId'),
-    levels: sheetMapById_(ss.getSheetByName(PSB_SHEETS.MASTER_JENJANG), 'jenjangId')
+    years: sheetMapById_(ss.getSheetByName(PSB_SHEETS.MASTER_TAHUN_AJARAN), 'tahunAjaranId', ['name','isActive']),
+    waves: sheetMapById_(ss.getSheetByName(PSB_SHEETS.MASTER_GELOMBANG), 'gelombangId', ['name']),
+    levels: sheetMapById_(ss.getSheetByName(PSB_SHEETS.MASTER_JENJANG), 'jenjangId', ['name'])
   };
 
   let registrationItems = registrationRows;
@@ -2905,7 +2876,9 @@ function getSelectionPageData(sessionToken, registrationId) {
 
   const activeYearId = String(getConfig_('ACTIVE_YEAR_ID') || '').trim();
   const activeYearName = String(getConfig_('ACTIVE_YEAR') || '').trim();
-  const activeYear = activeYearId ? findMasterItemById_('MASTER_TAHUN_AJARAN','tahunAjaranId',activeYearId) : getActiveMasterItems_('MASTER_TAHUN_AJARAN').find(x=>String(x.name)===activeYearName);
+  const activeYear = activeYearId
+    ? (enrichmentMaps.years[activeYearId] || null)
+    : Object.values(enrichmentMaps.years).find(x=>String(x.name)===activeYearName && (x.isActive===true || String(x.isActive).toUpperCase()==='TRUE')) || null;
   const yearId = String(activeYear?.tahunAjaranId || activeYearId || '');
   const schedules = sheetRowsByFields_(ss.getSheetByName(PSB_SHEETS.SELECTION_SCHEDULE),
     ['scheduleId','tahunAjaranId','name','selectionDate','location','isActive'])
@@ -4199,26 +4172,52 @@ function getReportingPageData(sessionToken, filters) {
   const gelombangId = String(filters.gelombangId || '').trim();
   const jenjangId = String(filters.jenjangId || '').trim();
   const gender = normalizeReportGender_(filters.gender);
-  const regs = sheetRows_(ss.getSheetByName(PSB_SHEETS.REGISTRATIONS));
-  const candidates = sheetRows_(ss.getSheetByName(PSB_SHEETS.CANDIDATES));
-  const bills = sheetRows_(ss.getSheetByName(PSB_SHEETS.BILLS));
-  const payments = sheetRows_(ss.getSheetByName(PSB_SHEETS.PAYMENTS));
-  const participants = sheetRows_(ss.getSheetByName(PSB_SHEETS.SELECTION_PARTICIPANTS));
-  const results = sheetRows_(ss.getSheetByName(PSB_SHEETS.SELECTION_RESULTS));
-  const rereg = sheetRows_(ss.getSheetByName(PSB_SHEETS.REREGISTRATIONS));
-  const years = sheetRows_(ss.getSheetByName(PSB_SHEETS.MASTER_TAHUN_AJARAN));
-  const gelombangs = sheetRows_(ss.getSheetByName(PSB_SHEETS.MASTER_GELOMBANG));
-  const jenjangs = sheetRows_(ss.getSheetByName(PSB_SHEETS.MASTER_JENJANG));
-  const yearMap={},gelombangMap={},jenjangMap={},candidateMap={};
-  years.forEach(x=>yearMap[String(x.tahunAjaranId)]=x); gelombangs.forEach(x=>gelombangMap[String(x.gelombangId)]=x); jenjangs.forEach(x=>jenjangMap[String(x.jenjangId)]=x); candidates.forEach(x=>candidateMap[String(x.candidateId)]=x);
+
+  // Keep the full registration index for accurate filtering, but transfer only
+  // fields consumed by the report. Related rows are loaded only for visible IDs.
+  const regs = sheetRowsByFields_(ss.getSheetByName(PSB_SHEETS.REGISTRATIONS), [
+    'registrationId','registrationNumber','candidateId','tahunAjaranId',
+    'gelombangId','jenjangId','status','submittedAt','verifiedAt','createdAt'
+  ]);
+  const years = sheetRowsByFields_(ss.getSheetByName(PSB_SHEETS.MASTER_TAHUN_AJARAN), ['tahunAjaranId','name']);
+  const gelombangs = sheetRowsByFields_(ss.getSheetByName(PSB_SHEETS.MASTER_GELOMBANG), ['gelombangId','tahunAjaranId','name']);
+  const jenjangs = sheetRowsByFields_(ss.getSheetByName(PSB_SHEETS.MASTER_JENJANG), ['jenjangId','name','isActive']);
+  const yearMap={},gelombangMap={},jenjangMap={};
+  years.forEach(x=>yearMap[String(x.tahunAjaranId)]=x);
+  gelombangs.forEach(x=>gelombangMap[String(x.gelombangId)]=x);
+  jenjangs.forEach(x=>jenjangMap[String(x.jenjangId)]=x);
   const activeYearId=years.find(x=>String(x.name||'')===activeYear)?.tahunAjaranId||'';
   let rows=regs.filter(r=>!year && activeYearId ? String(r.tahunAjaranId)===String(activeYearId) : (!year || String(r.tahunAjaranId)===year));
   if(gelombangId) rows=rows.filter(r=>String(r.gelombangId)===gelombangId);
   if(jenjangId) rows=rows.filter(r=>String(r.jenjangId)===jenjangId);
+
+  const candidateIds=rows.map(r=>String(r.candidateId||'')).filter(Boolean);
+  const candidates=sheetRowsMatchingValuesByFields_(
+    ss.getSheetByName(PSB_SHEETS.CANDIDATES),'candidateId',candidateIds,['fullName','gender']
+  );
+  const candidateMap={};
+  candidates.forEach(x=>candidateMap[String(x.candidateId)]=x);
   if(gender) rows=rows.filter(r=>normalizeReportGender_(candidateMap[String(r.candidateId)]?.gender)===gender);
   if(status) rows=rows.filter(r=>String(r.status||'').toUpperCase()===status);
 
-  // Agregasi tagihan sekali per baris, bukan filter + reduce + some untuk setiap pendaftaran.
+  const registrationIds=rows.map(r=>String(r.registrationId||'')).filter(Boolean);
+  const bills=sheetRowsMatchingValuesByFields_(
+    ss.getSheetByName(PSB_SHEETS.BILLS),'registrationId',registrationIds,['status','amount']
+  );
+  const payments=sheetRowsMatchingValuesByFields_(
+    ss.getSheetByName(PSB_SHEETS.PAYMENTS),'registrationId',registrationIds,['status','createdAt']
+  );
+  const participants=sheetRowsMatchingValuesByFields_(
+    ss.getSheetByName(PSB_SHEETS.SELECTION_PARTICIPANTS),'registrationId',registrationIds,[]
+  );
+  const results=sheetRowsMatchingValuesByFields_(
+    ss.getSheetByName(PSB_SHEETS.SELECTION_RESULTS),'registrationId',registrationIds,['status','announcementDate']
+  );
+  const rereg=sheetRowsMatchingValuesByFields_(
+    ss.getSheetByName(PSB_SHEETS.REREGISTRATIONS),'registrationId',registrationIds,['status']
+  );
+
+  // Aggregate bills and index the latest payment once per registration.
   const billSummaryByRegistration={};
   bills.forEach(b=>{
     const key=String(b.registrationId);
@@ -4228,9 +4227,6 @@ function getReportingPageData(sessionToken, filters) {
       billSummaryByRegistration[key].paidAmount+=(Number(b.amount)||0);
     }
   });
-
-  // Indeks pembayaran terbaru sekali. Timestamp sama mempertahankan baris pertama.
-  // Grup dengan timestamp tidak valid memakai comparator lama agar perilaku sort tetap identik.
   const paymentRowsByRegistration={};
   const latestPaymentByRegistration={};
   const invalidPaymentTimestampByRegistration={};
@@ -4269,7 +4265,6 @@ function getReportingPageData(sessionToken, filters) {
   const groupBreakdown=Object.keys(groupMap).map(k=>({label:k,count:groupMap[k]})).sort((a,b)=>b.count-a.count||a.label.localeCompare(b.label,'id'));
   return {success:true,activeYear,filters:{tahunAjaranId:year||activeYearId,gelombangId,jenjangId,gender,status},summary,groupBreakdown,rows:dataRows,options:{tahunAjaran:years.slice().sort((a,b)=>String(b.name||'').localeCompare(String(a.name||''))),gelombang:gelombangs.filter(x=>year?String(x.tahunAjaranId)===year:String(x.tahunAjaranId)===String(activeYearId)),jenjang:jenjangs.filter(x=>String(x.isActive).toUpperCase()==='TRUE'),gender:[{value:'L',name:'Laki-laki',groupName:'Putra'},{value:'P',name:'Perempuan',groupName:'Putri'}],statuses:['DRAFT','SUBMITTED','UNDER_REVIEW','REVISION','VERIFIED','PAYMENT_VERIFIED','SELECTION','PASSED','NOT_PASSED','REREGISTRATION','COMPLETED']},generatedAt:new Date().toISOString()};
 }
-
 function getAdvancedReportingData(sessionToken, filters) {
   const actor = requireRole_(sessionToken, PSB_REPORT_ROLES);
   filters = filters || {};
@@ -4282,8 +4277,9 @@ function getAdvancedReportingData(sessionToken, filters) {
   const status = String(filters.status || '').trim().toUpperCase();
   const fromDate = filters.fromDate ? new Date(filters.fromDate + 'T00:00:00') : null;
   const toDate = filters.toDate ? new Date(filters.toDate + 'T23:59:59') : null;
-  const rows = name => sheetRows_(ss.getSheetByName(PSB_SHEETS[name]));
-  const years=rows('MASTER_TAHUN_AJARAN'), gels=rows('MASTER_GELOMBANG'), jins=rows('MASTER_JENJANG');
+  const years=sheetRowsByFields_(ss.getSheetByName(PSB_SHEETS.MASTER_TAHUN_AJARAN), ['tahunAjaranId','name']);
+  const gels=sheetRowsByFields_(ss.getSheetByName(PSB_SHEETS.MASTER_GELOMBANG), ['gelombangId','tahunAjaranId','name']);
+  const jins=sheetRowsByFields_(ss.getSheetByName(PSB_SHEETS.MASTER_JENJANG), ['jenjangId','name']);
   // Reporting only consumes these registration fields; avoid transferring every
   // column from REGISTRATIONS while retaining all rows for accurate aggregates.
   const regs=sheetRowsByFields_(ss.getSheetByName(PSB_SHEETS.REGISTRATIONS), [
@@ -5316,11 +5312,12 @@ function enrichRegistrationList_(items, preloadedMaps) {
   }));
 }
 
-function sheetMapByIdForValues_(sheet,idField,wantedValues) {
+function sheetMapByIdForValues_(sheet,idField,wantedValues,fields) {
   const out=Object.create(null);
-  sheetRowsMatchingValues_(sheet,idField,wantedValues).forEach(item=>{
-    out[String(item[idField]||'')]=item;
-  });
+  const rows = Array.isArray(fields) && fields.length
+    ? sheetRowsMatchingValuesByFields_(sheet,idField,wantedValues,fields)
+    : sheetRowsMatchingValues_(sheet,idField,wantedValues);
+  rows.forEach(item=>{ out[String(item[idField]||'')]=item; });
   return out;
 }
 function getActiveMasterItems_(masterKey, fields) {
@@ -5396,7 +5393,18 @@ function findRowById_(sheet,idField,id) {
   return null;
 }
 function findFirstBy_(sheet,field,value,preferPrimary) { if(!sheet||sheet.getLastRow()<2)return null; const h=sheet.getRange(1,1,1,sheet.getLastColumn()).getValues()[0].map(String), idx=h.indexOf(field), primary=h.indexOf('isPrimary'); if(idx<0)return null; const rows=sheet.getRange(2,1,sheet.getLastRow()-1,sheet.getLastColumn()).getValues(); let fallback=null; for(let i=0;i<rows.length;i++){if(String(rows[i][idx]||'')!==String(value))continue; const obj=rowObject_(h,rows[i],i+2); if(!fallback)fallback={rowNumber:i+2,object:obj}; if(preferPrimary&&primary>=0&&(rows[i][primary]===true||String(rows[i][primary]).toUpperCase()==='TRUE'))return {rowNumber:i+2,object:obj};} return fallback; }
-function sheetMapById_(sheet,idField) { const out={}; if(!sheet||sheet.getLastRow()<2)return out; const h=sheet.getRange(1,1,1,sheet.getLastColumn()).getValues()[0].map(String), idx=h.indexOf(idField); if(idx<0)return out; const rows=sheet.getRange(2,1,sheet.getLastRow()-1,sheet.getLastColumn()).getValues(); rows.forEach((r,i)=>{const o=rowObject_(h,r,i+2);out[String(r[idx]||'')]=o;}); return out; }
+function sheetMapById_(sheet,idField,fields) {
+  const out=Object.create(null);
+  if (!sheet || sheet.getLastRow() < 2) return out;
+  const selectedFields = Array.isArray(fields) && fields.length
+    ? Array.from(new Set([idField].concat(fields)))
+    : null;
+  const rows = selectedFields
+    ? sheetRowsByFields_(sheet, selectedFields)
+    : sheetRows_(sheet);
+  rows.forEach(row => { out[String(row[idField] || '')] = row; });
+  return out;
+}
 function hasRoleDirect_(user, roles) { const mine=String(user.role||'').split(',').map(x=>x.trim().toUpperCase()); return roles.some(r=>mine.indexOf(r)>=0); }
 function clean_(v) { return String(v==null?'':v).trim(); }
 function digits_(v) { return clean_(v).replace(/\D/g,''); }
