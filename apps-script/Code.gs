@@ -2436,22 +2436,21 @@ function getPaymentQueue(sessionToken, page, filters) {
     candidateRows.forEach(x=>{candidateById[String(x.candidateId||'')]=x;});
   }
 
-  const paymentStatusByBill = Object.create(null);
-  if (statusFilter) {
-    sheetRowsByFields_(ss.getSheetByName(PSB_SHEETS.PAYMENTS), ['billId','status'])
-      .forEach(x=>{paymentStatusByBill[String(x.billId||'')]=String(x.status||'').toUpperCase();});
-  }
+  const paymentsForStatus = sheetRowsByFields_(ss.getSheetByName(PSB_SHEETS.PAYMENTS), ['billId','status']);
+  const paymentsByBillForStatus = Object.create(null);
+  paymentsForStatus.forEach(x=>{
+    const key=String(x.billId||'');
+    if(!paymentsByBillForStatus[key])paymentsByBillForStatus[key]=[];
+    paymentsByBillForStatus[key].push(x);
+  });
   const paymentTypeNameById = Object.create(null);
   if (query) paymentTypes.forEach(x=>{paymentTypeNameById[String(x.paymentTypeId||'')]=String(x.name||'');});
 
   const indexed = activeBillRefs.map(bill=>{
     const registration=query?registrationById[String(bill.registrationId||'')]||{}:{};
     const candidate=query?candidateById[String(registration.candidateId||'')]||{}:{};
-    const paymentStatus=statusFilter?paymentStatusByBill[String(bill.billId||'')]||'':'';
-    const billStatus=String(bill.status||'').toUpperCase();
-    const queueStatus=billStatus==='PAID'||paymentStatus==='VERIFIED'?'PAID':
-      paymentStatus==='SUBMITTED'?'WAITING':
-      paymentStatus==='REJECTED'?'REJECTED':'UNPAID';
+    const billPayments=paymentsByBillForStatus[String(bill.billId||'')]||[];
+    const queueStatus=paymentQueueStatus_(bill.status,billPayments);
     const paymentTypeName=query?paymentTypeNameById[String(bill.paymentTypeId||'')]||String(bill.paymentTypeId||'Tagihan'):'';
     const searchValues=query?[
       candidate.fullName,candidate.name,registration.registrationNumber,
@@ -2498,7 +2497,10 @@ function getPaymentQueue(sessionToken, page, filters) {
     ['paymentId','status','proofFileUrl','submittedAt','createdAt']
   );
   const paymentByBill = Object.create(null);
-  payments.forEach(x=>{paymentByBill[String(x.billId||'')]=x;});
+  payments.forEach(x=>{
+    const key=String(x.billId||'');
+    paymentByBill[key]=preferredPaymentForBill_(paymentByBill[key],x);
+  });
   const paymentIds = payments.map(x=>String(x.paymentId||'')).filter(Boolean);
   const verifications = sheetRowsMatchingValuesByFields_(
     ss.getSheetByName(PSB_SHEETS.PAYMENT_VERIFICATIONS), 'paymentId', paymentIds,
@@ -2518,11 +2520,10 @@ function getPaymentQueue(sessionToken, page, filters) {
     const candidate=candidateMap[String(registration.candidateId||'')]||{};
     const payment=paymentByBill[String(bill.billId||'')]||null;
     const verification=payment?verificationByPayment[String(payment.paymentId||'')]||null:null;
+    const billPayments=payments.filter(x=>String(x.billId||'')===String(bill.billId||''));
     const paymentStatus=String(payment?.status||'').toUpperCase();
     const billStatus=String(bill.status||'').toUpperCase();
-    const queueStatus=billStatus==='PAID'||paymentStatus==='VERIFIED'?'PAID':
-      paymentStatus==='SUBMITTED'?'WAITING':
-      paymentStatus==='REJECTED'?'REJECTED':'UNPAID';
+    const queueStatus=paymentQueueStatus_(billStatus,billPayments);
     const paymentType=paymentTypesById[String(bill.paymentTypeId||'')]||{};
     return {
       billId:String(bill.billId||''),
@@ -2697,17 +2698,41 @@ function sheetRowsMatchingValues_(sheet, keyField, wantedValues, fields) {
   return matchingRows.length ? sheetRowsProjected_(sheet, matchingRows, fields, headers) : [];
 }
 
+function paymentStatusPriority_(status) {
+  const value=String(status||'').toUpperCase();
+  return value==='VERIFIED'?3:value==='SUBMITTED'?2:value==='REJECTED'?1:0;
+}
+
+function preferredPaymentForBill_(current, candidate) {
+  if(!current)return candidate;
+  return paymentStatusPriority_(candidate?.status)>paymentStatusPriority_(current?.status)?candidate:current;
+}
+
+function paymentQueueStatus_(billStatus, payments) {
+  const statuses=(payments||[]).map(x=>String(x?.status||'').toUpperCase());
+  if(statuses.includes('VERIFIED'))return 'PAID';
+  if(statuses.includes('SUBMITTED'))return 'WAITING';
+  if(statuses.includes('REJECTED'))return 'REJECTED';
+  return String(billStatus||'').toUpperCase()==='PAID'?'PAID':'UNPAID';
+}
+
 function buildPaymentData_(registrationId, paymentTypes) {
   const ss=getDatabaseSpreadsheet_();
   const billsSheet=ss.getSheetByName(PSB_SHEETS.BILLS), paymentsSheet=ss.getSheetByName(PSB_SHEETS.PAYMENTS);
   const bills=sheetRowsMatchingValues_(billsSheet,'registrationId',[registrationId]);
   const payments=sheetRowsMatchingValues_(paymentsSheet,'registrationId',[registrationId]);
   const types={}; (paymentTypes || getActiveMasterItems_('MASTER_JENIS_PEMBAYARAN')).forEach(x=>types[String(x.paymentTypeId)]=x);
-  const paymentByBill={}; payments.forEach(x=>{paymentByBill[String(x.billId)]=x;});
+  const paymentByBill={}; payments.forEach(x=>{const key=String(x.billId);paymentByBill[key]=preferredPaymentForBill_(paymentByBill[key],x);});
   const paymentIds=payments.map(x=>String(x.paymentId||'')).filter(Boolean);
   const verifications=sheetRowsMatchingValues_(ss.getSheetByName(PSB_SHEETS.PAYMENT_VERIFICATIONS),'paymentId',paymentIds);
   const verificationByPayment={}; verifications.forEach(x=>{verificationByPayment[String(x.paymentId)]=x;});
-  const items=bills.map(b=>{const payment=paymentByBill[String(b.billId)]||null;const verification=payment?verificationByPayment[String(payment.paymentId)]:null;return Object.assign({},b,{paymentTypeName:types[String(b.paymentTypeId)]?.name||b.paymentTypeId,payment:payment?Object.assign({},payment,{verificationNote:String(verification?.note||'')}):null});});
+  const items=bills.map(b=>{
+    const billPayments=payments.filter(x=>String(x.billId)===String(b.billId));
+    const payment=paymentByBill[String(b.billId)]||null;
+    const verification=payment?verificationByPayment[String(payment.paymentId)]:null;
+    const status=paymentQueueStatus_(b.status,billPayments);
+    return Object.assign({},b,{status:status==='WAITING'?'PAYMENT_REVIEW':status,paymentTypeName:types[String(b.paymentTypeId)]?.name||b.paymentTypeId,payment:payment?Object.assign({},payment,{verificationNote:String(verification?.note||'')}):null});
+  });
   return {registrationId:String(registrationId),bills:items,payments};
 }
 
@@ -3053,6 +3078,11 @@ function verifyPayment(sessionToken,payload){
     if(!br)return fail_('Tagihan terkait pembayaran tidak ditemukan. Verifikasi dibatalkan.');
     if(String(br.object.registrationId||'')!==String(found.object.registrationId||''))return fail_('Relasi tagihan dan pendaftaran tidak sesuai. Verifikasi dibatalkan.');
     if(String(br.object.status||'').toUpperCase()==='CANCELLED')return fail_('Tagihan terkait pembayaran sudah dibatalkan. Verifikasi tidak dapat dilanjutkan.');
+    if(status==='VERIFIED'){
+      const otherVerifiedPayment=sheetRowsMatchingValues_(sheet,'billId',[String(found.object.billId||'')])
+        .find(x=>String(x.paymentId||'')!==paymentId&&String(x.status||'').toUpperCase()==='VERIFIED');
+      if(otherVerifiedPayment)return fail_('Tagihan ini sudah memiliki pembayaran lain yang terverifikasi. Verifikasi pembayaran kedua dibatalkan; periksa riwayat tagihan.');
+    }
     const headers=sheet.getRange(1,1,1,sheet.getLastColumn()).getValues()[0].map(String);
     const paymentStatusIdx=headers.indexOf('status'),paymentUpdatedIdx=headers.indexOf('updatedAt');
     if(paymentStatusIdx<0||paymentUpdatedIdx<0)return fail_('Struktur kolom PAYMENTS belum lengkap. Verifikasi dibatalkan.');
@@ -3112,7 +3142,7 @@ function verifyPayment(sessionToken,payload){
       const type=findMasterItemById_('MASTER_JENIS_PEMBAYARAN','paymentTypeId',br.object.paymentTypeId);
       if(/formulir/i.test(String(type?.name||''))){
         const reg=findRegistration_(String(br.object.registrationId));
-        if(reg&&String(reg.registration.status)==='VERIFIED'){
+        if(reg&&['VERIFIED','PAYMENT_VERIFIED'].includes(String(reg.registration.status||'').toUpperCase())){
           const moved=setRegistrationStatus_(reg.registration,'PAYMENT_VERIFIED',actor.userId,'Pembayaran Formulir terverifikasi; pendaftar dapat mengikuti proses tes.');
           if(!moved?.success)return moved||fail_('Status pendaftaran belum berhasil diperbarui. Verifikasi dapat dicoba kembali.');
         }
@@ -5089,21 +5119,29 @@ function setRegistrationStatus_(registration, status, actorUserId, note) {
   const statusIdx=headers.indexOf('status'), verifiedIdx=headers.indexOf('verifiedAt'), updatedIdx=headers.indexOf('updatedAt');
   if(statusIdx<0) return fail_('Struktur kolom REGISTRATIONS belum memiliki kolom status.');
   if(!row || row<2) return fail_('Baris pendaftaran tidak valid; status belum diperbarui.');
+  const previousStatus=String(registration?.status||'').toUpperCase();
   sheet.getRange(row,statusIdx+1).setValue(status);
   if(verifiedIdx>=0 && status==='VERIFIED') sheet.getRange(row,verifiedIdx+1).setValue(now);
   if(verifiedIdx>=0 && status==='REVISION') sheet.getRange(row,verifiedIdx+1).setValue('');
   if(updatedIdx>=0) sheet.getRange(row,updatedIdx+1).setValue(now);
+  SpreadsheetApp.flush();
 
   const confirmed=findRowById_(sheet,'registrationId',String(registration.registrationId||''));
   if(!confirmed || String(confirmed.object.status||'').toUpperCase()!==String(status).toUpperCase()) {
     return fail_('Status pendaftaran belum berhasil disimpan. Silakan periksa kembali sebelum melanjutkan proses.');
   }
-  try {
-    writeAudit_(actorUserId,status==='REVISION'?'REVISION':status==='VERIFIED'?'VERIFY':'UPDATE','REGISTRATION',registration.registrationId,JSON.stringify({status:registration.status}),JSON.stringify({status:status,note:note}),note);
-  } catch(auditError) {
-    // The registration status is already confirmed in the sheet. Keep the
-    // committed transition successful; audit repair can be handled separately.
-    console.error('Registration status audit write failed after commit: '+auditError);
+  if(updatedIdx>=0 && new Date(confirmed.object.updatedAt||0).getTime()!==now.getTime()) {
+    return fail_('Metadata waktu perubahan pendaftaran belum berhasil disimpan. Silakan coba kembali untuk memulihkan proses.');
+  }
+  if(verifiedIdx>=0 && status==='VERIFIED' && new Date(confirmed.object.verifiedAt||0).getTime()!==now.getTime()) {
+    return fail_('Metadata verifikasi pendaftaran belum berhasil disimpan. Silakan coba kembali.');
+  }
+  if(previousStatus!==String(status).toUpperCase()) {
+    try {
+      writeAudit_(actorUserId,status==='REVISION'?'REVISION':status==='VERIFIED'?'VERIFY':'UPDATE','REGISTRATION',registration.registrationId,JSON.stringify({status:previousStatus}),JSON.stringify({status:status,note:note}),note);
+    } catch(auditError) {
+      console.error('Registration status audit write failed after commit: '+auditError);
+    }
   }
   return {success:true,message:status==='VERIFIED'?'Pendaftaran berhasil diverifikasi.':status==='REREGISTRATION'?'Tahap Daftar Ulang dibuka.':status==='COMPLETED'?'Daftar ulang selesai.':'Pendaftaran dikembalikan untuk perbaikan.',status:status};
 }
