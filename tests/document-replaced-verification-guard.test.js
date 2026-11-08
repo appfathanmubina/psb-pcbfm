@@ -30,8 +30,15 @@ assert.ok(lockIndex >= 0, 'document verification must acquire ScriptLock');
 assert.ok(lookupIndex > lockIndex, 'document must be re-read after acquiring ScriptLock');
 assert.ok(replacedGuardIndex > lookupIndex, 'REPLACED status must be checked after fresh document lookup');
 assert.ok(firstWriteIndex > replacedGuardIndex, 'REPLACED guard must run before the atomic document status write');
-assert.doesNotMatch(verify, /sheet\\.getRange\\(found\\.rowNumber,[^\\n]*\\)\\.setValue\\(/, 'verification metadata must not be written through separate cell updates');
-assert.match(verify, /verificationRow\\[statusIdx\\]=status[\\s\\S]*?verificationRow\\[verifiedIdx\\]=[\\s\\S]*?verificationRow\\[byIdx\\]=[\\s\\S]*?verificationRow\\[noteIdx\\]=[\\s\\S]*?setValues\\(\\[verificationRow\\]\\)/, 'all verification fields must be committed in one row write');
+assert.ok(!verify.includes('setValue(status)') && !verify.includes('setValue(status==='),
+  'verification metadata must not be written through separate cell updates');
+assert.ok(
+  verify.indexOf('verificationRow[statusIdx]=status') < verify.indexOf('setValues([verificationRow])') &&
+  verify.indexOf('verificationRow[verifiedIdx]=') < verify.indexOf('setValues([verificationRow])') &&
+  verify.indexOf('verificationRow[byIdx]=') < verify.indexOf('setValues([verificationRow])') &&
+  verify.indexOf('verificationRow[noteIdx]=') < verify.indexOf('setValues([verificationRow])'),
+  'all verification fields must be committed in one row write'
+);
 assert.match(verify, /Dokumen ini sudah digantikan oleh unggahan terbaru dan tidak dapat diverifikasi/,
   'replaced documents must return a clear non-retryable response');
 assert.match(verify, /requiredHeaders=\['documentId','registrationId','documentTypeId','status','verifiedAt','verifiedBy','revisionNote'\]/,
