@@ -3815,6 +3815,11 @@ function openReregistration(sessionToken, registrationId) {
     const rrSheet=ss.getSheetByName(PSB_SHEETS.REREGISTRATIONS);
     const current=findRowById_(rrSheet,'registrationId',id);
     if(['PAYMENT_VERIFIED','COMPLETED'].includes(currentStatus) && !current)return fail_('Status pendaftaran sudah berlanjut, tetapi data Daftar Ulang tidak ditemukan. Perlu pemeriksaan administrator sebelum membuka ulang.');
+    const reregistrationType=getActiveMasterItems_('MASTER_JENIS_PEMBAYARAN')
+      .find(x=>/daftar\s*ulang/i.test(String(x.name||'')));
+    const reregistrationAmount=Number(reregistrationType?.amount);
+    if(!reregistrationType||!Number.isFinite(reregistrationAmount)||reregistrationAmount<=0)
+      return fail_('Nominal tagihan Daftar Ulang belum valid. Pastikan jenis pembayaran Daftar Ulang aktif dan nominalnya lebih besar dari Rp0 pada Master Data → Jenis Pembayaran.');
     // Always run the idempotent helper, even when the reregistration row
     // already exists. This repairs a missing bill after an earlier partial
     // attempt instead of returning a misleading "already open" response.
