@@ -32,6 +32,13 @@ assert.match(open, /const confirmed=findRegistration_\(id\)/,
 assert.match(open, /finally \{ lock\.releaseLock\(\); \}/,
   'Opening re-registration must always release ScriptLock');
 
+assert.match(open, /notificationPayload=\{userId:String\(regNow\.registration\.userId\|\|''\)/,
+  'Opening an already-existing re-registration must reconstruct the notification payload');
+assert.match(open, /createNotificationOnce_\(notificationPayload\.userId,'Daftar Ulang Dibuka'/,
+  'Opening re-registration must retry notification delivery idempotently after releasing the lock');
+assert.doesNotMatch(open, /if\(!current\) notificationUserId=/,
+  'Notification recovery must not depend only on creating the re-registration row for the first time');
+
 const amountGuard = open.indexOf('reregistrationAmount=Number(reregistrationType.amount)');
 assert.ok(amountGuard > lock,
   'Re-registration fee must be validated inside the transaction lock');
