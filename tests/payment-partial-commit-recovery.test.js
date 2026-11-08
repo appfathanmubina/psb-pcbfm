@@ -41,8 +41,8 @@ const dashboard = section(
 assert.match(dashboard, /reconcilePaymentLedger_\(periodBills,periodPayments\)/);
 assert.match(dashboard, /state\.status==='WAITING'/,
   'Dashboard payment summary must count a persisted SUBMITTED payment as awaiting review even when bill status is PAID');
-assert.match(dashboard, /status\|\|''\)\.toUpperCase\(\)==='PAYMENT_REVIEW'\|\|String\(latestPaymentByBill/,
-  'Dashboard verification queue must include a submitted payment even if its bill status is stale');
+assert.match(dashboard, /state\?\.status==='WAITING'\|\|state\?\.requiresReview/,
+  'Dashboard verification queue must include submitted and inconsistent bill/payment states');
 
 const render = section(frontend, 'function renderPaymentContent(){', '\nfunction openPaymentUpload(billId)', 'Payment renderer');
 assert.match(render, /displayStatus=p\?\.status==='SUBMITTED'\?'PAYMENT_REVIEW':\(st==='PAID'\?'PAID'/,
