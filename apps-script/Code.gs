@@ -2710,7 +2710,7 @@ function dispatchPaymentSubmissionNotifications_(paymentId, actorRole){
   if(!paymentFound)return false;
   const payment=paymentFound.object;
   const status=String(payment.status||'').toUpperCase();
-  if(!['SUBMITTED','VERIFIED'].includes(status))return false;
+  if(status!=='SUBMITTED')return false;
   const registrationFound=findRegistration_(String(payment.registrationId||''));
   if(!registrationFound)return false;
   const paymentType=findMasterItemById_('MASTER_JENIS_PEMBAYARAN','paymentTypeId',String(findRowById_(getDatabaseSpreadsheet_().getSheetByName(PSB_SHEETS.BILLS),'billId',String(payment.billId||''))?.object.paymentTypeId||''));
@@ -2785,7 +2785,7 @@ function submitPayment(sessionToken,payload){
 
     stage='CHECK_DUPLICATE_PAYMENT';
     const existingRows=sheetRowsMatchingValues_(paymentSheet,'billId',[billId]);
-    const existingPayment=existingRows.find(r=>['SUBMITTED','VERIFIED'].indexOf(String(r.status||'').toUpperCase())>=0);
+    const existingPayment=existingRows.find(r=>String(r.status||'').toUpperCase()==='SUBMITTED');
     if(existingPayment) {
       if(String(existingPayment.registrationId||'')!==String(br.object.registrationId||'') || String(existingPayment.billId||'')!==billId) {
         return fail_('Bukti pembayaran aktif tidak sesuai dengan tagihan ini.');
