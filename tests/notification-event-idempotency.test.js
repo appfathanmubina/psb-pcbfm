@@ -68,13 +68,12 @@ send('wali-1', 'Legacy message', 'Legacy body', 'INFO');
 send('wali-1', 'Legacy message', 'Legacy body', 'INFO');
 assert.equal(storedRows.length, 4, 'Legacy callers without an event key retain content-based fallback deduplication');
 
-assert.match(backend, /PAYMENT_VERIFICATION:'\+paymentId\+'\:'\+status/,
+assert.ok(backend.includes("eventKey:'PAYMENT_VERIFICATION:'+paymentId+':'+status"),
   'Payment verification notifications must use the persisted payment ID and decision as event identity');
-assert.match(backend, /REGISTRATION_VERIFICATION:'\+registrationId\+'\:'\+decision\+'\:'\+String\(confirmed\?\.registration\?\.updatedAt\|\|''\)/,
+assert.ok(backend.includes("notificationEventKey='REGISTRATION_VERIFICATION:'+registrationId+':'+decision+':'+String(confirmed?.registration?.updatedAt||'')"),
   'Registration verification notifications must distinguish later decision cycles by persisted update timestamp');
-assert.match(backend, /REREGISTRATION_COMPLETED:'\+id/,
+assert.ok(backend.includes("eventKey:'REREGISTRATION_COMPLETED:'+id"),
   'Re-registration completion notifications must share one stable event identity across recovery paths');
-assert.match(backend, /SELECTION_ANNOUNCEMENT:'\+registrationId/,
+assert.ok(backend.includes("eventKey:'SELECTION_ANNOUNCEMENT:'+registrationId"),
   'Announcement notifications must use a stable announcement event identity');
-
 console.log('Event-keyed notification idempotency and transaction event identity: OK');
