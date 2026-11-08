@@ -61,14 +61,14 @@ assert.ok(billHelper.indexOf('if (existing) return existing;') < billHelper.inde
   'Existing valid bills must remain usable even if the master amount is later misconfigured');
 
 const pageStart = backend.indexOf('function getReregistrationPageData(sessionToken) {');
-const pageEnd = backend.indexOf('\\nfunction openReregistration(', pageStart);
+const pageEnd = backend.indexOf('\nfunction openReregistration(', pageStart);
 assert.ok(pageStart >= 0 && pageEnd > pageStart, 'Re-registration page data endpoint must exist');
 const page = backend.slice(pageStart, pageEnd);
-assert.match(page, /sheetRows_\\(ss\\.getSheetByName\\(PSB_SHEETS\\.MASTER_JENIS_PEMBAYARAN\\)\\)/,
+assert.ok(page.includes("sheetRows_(ss.getSheetByName(PSB_SHEETS.MASTER_JENIS_PEMBAYARAN))"),
   'Re-registration page must resolve historical payment type names from the full master list');
-assert.match(page, /status \\|\\| ''\\)\\.toUpperCase\\(\\) !== 'CANCELLED'/,
+assert.ok(page.includes("String(b.status || '').toUpperCase() !== 'CANCELLED'"),
   'Re-registration page must exclude cancelled historical bills');
-assert.match(page, /find\\(b => String\\(b\\.status \\|\\| ''\\)\\.toUpperCase\\(\\) === 'PAID'\\)/,
+assert.ok(page.includes("reregistrationBills.find(b => String(b.status || '').toUpperCase() === 'PAID')"),
   'Re-registration page must prefer a paid active bill over an older unpaid active bill');
 
 const openMasterLookup = open.indexOf("sheetRows_(ss.getSheetByName(PSB_SHEETS.MASTER_JENIS_PEMBAYARAN))");
@@ -79,10 +79,10 @@ assert.ok(open.indexOf('const existingReregistrationBill=') > openMasterLookup &
   'Existing bills must be checked before enforcing master activation for new bill creation');
 
 const ensureStart = backend.indexOf('function ensureReregistrationBill_(found, actorUserId) {');
-const ensureEnd = backend.indexOf('\\nfunction findReregistrationBillPayment_(', ensureStart);
+const ensureEnd = backend.indexOf('\nfunction findReregistrationBillPayment_(', ensureStart);
 assert.ok(ensureStart >= 0 && ensureEnd > ensureStart, 'Reregistration bill helper must exist');
 const ensureLatest = backend.slice(ensureStart, ensureEnd);
-assert.match(ensureLatest, /sheetRows_\\(getDatabaseSpreadsheet_\\(\\)\\.getSheetByName\\(PSB_SHEETS\\.MASTER_JENIS_PEMBAYARAN\\)\\)/,
+assert.ok(ensureLatest.includes("sheetRows_(getDatabaseSpreadsheet_().getSheetByName(PSB_SHEETS.MASTER_JENIS_PEMBAYARAN))"),
   'Reregistration bill helper must find the payment type even when inactive');
 assert.ok(ensureLatest.indexOf('if (existing) return existing;') < ensureLatest.indexOf('if (type.isActive !== true) return null;'),
   'An existing non-cancelled bill must be returned before enforcing master activation');
