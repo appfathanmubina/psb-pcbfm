@@ -98,6 +98,8 @@ jobs:
         run: node tests/authorization-ownership.test.js
       - name: Test direct Wali registration without email verification safeguards
         run: node tests/email-otp.test.js
+      - name: Test manual user legacy identity duplicate safeguards
+        run: node tests/manual-user-legacy-identity.test.js
       - name: Test OTP, account recovery, and password input safeguards
         run: node tests/auth-recovery-security.test.js
       - name: Test Script Properties preservation safeguards
