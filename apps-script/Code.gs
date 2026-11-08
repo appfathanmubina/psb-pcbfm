@@ -3339,17 +3339,34 @@ function publishAnnouncement(sessionToken,payload) {
     const expectedStatus=latestStatus==='PASSED'?'REREGISTRATION':latestStatus==='NOT_PASSED'?'NOT_PASSED':'SELECTION';
     // Allow retry when the registration transition committed but announcementDate did not.
     if(!alreadyPublished && !['SELECTION','PASSED',expectedStatus].includes(currentRegStatus))return fail_('Pendaftaran sudah berpindah tahap dan tidak dapat diumumkan dari status saat ini.');
+    const passedWorkflowAdvanced=latestStatus==='PASSED' && ['REREGISTRATION','PAYMENT_VERIFIED','COMPLETED'].includes(currentRegStatus);
+    if(alreadyPublished){
+      const allowedPublishedStatuses=latestStatus==='PASSED'
+        ? ['SELECTION','PASSED','REREGISTRATION','PAYMENT_VERIFIED','COMPLETED']
+        : ['SELECTION','PASSED',expectedStatus];
+      if(!allowedPublishedStatuses.includes(currentRegStatus))return fail_('Status pendaftaran tidak konsisten dengan hasil seleksi yang sudah diumumkan. Periksa data sebelum melanjutkan.');
+    }
 
     // Prepare required follow-up data before committing the announcement marker.
+    // Once Daftar Ulang has been paid or completed, never recreate an unpaid bill.
     if(latestStatus==='PASSED'){
-      const rr=ensureReregistration_(registrationId,actor.userId,true);
-      if(!rr)return fail_('Pengumuman belum dapat dipublikasikan karena daftar ulang atau tagihannya belum dapat disiapkan. Periksa master jenis pembayaran dan sheet tagihan.');
+      if(passedWorkflowAdvanced){
+        const existingReregistration=findRowById_(ss.getSheetByName(PSB_SHEETS.REREGISTRATIONS),'registrationId',registrationId);
+        if(!existingReregistration)return fail_('Status pendaftaran sudah berlanjut, tetapi data Daftar Ulang tidak ditemukan. Perlu pemeriksaan administrator.');
+      } else {
+        const rr=ensureReregistration_(registrationId,actor.userId,true);
+        if(!rr)return fail_('Pengumuman belum dapat dipublikasikan karena daftar ulang atau tagihannya belum dapat disiapkan. Periksa master jenis pembayaran dan sheet tagihan.');
+      }
     }
 
     const nextStatus=latestStatus==='PASSED'?'REREGISTRATION':latestStatus==='NOT_PASSED'?'NOT_PASSED':'SELECTION';
-    if(currentRegStatus!==nextStatus){
+    // A repeated PASS announcement is a no-op after the registration has
+    // advanced into payment verification or completion; do not downgrade it.
+    if(currentRegStatus!==nextStatus && !passedWorkflowAdvanced){
       const moved=setRegistrationStatus_(latestReg.registration,nextStatus,actor.userId,alreadyPublished?'Pemulihan status setelah pengumuman hasil seleksi.':'Status pendaftaran diperbarui saat pengumuman hasil seleksi.');
       if(!moved?.success)return moved;
+      const confirmed=findRegistration_(registrationId);
+      if(!confirmed || String(confirmed.registration.status||'').toUpperCase()!==nextStatus)return fail_('Status pendaftaran belum berhasil disimpan setelah pengumuman. Silakan coba kembali.');
     }
 
     if(alreadyPublished){

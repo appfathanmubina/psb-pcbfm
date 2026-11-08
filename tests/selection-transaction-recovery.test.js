@@ -25,6 +25,15 @@ assert.match(publish, /if\(!alreadyPublished && !\['SELECTION','PASSED',expected
 assert.ok(publish.indexOf('setRegistrationStatus_(latestReg.registration,nextStatus') < publish.indexOf('resultSheet.getRange(latest.rowNumber,dateIdx+1).setValue(now)'),
   'Announcement marker must remain the final state commit after follow-up state is ready');
 
+assert.match(publish, /passedWorkflowAdvanced=latestStatus==='PASSED' && \['REREGISTRATION','PAYMENT_VERIFIED','COMPLETED'\]\.includes\(currentRegStatus\)/,
+  'A published PASS result must recognize downstream re-registration and completion states');
+assert.match(publish, /if\(currentRegStatus!==nextStatus && !passedWorkflowAdvanced\)/,
+  'Repeated PASS announcements must not downgrade a registration that advanced beyond REREGISTRATION');
+assert.match(publish, /if\(passedWorkflowAdvanced\)[\s\S]*?existingReregistration=findRowById_/,
+  'A repeated PASS announcement in an advanced state must confirm the existing re-registration row');
+assert.match(publish, /const confirmed=findRegistration_\(registrationId\)/,
+  'A registration status transition during publication must be confirmed by a fresh read');
+
 const scheduleStatus = section(
   'function updateSelectionScheduleStatus(sessionToken,payload){',
   '\nfunction addSelectionParticipant(sessionToken,payload){',
