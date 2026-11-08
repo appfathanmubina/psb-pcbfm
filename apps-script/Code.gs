@@ -2297,7 +2297,7 @@ function appendBillRecordWithRecovery_(sheet, headers, record) {
   const alreadyPersisted=findRowById_(sheet,'billId',billId);
   if(alreadyPersisted) return alreadyPersisted;
   try {
-    sheet.appendRow(headers.map(h=>record[h] == null ? '' : record[h]));
+    sheet.appendRow(safeSheetRow_(headers.map(h=>record[h] == null ? '' : record[h])));
   } catch(writeError) {
     try {
       const recovered=findRowById_(sheet,'billId',billId);
