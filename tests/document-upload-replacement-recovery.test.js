@@ -39,7 +39,7 @@ assert.ok(recoveryIndex >= 0 && cleanupIndex > recoveryIndex,
   'ambiguous append outcomes must be reconciled from Sheets before Drive cleanup');
 assert.match(upload, /if \(committed\) \{[\s\S]*?documentRowWritten = true;[\s\S]*?savedDocument = committed\.object/,
   'a document found after an ambiguous append must be treated as committed');
-assert.match(upload, /replaceCurrentDocumentStatuses_\(pendingDocumentSheet, oldDocumentRowNumbers, pendingStatusColumn\)/,
+assert.match(upload, /replaceCurrentDocumentStatuses_\(\s*pendingDocumentSheet, oldDocumentRowNumbers, pendingStatusColumn\)/,
   'recovery must retry the previous-document replacement reconciliation');
 assert.match(upload, /if \(documentRowWritten\) \{\s*return \{/,
   'a committed upload must not be reported as failed and retried as a duplicate');
