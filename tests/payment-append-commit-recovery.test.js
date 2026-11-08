@@ -14,6 +14,7 @@ const headers = ['paymentId','billId','registrationId','amount','proofFileId','p
 const rows = [];
 let appendMode = 'normal';
 let readbackFailure = false;
+let enableReadbackFailureAfterCommit = false;
 let flushCount = 0;
 const sheet = {
   appendRow(values) {
@@ -21,6 +22,7 @@ const sheet = {
     rows.push(values.slice());
     if (appendMode === 'commit-then-throw') {
       appendMode = 'normal';
+      if (enableReadbackFailureAfterCommit) readbackFailure = true;
       throw new Error('simulated lost response after payment Sheets commit');
     }
   }
@@ -68,7 +70,7 @@ assert.equal(findRowById_(sheet, 'paymentId', absentRecord.paymentId), null,
 
 appendMode = 'commit-then-throw';
 const uncertainRecord = { ...record, paymentId: 'PAY-READBACK-UNCERTAIN' };
-readbackFailure = true;
+enableReadbackFailureAfterCommit = true;
 assert.throws(
   () => persist(sheet, headers, uncertainRecord),
   error => error && error.paymentPersistenceUncertain === true && error.paymentId === uncertainRecord.paymentId,
