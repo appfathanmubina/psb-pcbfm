@@ -40,6 +40,7 @@ function findRowById_(target, field, value) {
 const sandbox = {
   SpreadsheetApp: { flush() { flushCount++; } },
   findRowById_,
+  safeSheetRow_: row => row.map(value => typeof value === 'string' && /^[\\s]*[=+\\-@]/.test(value) ? "'" + value : value),
   console: { error() {} },
   Error
 };
