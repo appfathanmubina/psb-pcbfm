@@ -1,6 +1,6 @@
 # PSB Audit & Repair Log
 
-Last updated: 2026-11-01
+Last updated: 2026-11-08
 Repository: `appfathanmubina/psb-pcbfm`
 Working branch: `main`
 
@@ -497,3 +497,22 @@ Branch: `fix/payment-verification-rejection-recovery`
 - Rejected payments continue to set the linked bill to `UNPAID`, allowing the existing Wali upload-again flow to submit a new payment record.
 - Existing role checks, ownership checks, ScriptLock, required rejection reason, 500-character note limit, upload validation, and notification behavior remain unchanged.
 - No Spreadsheet schema, frontend behavior, production data, or Apps Script deployment was changed.
+
+
+## Repair batch 17 — payment, bill, and re-registration state guards
+
+Branch: `fix/payment-bill-reregistration-state-guards`
+
+| ID | Finding | Change | Status |
+|---|---|---|---|
+| PAY-004 | Retrying rejection of an older payment could set its bill to `UNPAID` while a newer proof for the same bill remained `SUBMITTED`. | Under ScriptLock, re-read all payments for the bill. Preserve/repair `PAID` when another payment is `VERIFIED`, preserve/repair `PAYMENT_REVIEW` when another payment is `SUBMITTED`, and only use `UNPAID` when no newer active payment supports another state. | Regression assertions added; CI pending |
+| PAY-005 | `ensureFormBillForRegistration_()` validated the active master amount before looking for an existing bill, so later master deactivation or amount misconfiguration could block access to an already-created bill. | Resolve the Formulir payment type from the complete master list, return an existing non-cancelled bill first, and validate active status/amount only before creating a new bill. | Regression assertions added; CI pending |
+| PAY-006 | A submitted proof could still be verified after its linked bill had been cancelled. | Reject verification of a cancelled bill before writing verification history or changing payment/bill state. | Regression assertions added; CI pending |
+| PAY-007 | Finalization and payment synchronization could select an older cancelled Daftar Ulang bill instead of a paid replacement bill. | Add a shared selector that resolves Daftar Ulang payment type IDs from the full master list, excludes cancelled bills, and prefers a paid non-cancelled bill. Use it in both finalization and payment synchronization. | Regression assertions added; CI pending |
+
+### Scope and safety
+
+- Existing ScriptLock, role/ownership gates, verification-history requirements, payment decision commit order, and read-back checks remain in place.
+- The changes do not alter Spreadsheet schemas, create or delete production records, or deploy Apps Script.
+- Regression tests are static source-contract checks; Apps Script runtime and staging transaction tests remain required before a production release.
+- The broader state-machine review `TXN-001` remains open until remaining payment, selection, and re-registration transitions are audited.

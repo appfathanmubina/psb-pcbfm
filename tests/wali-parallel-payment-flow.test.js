@@ -104,6 +104,12 @@ assert.match(autoBill, /formulir/i);
 assert.match(autoBill, /amount>0/);
 assert.match(autoBill, /CANCELLED/);
 assert.match(autoBill, /Tagihan formulir dibuat otomatis/);
+assert.ok(autoBill.indexOf('const existing=rows.find') < autoBill.indexOf('const amount=Number'),
+  'An existing non-cancelled form bill must be returned before validating the current master amount');
+assert.ok(autoBill.indexOf('const existing=rows.find') < autoBill.indexOf('if(formType.isActive!==true)'),
+  'An existing form bill must remain usable when its master payment type is deactivated');
+assert.match(autoBill, /const types=sheetRows_\(masterSheet\)/,
+  'Existing form bills must be located using the full master list, including inactive payment types');
 const paymentPageData = section(backend, 'function getPaymentPageData(sessionToken, registrationId)', 'function getPaymentsForRegistration');
 assert.match(paymentPageData, /ensureFormBillForRegistration_/);
 assert.match(paymentPageData, /withScriptLock_/);

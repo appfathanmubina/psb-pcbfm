@@ -2266,11 +2266,12 @@ function ensureFormBillForRegistration_(registrationId, paymentTypes, actorUserI
   if(!id) return fail_('ID pendaftaran tidak valid.');
   const found=findRegistration_(id);
   if(!found) return fail_('Pendaftaran tidak ditemukan.');
-  const types=paymentTypes||getActiveMasterItems_('MASTER_JENIS_PEMBAYARAN');
-  const formType=(types||[]).find(x=>x&&x.isActive!==false&&/formulir/i.test(String(x.name||'')));
-  if(!formType) return fail_('Jenis pembayaran Formulir yang aktif belum tersedia di Master Data.');
-  const amount=Number(formType.amount||0);
-  if(!(amount>0)||!isFinite(amount)) return fail_('Nominal jenis pembayaran Formulir belum diatur atau tidak valid.');
+  // Resolve the payment type from the full master list so an existing bill
+  // remains usable even if its master item was later deactivated.
+  const masterSheet=getDatabaseSpreadsheet_().getSheetByName(PSB_SHEETS.MASTER_JENIS_PEMBAYARAN);
+  const types=sheetRows_(masterSheet);
+  const formType=types.find(x=>x&&/formulir/i.test(String(x.name||'')));
+  if(!formType) return fail_('Jenis pembayaran Formulir tidak ditemukan di Master Data.');
   const sheet=getDatabaseSpreadsheet_().getSheetByName(PSB_SHEETS.BILLS);
   if(!sheet||sheet.getLastColumn()<1) return fail_('Sheet BILLS belum tersedia.');
   const headers=sheet.getRange(1,1,1,sheet.getLastColumn()).getValues()[0].map(String);
@@ -2282,6 +2283,9 @@ function ensureFormBillForRegistration_(registrationId, paymentTypes, actorUserI
     const record={};headers.forEach(h=>record[h]=existing[h]);
     return {success:true,created:false,bill:record};
   }
+  if(formType.isActive!==true) return fail_('Jenis pembayaran Formulir tidak aktif pada Master Data.');
+  const amount=Number(formType.amount||0);
+  if(!(amount>0)||!isFinite(amount)) return fail_('Nominal jenis pembayaran Formulir belum diatur atau tidak valid.');
   const now=new Date(),billId=generateId_('BIL'),record={};
   headers.forEach(h=>record[h]='');
   Object.assign(record,{billId,registrationId:id,paymentTypeId:String(formType.paymentTypeId),amount,dueDate:'',status:'UNPAID',createdAt:now,updatedAt:now});
@@ -2898,6 +2902,7 @@ function verifyPayment(sessionToken,payload){
     const bills=ss.getSheetByName(PSB_SHEETS.BILLS),br=findRowById_(bills,'billId',String(found.object.billId||''));
     if(!br)return fail_('Tagihan terkait pembayaran tidak ditemukan. Verifikasi dibatalkan.');
     if(String(br.object.registrationId||'')!==String(found.object.registrationId||''))return fail_('Relasi tagihan dan pendaftaran tidak sesuai. Verifikasi dibatalkan.');
+    if(String(br.object.status||'').toUpperCase()==='CANCELLED')return fail_('Tagihan terkait pembayaran sudah dibatalkan. Verifikasi tidak dapat dilanjutkan.');
     const headers=sheet.getRange(1,1,1,sheet.getLastColumn()).getValues()[0].map(String);
     const paymentStatusIdx=headers.indexOf('status'),paymentUpdatedIdx=headers.indexOf('updatedAt');
     if(paymentStatusIdx<0||paymentUpdatedIdx<0)return fail_('Struktur kolom PAYMENTS belum lengkap. Verifikasi dibatalkan.');
@@ -2930,18 +2935,25 @@ function verifyPayment(sessionToken,payload){
     // PAYMENTS.status, so retries can safely finish an interrupted decision.
     const targetBillStatus=status==='VERIFIED'?'PAID':'UNPAID';
     const currentBillStatus=String(br.object.status||'').toUpperCase();
-    let preservePaidBill=false;
-    if(status==='REJECTED'&&currentBillStatus==='PAID'){
-      // A rejected older proof may be retried after a newer proof for the
-      // same bill has already been verified. Never downgrade that paid bill.
-      const newerVerifiedPayment=sheetRowsMatchingValues_(sheet,'billId',[String(found.object.billId||'')])
-        .find(x=>String(x.paymentId||'')!==paymentId&&String(x.status||'').toUpperCase()==='VERIFIED');
-      if(!newerVerifiedPayment)return fail_('Tagihan sudah berstatus LUNAS. Penolakan pembayaran ini tidak dapat mengubah status tagihan yang sudah lunas.');
-      preservePaidBill=true;
+    let expectedBillStatus=targetBillStatus;
+    if(status==='REJECTED'){
+      // Re-read every payment for this bill while holding ScriptLock. A retry
+      // of an older rejection must not erase a newer pending or verified proof.
+      const otherBillPayments=sheetRowsMatchingValues_(sheet,'billId',[String(found.object.billId||'')])
+        .filter(x=>String(x.paymentId||'')!==paymentId);
+      const newerVerifiedPayment=otherBillPayments.find(x=>String(x.status||'').toUpperCase()==='VERIFIED');
+      const newerSubmittedPayment=otherBillPayments.find(x=>String(x.status||'').toUpperCase()==='SUBMITTED');
+      if(newerVerifiedPayment){
+        expectedBillStatus='PAID';
+      } else if(newerSubmittedPayment){
+        if(currentBillStatus==='PAID')return fail_('Tagihan sudah berstatus LUNAS tetapi tidak ditemukan pembayaran terverifikasi. Periksa riwayat sebelum mengubah status.');
+        expectedBillStatus='PAYMENT_REVIEW';
+      } else if(currentBillStatus==='PAID'){
+        return fail_('Tagihan sudah berstatus LUNAS. Penolakan pembayaran ini tidak dapat mengubah status tagihan yang sudah lunas.');
+      }
     }
-    if(!preservePaidBill)bills.getRange(br.rowNumber,billStatusIdx+1).setValue(targetBillStatus);
+    if(currentBillStatus!==expectedBillStatus)bills.getRange(br.rowNumber,billStatusIdx+1).setValue(expectedBillStatus);
     const confirmedBill=findRowById_(bills,'billId',String(found.object.billId||''));
-    const expectedBillStatus=preservePaidBill?'PAID':targetBillStatus;
     if(!confirmedBill||String(confirmedBill.object.status||'').toUpperCase()!==expectedBillStatus){
       return fail_('Status tagihan belum berhasil disimpan. Keputusan pembayaran belum difinalisasi; silakan coba kembali.');
     }
@@ -3900,6 +3912,20 @@ function ensureReregistrationBill_(found, actorUserId) {
   return record;
 }
 
+function findReregistrationBillPayment_(registrationId) {
+  const ss=getDatabaseSpreadsheet_();
+  const typeSheet=ss.getSheetByName(PSB_SHEETS.MASTER_JENIS_PEMBAYARAN);
+  const typeIds=sheetRows_(typeSheet)
+    .filter(x=>/daftar\s*ulang/i.test(String(x.name||'')))
+    .map(x=>String(x.paymentTypeId||''))
+    .filter(Boolean);
+  if(!typeIds.length)return null;
+  const bills=buildPaymentData_(registrationId).bills.filter(b=>
+    typeIds.indexOf(String(b.paymentTypeId||''))>=0&&String(b.status||'').toUpperCase()!=='CANCELLED'
+  );
+  return bills.find(b=>String(b.status||'').toUpperCase()==='PAID')||bills[0]||null;
+}
+
 function finalizeReregistration(sessionToken, registrationId) {
   const actor = requireRole_(sessionToken, PSB_REREGISTRATION_ADMIN_ROLES);
   assertOperationalMutation_(actor);
@@ -3923,7 +3949,7 @@ function finalizeReregistration(sessionToken, registrationId) {
       const d=docs.find(x=>String(x.documentTypeId)===String(t.documentTypeId));
       if(!d||String(d.status||'').toUpperCase()!=='VERIFIED')return fail_('Dokumen wajib belum lengkap/terverifikasi: '+String(t.name||t.documentTypeId));
     }
-    const payment=buildPaymentData_(id).bills.find(b=>/daftar\s*ulang/i.test(String(b.paymentTypeName||'')));
+    const payment=findReregistrationBillPayment_(id);
     if(!payment||String(payment.status||'').toUpperCase()!=='PAID')return fail_('Pembayaran Daftar Ulang belum lunas.');
 
     const now=new Date(), headers=rrSheet.getRange(1,1,1,rrSheet.getLastColumn()).getValues()[0].map(String);
@@ -3960,7 +3986,7 @@ function syncReregistrationAfterPayment_(registrationId, actorUserId, deferNotif
   const docs=getCurrentDocuments_(id);
   const required=getActiveMasterItems_('MASTER_DOKUMEN').filter(x=>x.required);
   const docsReady=required.every(t=>{const d=docs.find(x=>String(x.documentTypeId)===String(t.documentTypeId));return d&&String(d.status||'').toUpperCase()==='VERIFIED';});
-  const payment=buildPaymentData_(id).bills.find(b=>/daftar\s*ulang/i.test(String(b.paymentTypeName||'')));
+  const payment=findReregistrationBillPayment_(id);
   if(!payment||String(payment.status||'').toUpperCase()!=='PAID')return fail_('Tagihan Daftar Ulang belum terkonfirmasi lunas. Sinkronisasi belum dapat dilakukan.');
 
   let reg=null;

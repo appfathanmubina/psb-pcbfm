@@ -29,14 +29,20 @@ assert.match(verify, /if\(!reregistrationNotification\|\|reregistrationNotificat
 );
 assert.match(verify, /const verified=findRowById_\(sheet,'paymentId',paymentId\)/,
   'The final payment status must still be re-read and confirmed');
-assert.match(verify, /if\(status==='REJECTED'&&currentBillStatus==='PAID'\)/,
-  'A repeated rejection must detect a bill that has already become PAID');
-assert.match(verify, /newerVerifiedPayment=sheetRowsMatchingValues_\(sheet,'billId',\[String\(found\.object\.billId\|\|''\)\]\)/,
-  'A paid bill must be associated with a different verified payment before preserving it');
-assert.match(verify, /if\(!preservePaidBill\)bills\.getRange\(br\.rowNumber,billStatusIdx\+1\)\.setValue\(targetBillStatus\)/,
-  'A rejection retry must never write UNPAID over a bill preserved as PAID');
-assert.match(verify, /expectedBillStatus=preservePaidBill\?'PAID':targetBillStatus/,
-  'The bill read-back must confirm PAID when a newer payment has been verified');
+assert.match(verify, /otherBillPayments=sheetRowsMatchingValues_\(sheet,'billId',\[String\(found\.object\.billId\|\|''\)\]\)/,
+  'A rejection retry must re-read all payments for the linked bill under ScriptLock');
+assert.match(verify, /newerVerifiedPayment=otherBillPayments\.find/,
+  'A newer verified payment must preserve the PAID bill state');
+assert.match(verify, /newerSubmittedPayment=otherBillPayments\.find/,
+  'A newer submitted payment must preserve or repair PAYMENT_REVIEW');
+assert.match(verify, /expectedBillStatus='PAYMENT_REVIEW'/,
+  'A pending newer proof must prevent a rejection retry from downgrading the bill to UNPAID');
+assert.match(verify, /if\(currentBillStatus!==expectedBillStatus\)bills\.getRange/,
+  'The linked bill must be repaired only to the state supported by other active payments');
+assert.match(verify, /if\(String\(br\.object\.status\|\|''\)\.toUpperCase\(\)==='CANCELLED'\)/,
+  'A cancelled bill must block verification before any verification history is written');
+assert.ok(verify.indexOf("status||'').toUpperCase()==='CANCELLED'") < verify.indexOf('const verSheet='),
+  'Cancelled-bill guard must run before verification history writes');
 
 const submit = section(
   backend,
