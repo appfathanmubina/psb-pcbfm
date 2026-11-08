@@ -86,8 +86,13 @@ const context = {
 const selectionAdminRolesDeclaration = code.match(/^const PSB_SELECTION_ADMIN_ROLES = \[[^\n]+\];$/m);
 assert.ok(selectionAdminRolesDeclaration,
   'Production backend must declare the selection admin role allowlist used by Dashboard');
+const ledgerHelperStart = code.indexOf('function paymentAmountMatchesBill_(');
+const ledgerHelperEnd = code.indexOf('\nfunction preferredPaymentForBill_(', ledgerHelperStart);
+assert.ok(ledgerHelperStart >= 0 && ledgerHelperEnd > ledgerHelperStart,
+  'Dashboard test must load the canonical payment ledger helpers');
+const ledgerHelpers = code.slice(ledgerHelperStart, ledgerHelperEnd);
 vm.createContext(context);
-vm.runInContext(selectionAdminRolesDeclaration[0] + '\n' + page, context);
+vm.runInContext(selectionAdminRolesDeclaration[0] + '\n' + ledgerHelpers + '\n' + page, context);
 
 function response(role) {
   return JSON.parse(JSON.stringify(context.getDashboardPageData(role)));
