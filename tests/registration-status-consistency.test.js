@@ -45,6 +45,14 @@ assert.match(wali, /paymentStatusLabel/);
 assert.match(wali, /documentsStatus|statusLabel:requiredDocumentTypes/);
 assert.doesNotMatch(wali, /const formPaid\s*=\s*String\(reg\.status\)/,
   'Legacy registration status alone must not grant payment eligibility');
+assert.match(wali, /\['VERIFIED','PAYMENT_VERIFIED','SELECTION','PASSED','NOT_PASSED','REREGISTRATION','COMPLETED'\]\.includes\(registrationStatus\)/,
+  'The Wali workflow must keep the verification stage pending while the registration is UNDER_REVIEW');
+
+const verificationQueue = section('getVerificationQueue');
+assert.match(verificationQueue, /const queueStatuses = \['SUBMITTED','UNDER_REVIEW','REVISION','REREGISTRATION'\]/,
+  'The verification queue must list only actionable registrations and document-review registrations');
+assert.match(verificationQueue, /requestedStatus \? \(queueStatuses\.includes\(requestedStatus\) \? \[requestedStatus\] : \[\]\)/,
+  'An unsupported status filter must not expose records with unavailable verification actions');
 
 const finalize = section('finalizeVerification');
 assert.match(finalize, /x\.required===true\|\|String\(x\.required\)\.toUpperCase\(\)==='TRUE'/,

@@ -2340,7 +2340,9 @@ function getWaliHomeData(sessionToken) {
     if (!['DRAFT'].includes(registrationStatus)) completed = 1;
     if (formPaid) completed = Math.max(completed, 2);
     if (formPaid && documentsComplete) completed = Math.max(completed, 3);
-    if (formPaid && documentsComplete && ['UNDER_REVIEW','VERIFIED','PAYMENT_VERIFIED','SELECTION','PASSED','NOT_PASSED','REREGISTRATION','COMPLETED'].includes(registrationStatus)) completed = Math.max(completed, 4);
+    // UNDER_REVIEW is still an active admin task; only advance this stage
+    // after the final registration decision or a later workflow status.
+    if (formPaid && documentsComplete && ['VERIFIED','PAYMENT_VERIFIED','SELECTION','PASSED','NOT_PASSED','REREGISTRATION','COMPLETED'].includes(registrationStatus)) completed = Math.max(completed, 4);
     if (participant && (result || ['COMPLETED','PRESENT','ABSENT'].includes(String(participant.status).toUpperCase()))) completed = Math.max(completed, 5);
     if (published) completed = Math.max(completed, 6);
     if (registrationStatus === 'COMPLETED') completed = 7;
@@ -5186,7 +5188,11 @@ function getVerificationQueue(sessionToken, filters) {
   filters = filters || {};
   const pageSize = Math.min(100, Math.max(1, Math.floor(Number(filters.pageSize) || 50)));
   const query = String(filters.search || '').trim().toLowerCase().slice(0,120);
-  const allowed = filters.status ? [String(filters.status)] : ['SUBMITTED','UNDER_REVIEW','REVISION','VERIFIED','REREGISTRATION'];
+  // VERIFIED is not an actionable verification queue item: the decision
+  // endpoint rejects it. REREGISTRATION remains available for document review.
+  const queueStatuses = ['SUBMITTED','UNDER_REVIEW','REVISION','REREGISTRATION'];
+  const requestedStatus = String(filters.status || '').toUpperCase();
+  const allowed = requestedStatus ? (queueStatuses.includes(requestedStatus) ? [requestedStatus] : []) : queueStatuses;
   const formPaidIds = getFormPaymentVerifiedRegistrationIds_();
   const projected = sheetRowsByFields_(sheet, [
     'registrationId', 'registrationNumber', 'candidateId', 'status', 'updatedAt'
