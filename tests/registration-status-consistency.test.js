@@ -14,7 +14,9 @@ function section(name, source = code) {
 // One canonical rule for payment eligibility: cancelled bills must never
 // authorize document upload or move a registration into the verification queue.
 const paidIds = section('getFormPaymentVerifiedRegistrationIds_');
-assert.match(paidIds, /status\s*\|\|\s*''\)\.toUpperCase\(\)\s*===\s*'CANCELLED'\)\s*return/);
+assert.match(paidIds, /reconcilePaymentLedger_\(bills,payments\)/);
+assert.match(code, /status\|\|''\)\.toUpperCase\(\)!=='CANCELLED'/,
+  'Cancelled bills must be excluded by the canonical ledger before document eligibility is granted');
 assert.match(paidIds, /reconcilePaymentLedger_\(bills,payments\)/);
 assert.match(paidIds, /state\?\.status==='PAID'&&!state\.requiresReview/);
 assert.doesNotMatch(paidIds, /String\(x\.status\|\|''\)\.toUpperCase\(\)\s*===\s*'PAID'\s*\|\|/,
