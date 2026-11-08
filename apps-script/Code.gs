@@ -723,6 +723,31 @@ function getDataIntegrityReport(sessionToken) {
     const bad=Object.keys(seen).filter(k=>seen[k]>1);dup+=bad.length;
     add(spec.key,spec.label,bad.length?'ERROR':'OK',bad.length?'Duplikasi: '+bad.slice(0,8).join(', '):'Tidak ada duplikasi relasi.','Business Keys');
   });
+  // Validate cross-table business relationships and ledger totals. This is read-only.
+  const ledger=reconcilePaymentLedger_(rowsBy('BILLS'),rowsBy('PAYMENTS'));
+  const ledgerChecks=[
+    ['payment_orphan_rows','PAYMENTS without a matching bill',ledger.summary.orphanPayments],
+    ['payment_registration_mismatch','PAYMENTS.registrationId must match BILLS.registrationId',ledger.summary.registrationMismatchPayments],
+    ['payment_amount_mismatch','PAYMENTS.amount must match BILLS.amount',ledger.summary.amountMismatchPayments],
+    ['duplicate_verified_payment_per_bill','More than one VERIFIED payment for a bill',ledger.summary.duplicateVerifiedBills],
+    ['paid_bill_without_verified_payment','BILLS.PAID without a matching VERIFIED payment',ledger.summary.paidWithoutVerifiedBills],
+    ['verified_payment_bill_status_mismatch','VERIFIED payment while bill is not PAID',ledger.summary.verifiedBillStatusMismatch]
+  ];
+  ledgerChecks.forEach(([key,label,count])=>add(key,label,count?'ERROR':'OK',
+    count?count+' ketidaksesuaian ditemukan; data tidak diubah otomatis.':'Tidak ditemukan ketidaksesuaian.','Payment Reconciliation'));
+  const historyByPayment=Object.create(null);
+  rowsBy('PAYMENT_VERIFICATIONS').forEach(x=>{
+    const id=String(x.paymentId||'');if(!historyByPayment[id])historyByPayment[id]=[];
+    historyByPayment[id].push(x);
+  });
+  const invalidHistory=rowsBy('PAYMENTS').filter(p=>{
+    const status=String(p.status||'').toUpperCase();
+    if(!['VERIFIED','REJECTED'].includes(status))return false;
+    const history=historyByPayment[String(p.paymentId||'')]||[];
+    return history.length!==1||String(history[0]?.status||'').toUpperCase()!==status;
+  }).length;
+  add('payment_verification_history_consistency','Final payment status and verification history',invalidHistory?'ERROR':'OK',
+    invalidHistory?invalidHistory+' pembayaran final tidak memiliki tepat satu riwayat dengan keputusan yang sama.':'Status pembayaran dan riwayat verifikasi konsisten.','Payment Reconciliation');
   const testTokens=['TEST-','example.test']; let testRows=0; Object.keys(PSB_SHEETS).forEach(k=>{const name=PSB_SHEETS[k];rowsBy(name).forEach(r=>{const joined=Object.keys(r).map(x=>String(r[x]||'')).join('|');if(testTokens.some(t=>joined.indexOf(t)>=0))testRows++;});});
   add('testData','Dummy/test indicators',testRows?'WARNING':'OK',testRows?testRows+' baris terindikasi sebagai data test/dummy.':'Tidak ditemukan indikator TEST-/example.test.','Production');
   add('orphanSummary','Total orphan references',orphan?'ERROR':'OK',orphan?orphan+' referensi orphan ditemukan.':'Tidak ada orphan reference.','Summary');
@@ -2411,8 +2436,8 @@ function getPaymentQueue(sessionToken, page, filters) {
   // Build a lightweight global search/filter index from narrow projections.
   // Full bill rows and related detail are still fetched only for the selected page.
   const billFields = query
-    ? ['billId','registrationId','paymentTypeId','status','createdAt']
-    : ['billId','status','createdAt'];
+    ? ['billId','registrationId','paymentTypeId','status','amount','createdAt']
+    : ['billId','registrationId','status','amount','createdAt'];
   const billRefs = sheetRowsByFields_(billSheet, billFields);
   const activeBillRefs = billRefs.filter(x=>String(x.status||'').toUpperCase()!=='CANCELLED');
   const allBills = activeBillRefs.length;
@@ -2429,21 +2454,16 @@ function getPaymentQueue(sessionToken, page, filters) {
     candidateRows.forEach(x=>{candidateById[String(x.candidateId||'')]=x;});
   }
 
-  const paymentsForStatus = sheetRowsByFields_(ss.getSheetByName(PSB_SHEETS.PAYMENTS), ['billId','status']);
-  const paymentsByBillForStatus = Object.create(null);
-  paymentsForStatus.forEach(x=>{
-    const key=String(x.billId||'');
-    if(!paymentsByBillForStatus[key])paymentsByBillForStatus[key]=[];
-    paymentsByBillForStatus[key].push(x);
-  });
+  const paymentsForStatus=sheetRowsMatchingValuesByFields_(ss.getSheetByName(PSB_SHEETS.PAYMENTS),'billId',
+    activeBillRefs.map(x=>String(x.billId||'')).filter(Boolean),['paymentId','billId','registrationId','amount','status','createdAt']);
+  const paymentLedgerForQueue=reconcilePaymentLedger_(activeBillRefs,paymentsForStatus);
   const paymentTypeNameById = Object.create(null);
   if (query) paymentTypes.forEach(x=>{paymentTypeNameById[String(x.paymentTypeId||'')]=String(x.name||'');});
 
   const indexed = activeBillRefs.map(bill=>{
     const registration=query?registrationById[String(bill.registrationId||'')]||{}:{};
     const candidate=query?candidateById[String(registration.candidateId||'')]||{}:{};
-    const billPayments=paymentsByBillForStatus[String(bill.billId||'')]||[];
-    const queueStatus=paymentQueueStatus_(bill.status,billPayments);
+    const queueStatus=paymentLedgerForQueue.byBill[String(bill.billId||'')]?.status||'UNPAID';
     const paymentTypeName=query?paymentTypeNameById[String(bill.paymentTypeId||'')]||String(bill.paymentTypeId||'Tagihan'):'';
     const searchValues=query?[
       candidate.fullName,candidate.name,registration.registrationNumber,
@@ -2487,7 +2507,7 @@ function getPaymentQueue(sessionToken, page, filters) {
   const payments = sheetRowsMatchingValuesByFields_(
     ss.getSheetByName(PSB_SHEETS.PAYMENTS), 'billId',
     bills.map(x=>String(x.billId||'')).filter(Boolean),
-    ['paymentId','status','proofFileUrl','submittedAt','createdAt']
+    ['paymentId','billId','registrationId','amount','status','proofFileUrl','submittedAt','createdAt']
   );
   const paymentByBill = Object.create(null);
   payments.forEach(x=>{
@@ -2516,7 +2536,8 @@ function getPaymentQueue(sessionToken, page, filters) {
     const billPayments=payments.filter(x=>String(x.billId||'')===String(bill.billId||''));
     const paymentStatus=String(payment?.status||'').toUpperCase();
     const billStatus=String(bill.status||'').toUpperCase();
-    const queueStatus=paymentQueueStatus_(billStatus,billPayments);
+    const billLedger=reconcilePaymentLedger_([bill],billPayments).byBill[String(bill.billId||'')]||{status:'UNPAID',requiresReview:false};
+    const queueStatus=billLedger.status;
     const paymentType=paymentTypesById[String(bill.paymentTypeId||'')]||{};
     return {
       billId:String(bill.billId||''),
@@ -2529,7 +2550,7 @@ function getPaymentQueue(sessionToken, page, filters) {
       paymentTypeName:String(paymentType.name||bill.paymentTypeId||'Tagihan'),
       amount:Number(bill.amount||0),
       dueDate:String(bill.dueDate||''),
-      billStatus,queueStatus,
+      billStatus,queueStatus,reconciliationRequired:!!billLedger.requiresReview,
       paymentId:String(payment?.paymentId||''),
       paymentStatus,
       proofFileUrl:String(payment?.proofFileUrl||''),
@@ -2780,6 +2801,7 @@ function buildPaymentData_(registrationId, paymentTypes) {
   const bills=sheetRowsMatchingValues_(billsSheet,'registrationId',[registrationId]);
   const payments=sheetRowsMatchingValues_(paymentsSheet,'registrationId',[registrationId]);
   const types={}; (paymentTypes || getActiveMasterItems_('MASTER_JENIS_PEMBAYARAN')).forEach(x=>types[String(x.paymentTypeId)]=x);
+  const paymentLedger=reconcilePaymentLedger_(bills,payments);
   const paymentByBill={}; payments.forEach(x=>{const key=String(x.billId);paymentByBill[key]=preferredPaymentForBill_(paymentByBill[key],x);});
   const paymentIds=payments.map(x=>String(x.paymentId||'')).filter(Boolean);
   const verifications=sheetRowsMatchingValues_(ss.getSheetByName(PSB_SHEETS.PAYMENT_VERIFICATIONS),'paymentId',paymentIds);
@@ -2788,8 +2810,9 @@ function buildPaymentData_(registrationId, paymentTypes) {
     const billPayments=payments.filter(x=>String(x.billId)===String(b.billId));
     const payment=paymentByBill[String(b.billId)]||null;
     const verification=payment?verificationByPayment[String(payment.paymentId)]:null;
-    const status=paymentQueueStatus_(b.status,billPayments);
-    return Object.assign({},b,{status:status==='WAITING'?'PAYMENT_REVIEW':status,paymentTypeName:types[String(b.paymentTypeId)]?.name||b.paymentTypeId,payment:payment?Object.assign({},payment,{verificationNote:String(verification?.note||'')}):null});
+    const state=paymentLedger.byBill[String(b.billId||'')]||{status:'UNPAID',requiresReview:false};
+    const status=state.status;
+    return Object.assign({},b,{status:status==='WAITING'?'PAYMENT_REVIEW':status,reconciliationRequired:!!state.requiresReview,paymentTypeName:types[String(b.paymentTypeId)]?.name||b.paymentTypeId,payment:payment?Object.assign({},payment,{verificationNote:String(verification?.note||'')}):null});
   });
   return {registrationId:String(registrationId),bills:items,payments};
 }
@@ -6027,17 +6050,19 @@ function getRegistrationPaymentDocumentStatusMap_(items) {
   // Strictly-greater comparison preserves the first sheet row on equal timestamps,
   // matching the stable descending sort used by the previous implementation.
   const billIds=Object.create(null),billByReg=Object.create(null),billStampByReg=Object.create(null);
-  sheetRowsMatchingValues_(ss.getSheetByName(PSB_SHEETS.BILLS),'registrationId',Object.keys(ids)).forEach(x=>{
+  const relevantBills=sheetRowsMatchingValues_(ss.getSheetByName(PSB_SHEETS.BILLS),'registrationId',Object.keys(ids));
+  relevantBills.forEach(x=>{
     const id=String(x.registrationId||''),billId=String(x.billId||'');
     if(!ids[id]||!formTypeIds[String(x.paymentTypeId||'')]||String(x.status||'').toUpperCase()==='CANCELLED')return;
     billIds[billId]=true;
     const stamp=String(x.createdAt||'');
     if(!billByReg[id]||stamp.localeCompare(billStampByReg[id])>0){billByReg[id]=x;billStampByReg[id]=stamp;}
   });
-
-  // Latest payment per relevant bill, without sorting the full payment table.
+  const formBills=relevantBills.filter(x=>billIds[String(x.billId||'')]);
+  const formPayments=sheetRowsMatchingValues_(ss.getSheetByName(PSB_SHEETS.PAYMENTS),'billId',Object.keys(billIds));
+  const formLedger=reconcilePaymentLedger_(formBills,formPayments);
   const latest=Object.create(null),paymentStampByBill=Object.create(null);
-  sheetRowsMatchingValues_(ss.getSheetByName(PSB_SHEETS.PAYMENTS),'billId',Object.keys(billIds)).forEach(x=>{
+  formPayments.forEach(x=>{
     const billId=String(x.billId||'');
     if(!billIds[billId])return;
     const stamp=String(x.createdAt||'');
@@ -6061,16 +6086,18 @@ function getRegistrationPaymentDocumentStatusMap_(items) {
     const bill=billByReg[id]||null,payment=bill?latest[String(bill.billId||'')]||null:null;
     const ps=String(payment?.status||'').toUpperCase(),bs=String(bill?.status||'').toUpperCase();
     let paymentKey='NOT_CREATED',paymentLabel='Tagihan belum dibuat';
-    if(bs==='PAID'||ps==='VERIFIED'){paymentKey='VERIFIED';paymentLabel='Terverifikasi';}
-    else if(ps==='REJECTED'){paymentKey='REJECTED';paymentLabel='Ditolak';}
-    else if(ps==='SUBMITTED'||bs==='PAYMENT_REVIEW'){paymentKey='PENDING_VERIFICATION';paymentLabel='Menunggu verifikasi';}
+    const billState=bill?formLedger.byBill[String(bill.billId||'')]:null;
+    if(billState?.status==='PAID'&&!billState.requiresReview){paymentKey='VERIFIED';paymentLabel='Terverifikasi';}
+    else if(billState?.status==='WAITING'){paymentKey='PENDING_VERIFICATION';paymentLabel='Menunggu verifikasi';}
+    else if(billState?.status==='REJECTED'){paymentKey='REJECTED';paymentLabel='Ditolak';}
+    else if(billState?.requiresReview){paymentKey='RECONCILIATION_REQUIRED';paymentLabel='Perlu pemeriksaan Keuangan';}
     else if(bill){paymentKey='UNPAID';paymentLabel='Belum dibayar';}
     let uploaded=0,verified=0,revisions=0;
     required.forEach(t=>{const d=byDoc[id+'|'+String(t.documentTypeId)];if(!d)return;uploaded++;const s=String(d.status||'').toUpperCase();if(s==='VERIFIED')verified++;if(s==='REVISION')revisions++;});
     const total=required.length,missing=Math.max(0,total-uploaded);
     let documentKey='NOT_REQUIRED',documentLabel='Tidak ada dokumen wajib';
     if(total){if(revisions){documentKey='REVISION';documentLabel='Perlu perbaikan';}else if(missing&&uploaded===0){documentKey='NOT_UPLOADED';documentLabel='Belum upload';}else if(missing){documentKey='INCOMPLETE';documentLabel='Belum lengkap';}else if(verified>=total){documentKey='VERIFIED';documentLabel='Terverifikasi';}else{documentKey='PENDING_VERIFICATION';documentLabel='Menunggu verifikasi';}}
-    out[id]={formPaymentStatus:paymentKey,formPaymentStatusLabel:paymentLabel,documentsStatus:documentKey,documentsStatusLabel:documentLabel,documentsRequiredCount:total,documentsUploadedCount:uploaded,documentsVerifiedCount:verified,documentsMissingCount:missing,documentsRevisionCount:revisions};
+    out[id]={formPaymentStatus:paymentKey,formPaymentStatusLabel:paymentLabel,formPaymentReconciliationRequired:!!billState?.requiresReview,documentsStatus:documentKey,documentsStatusLabel:documentLabel,documentsRequiredCount:total,documentsUploadedCount:uploaded,documentsVerifiedCount:verified,documentsMissingCount:missing,documentsRevisionCount:revisions};
   });
   return out;
 }
