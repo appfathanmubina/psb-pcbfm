@@ -27,8 +27,7 @@ assert.ok(verify.indexOf("otherVerifiedPayment=sheetRowsMatchingValues_") < veri
   'A second payment for an already-paid bill must be rejected before verification history writes');
 assert.match(verify, /\['VERIFIED','PAYMENT_VERIFIED'\]\.includes\(String\(reg\.registration\.status\|\|''\)\.toUpperCase\(\)\)/,
   'A retry must repair registration metadata even when the status transition already committed');
-assert.match(verify, /paymentQueueStatus_\(billStatus,billPayments\)/,
-  'Queue detail status must be derived from all payments rather than bill PAID alone');assert.ok(
+assert.ok(
   verify.indexOf('const confirmedBill=findRowById_') <
   verify.indexOf('sheet.getRange(found.rowNumber,paymentStatusIdx+1).setValue(status)'),
   'PAYMENTS.status must be committed only after the linked bill is confirmed'
@@ -60,6 +59,15 @@ assert.match(verify, /notifyUsersByRolesOnce_\(\['SUPERADMIN','ADMIN_PSB','VERIF
   'Formulir verification queue notifications must be idempotent on retry');
 assert.ok(verify.indexOf("status||'').toUpperCase()==='CANCELLED'") < verify.indexOf('const verSheet='),
   'Cancelled-bill guard must run before verification history writes');
+
+const queue = section(
+  backend,
+  'function getPaymentQueue(sessionToken, page, filters) {',
+  '\nfunction ',
+  'Payment queue'
+);
+assert.match(queue, /paymentQueueStatus_\(bill\.status,billPayments\)/,
+  'Queue status must be derived from all payments rather than bill PAID alone');
 
 const submit = section(
   backend,
