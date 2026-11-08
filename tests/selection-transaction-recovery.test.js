@@ -105,6 +105,15 @@ assert.ok(verification.includes('catch(notificationError)'),
 assert.ok(verification.indexOf('catch(notificationError)') > verification.indexOf('setRegistrationStatus_('),
   'Verification notification isolation must occur after the registration status transition');
 
+assert.match(verification, /alreadyFinalized=currentStatus===decision/,
+  'Repeating the same persisted verification decision must be accepted as a recovery retry');
+assert.match(verification, /if\(!alreadyFinalized && \['SUBMITTED','UNDER_REVIEW','REVISION'\]/,
+  'A retry must not permit a conflicting decision after registration finalization');
+assert.match(verification, /createNotificationOnce_\(notificationUserId/,
+  'Verification owner notification recovery must be idempotent');
+assert.match(verification, /notificationUserId=String\(found\.registration\.userId\|\|''\)/,
+  'Verification retry must reconstruct the recipient from persisted registration ownership');
+
 const statusHelper = section(
   'function setRegistrationStatus_(',
   '\n// =====================================================\n// STAGE 5 - DOKUMEN',
