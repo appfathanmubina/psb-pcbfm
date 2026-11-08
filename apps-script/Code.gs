@@ -731,7 +731,8 @@ function getDataIntegrityReport(sessionToken) {
     ['payment_amount_mismatch','PAYMENTS.amount must match BILLS.amount',ledger.summary.amountMismatchPayments],
     ['duplicate_verified_payment_per_bill','More than one VERIFIED payment for a bill',ledger.summary.duplicateVerifiedBills],
     ['paid_bill_without_verified_payment','BILLS.PAID without a matching VERIFIED payment',ledger.summary.paidWithoutVerifiedBills],
-    ['verified_payment_bill_status_mismatch','VERIFIED payment while bill is not PAID',ledger.summary.verifiedBillStatusMismatch]
+    ['verified_payment_bill_status_mismatch','VERIFIED payment while bill is not PAID',ledger.summary.verifiedBillStatusMismatch],
+    ['payment_on_cancelled_bill','PAYMENTS linked to a CANCELLED bill',ledger.summary.cancelledBillPayments]
   ];
   ledgerChecks.forEach(([key,label,count])=>add(key,label,count?'ERROR':'OK',
     count?count+' ketidaksesuaian ditemukan; data tidak diubah otomatis.':'Tidak ditemukan ketidaksesuaian.','Payment Reconciliation'));
@@ -2732,7 +2733,7 @@ function paymentAmountMatchesBill_(bill,payment) {
 function reconcilePaymentLedger_(bills,payments) {
   const allBills=bills||[],activeBills=allBills.filter(b=>String(b.status||'').toUpperCase()!=='CANCELLED');
   const billById=Object.create(null),paymentsByBill=Object.create(null),issueByBill=Object.create(null),cancelledIds=Object.create(null);
-  const summary={billAmount:0,paidAmount:0,pendingAmount:0,unpaidAmount:0,paidBills:0,pendingBills:0,
+  const summary={billAmount:0,paidAmount:0,pendingAmount:0,rejectedAmount:0,unpaidAmount:0,paidBills:0,pendingBills:0,
     rejectedPayments:0,orphanPayments:0,registrationMismatchPayments:0,amountMismatchPayments:0,
     duplicateVerifiedBills:0,paidWithoutVerifiedBills:0,verifiedBillStatusMismatch:0,cancelledBillPayments:0,requiresReviewBills:0};
   const result={summary,byBill:Object.create(null),verifiedPayments:[],paymentRows:payments||[]};
@@ -2768,7 +2769,7 @@ function reconcilePaymentLedger_(bills,payments) {
       status='WAITING';pendingAmount=Number(b.amount)||0;summary.pendingBills++;summary.pendingAmount+=pendingAmount;
       if(billStatus==='PAID'){summary.paidWithoutVerifiedBills++;requiresReview=true;}
     }else if(rejected.length){
-      status='REJECTED';
+      status='REJECTED';summary.rejectedAmount+=Number(b.amount)||0;
       if(billStatus==='PAID'){summary.paidWithoutVerifiedBills++;requiresReview=true;}
     }else{
       status='UNPAID';summary.unpaidAmount+=Number(b.amount)||0;
@@ -4546,7 +4547,7 @@ function getDashboardPageData(sessionToken) {
     summary:{total:periodRegs.length,submitted:(byStatus.SUBMITTED||0),underReview:(byStatus.UNDER_REVIEW||0),revision:(byStatus.REVISION||0),verified:(byStatus.VERIFIED||0),paymentVerified:(byStatus.PAYMENT_VERIFIED||0),selection:(byStatus.SELECTION||0),reregistration:(byStatus.REREGISTRATION||0),completed:(byStatus.COMPLETED||0)},
     payments:paymentByStatus, selection:{participants:periodParticipants.length,results:periodResults.length,...resultCounts}, reregistration:reregCounts,
     finance:{paidAmount:revenue,billAmount:paymentLedger.summary.billAmount,pendingAmount:paymentLedger.summary.pendingAmount,
-      paidBills:paymentLedger.summary.paidBills,pendingBills:paymentLedger.summary.pendingBills,
+      rejectedAmount:paymentLedger.summary.rejectedAmount,paidBills:paymentLedger.summary.paidBills,pendingBills:paymentLedger.summary.pendingBills,
       rejectedPayments:paymentLedger.summary.rejectedPayments,reconciliationRequired:paymentLedger.summary.requiresReviewBills},
     distributions:{jenjang:sortCountMap_(jenjangCounts),gelombang:sortCountMap_(gelombangCounts)},
     operational,
@@ -4974,7 +4975,7 @@ function getAdvancedReportingData(sessionToken, filters) {
   const last30={registrations:filtered.filter(r=>new Date(r.createdAt||0)>=new Date(Date.now()-30*msPerDay)).length,payments:verifiedPayments.filter(p=>new Date(p.submittedAt||p.createdAt||0)>=new Date(Date.now()-30*msPerDay)).length,announcements:announced.filter(r=>new Date(r.announcementDate||0)>=new Date(Date.now()-30*msPerDay)).length};
   writeAudit_(actor.userId,'ADVANCED_REPORT_VIEW','REPORTING','', '', JSON.stringify({yearId,gelombangId,jenjangId,gender,fromDate:filters.fromDate||'',toDate:filters.toDate||''}), 'Advanced Reporting & Analytics dijalankan');
   return {success:true,activeYear,filters:{tahunAjaranId:yearId,gelombangId,jenjangId,gender,status,fromDate:filters.fromDate||'',toDate:filters.toDate||''},funnel,conversion,trends,breakdowns:{jenjang:byJenjang.slice(0,20),kelompok:byKelompok.slice(0,20),gelombang:byGelombang.slice(0,20),status:byStatus.slice(0,20)},outcome,finance:{
-    billAmount:paymentLedger.summary.billAmount,paidAmount:paymentAmount,pendingAmount:paymentLedger.summary.pendingAmount,
+    billAmount:paymentLedger.summary.billAmount,paidAmount:paymentAmount,pendingAmount:paymentLedger.summary.pendingAmount,rejectedAmount:paymentLedger.summary.rejectedAmount,
     paidBills:paymentLedger.summary.paidBills,pendingBills:paymentLedger.summary.pendingBills,rejectedPayments:paymentLedger.summary.rejectedPayments,
     orphanPayments:paymentLedger.summary.orphanPayments,registrationMismatchPayments:paymentLedger.summary.registrationMismatchPayments,
     amountMismatchPayments:paymentLedger.summary.amountMismatchPayments,duplicateVerifiedBills:paymentLedger.summary.duplicateVerifiedBills,
