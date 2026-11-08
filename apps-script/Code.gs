@@ -2861,7 +2861,7 @@ function getSelectionPageData(sessionToken, registrationId) {
   });
   const enrichmentMaps = {
     candidates: candidateMap,
-    years: sheetMapById_(ss.getSheetByName(PSB_SHEETS.MASTER_TAHUN_AJARAN), 'tahunAjaranId', ['name']),
+    years: sheetMapById_(ss.getSheetByName(PSB_SHEETS.MASTER_TAHUN_AJARAN), 'tahunAjaranId', ['name','isActive']),
     waves: sheetMapById_(ss.getSheetByName(PSB_SHEETS.MASTER_GELOMBANG), 'gelombangId', ['name']),
     levels: sheetMapById_(ss.getSheetByName(PSB_SHEETS.MASTER_JENJANG), 'jenjangId', ['name'])
   };
@@ -2878,7 +2878,7 @@ function getSelectionPageData(sessionToken, registrationId) {
   const activeYearName = String(getConfig_('ACTIVE_YEAR') || '').trim();
   const activeYear = activeYearId
     ? (enrichmentMaps.years[activeYearId] || null)
-    : Object.values(enrichmentMaps.years).find(x=>String(x.name)===activeYearName) || null;
+    : Object.values(enrichmentMaps.years).find(x=>String(x.name)===activeYearName && (x.isActive===true || String(x.isActive).toUpperCase()==='TRUE')) || null;
   const yearId = String(activeYear?.tahunAjaranId || activeYearId || '');
   const schedules = sheetRowsByFields_(ss.getSheetByName(PSB_SHEETS.SELECTION_SCHEDULE),
     ['scheduleId','tahunAjaranId','name','selectionDate','location','isActive'])
