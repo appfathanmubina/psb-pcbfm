@@ -5179,6 +5179,7 @@ function uploadDocument(sessionToken, payload) {
   let pendingDocumentSheet = null;
   let pendingStatusColumn = 0;
   let oldDocumentRowNumbers = [];
+  let replacementStatusesVerified = false;
   let stage = 'VALIDATE_REQUEST';
 
   try {
@@ -5332,8 +5333,9 @@ function uploadDocument(sessionToken, payload) {
     savedDocument = rowObject_(headers, recordRow, savedRowNumber);
 
     stage = 'REPLACE_OLD_DOCUMENTS';
-    if (oldDocumentRowNumbers.length && !replaceCurrentDocumentStatuses_(sheet, oldDocumentRowNumbers, statusIdx + 1)) {
-      throw new Error('Previous document status replacement could not be verified.');
+    if (oldDocumentRowNumbers.length) {
+      replacementStatusesVerified = replaceCurrentDocumentStatuses_(sheet, oldDocumentRowNumbers, statusIdx + 1);
+      if (!replacementStatusesVerified) throw new Error('Previous document status replacement could not be verified.');
     }
 
     stage = 'WRITE_AUDIT';
@@ -5363,12 +5365,23 @@ function uploadDocument(sessionToken, payload) {
       }
     }
 
+    // If the document row committed but the batched replacement write failed
+    // or had an ambiguous readback, retry the idempotent status reconciliation.
+    if (documentRowWritten && stage === 'REPLACE_OLD_DOCUMENTS' && oldDocumentRowNumbers.length) {
+      try {
+        replacementStatusesVerified = replaceCurrentDocumentStatuses_(
+          pendingDocumentSheet, oldDocumentRowNumbers, pendingStatusColumn);
+      } catch (replacementRecoveryError) {
+        console.error('PSB_DOCUMENT_REPLACEMENT_RETRY_FAILED: ' + String(replacementRecoveryError && replacementRecoveryError.message || replacementRecoveryError));
+      }
+    }
+
     // Once the document row exists, do not tell the user to retry the upload:
     // that could create a duplicate file. Report the committed upload as success.
     if (documentRowWritten) {
       return {
         success:true,
-        message:stage === 'REPLACE_OLD_DOCUMENTS'
+        message:stage === 'REPLACE_OLD_DOCUMENTS' && !replacementStatusesVerified
           ? 'Dokumen berhasil diunggah. Status dokumen sebelumnya perlu diperiksa petugas.'
           : 'Dokumen berhasil diunggah.',
         document:savedDocument
