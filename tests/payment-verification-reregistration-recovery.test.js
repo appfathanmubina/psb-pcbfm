@@ -48,7 +48,7 @@ assert.match(verify, /syncReregistrationAfterPayment_\(String\(br\.object\.regis
   'Payment verification must reuse its already-held ScriptLock without deadlocking');
 
 const documentVerifyStart = backend.indexOf('function verifyDocument(sessionToken, payload) {');
-const documentVerifyEnd = backend.indexOf('\\nfunction finalizeVerification(sessionToken, payload)', documentVerifyStart);
+const documentVerifyEnd = backend.indexOf('\nfunction finalizeVerification(sessionToken, payload)', documentVerifyStart);
 const documentVerify = backend.slice(documentVerifyStart, documentVerifyEnd);
 assert.match(documentVerify, /const syncResult=syncReregistrationAfterPayment_\(registrationId,actor\.userId\)/,
   'Document verification must run re-registration synchronization through the lock-safe wrapper');
