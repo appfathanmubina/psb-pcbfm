@@ -3535,7 +3535,7 @@ function publishAnnouncement(sessionToken,payload) {
     // Rebuild the notification payload on retry as well. The announcement
     // marker is durable, but notification delivery may have failed previously.
     const announcementEventDate=alreadyPublished?latest.object.announcementDate:new Date();
-    notificationPayload={userId,status:latestStatus,title,message,eventKey:'SELECTION_ANNOUNCEMENT:'+registrationId+':'+String(announcementEventDate)};
+    notificationPayload={userId,status:latestStatus,title,message,eventKey:'SELECTION_ANNOUNCEMENT:'+registrationId+':'+String(announcementEventDate),reregistrationEventKey:'REREGISTRATION_OPENED:'+registrationId+':'+String(announcementEventDate)};
     if(alreadyPublished){
       response={success:true,message:'Pengumuman sudah dipublikasikan dan data tindak lanjut telah dipastikan.',announcementDate:rpcSafe_(latest.object.announcementDate),result:rpcSafe_(latest.object),alreadyPublished:true};
     } else {
@@ -3561,7 +3561,7 @@ function publishAnnouncement(sessionToken,payload) {
     const p=notificationPayload;
     try{
       createNotificationOnce_(p.userId,p.title,p.message,p.status==='PASSED'?'SUCCESS':p.status==='NOT_PASSED'?'INFO':'WARNING',p.eventKey);
-      if(p.status==='PASSED')createNotificationOnce_(p.userId,'Daftar Ulang Dibuka','Karena hasil seleksi dinyatakan LULUS, tahap Daftar Ulang sudah dibuka. Silakan lengkapi dokumen dan pembayaran daftar ulang.','SUCCESS','REREGISTRATION_OPENED:'+registrationId+':'+String(announcementEventDate));
+      if(p.status==='PASSED')createNotificationOnce_(p.userId,'Daftar Ulang Dibuka','Karena hasil seleksi dinyatakan LULUS, tahap Daftar Ulang sudah dibuka. Silakan lengkapi dokumen dan pembayaran daftar ulang.','SUCCESS',p.reregistrationEventKey);
     }catch(notificationError){console.error('Announcement notification failed after publish: '+notificationError);}
   }
   return response;
