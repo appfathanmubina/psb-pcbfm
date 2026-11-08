@@ -3795,8 +3795,8 @@ function syncReregistrationAfterPayment_(registrationId, actorUserId, deferNotif
 
   const userId=String(reg?.registration?.userId||'');
   const payload={success:true,completed:true,userId,candidateName:String(reg?.candidate?.fullName||'calon santri')};
-  if(!deferNotification&&userId){
-    createNotification_(userId,'Daftar Ulang Selesai','Dokumen dan pembayaran daftar ulang telah lengkap.','SUCCESS');
+  if(!deferNotification){
+    if(userId)createNotification_(userId,'Daftar Ulang Selesai','Dokumen dan pembayaran daftar ulang telah lengkap.','SUCCESS');
   }
   return payload;
 }
