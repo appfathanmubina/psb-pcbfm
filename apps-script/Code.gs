@@ -2425,7 +2425,7 @@ function getPaymentQueue(sessionToken, page, filters) {
   const pageSize = 50;
   const query = String(filters.search || '').trim().toLowerCase().slice(0,120);
   const requestedStatus = String(filters.status || '').trim().toUpperCase();
-  const allowedStatuses = ['WAITING','REJECTED','PAID','UNPAID'];
+  const allowedStatuses = ['WAITING','REJECTED','PAID','UNPAID','RECONCILIATION_REQUIRED'];
   const statusFilter = allowedStatuses.indexOf(requestedStatus) >= 0 ? requestedStatus : '';
   const ss = getDatabaseSpreadsheet_();
   const billSheet = ss.getSheetByName(PSB_SHEETS.BILLS);
@@ -2463,7 +2463,8 @@ function getPaymentQueue(sessionToken, page, filters) {
   const indexed = activeBillRefs.map(bill=>{
     const registration=query?registrationById[String(bill.registrationId||'')]||{}:{};
     const candidate=query?candidateById[String(registration.candidateId||'')]||{}:{};
-    const queueStatus=paymentLedgerForQueue.byBill[String(bill.billId||'')]?.status||'UNPAID';
+    const ledgerState=paymentLedgerForQueue.byBill[String(bill.billId||'')]||{status:'UNPAID',requiresReview:false};
+    const queueStatus=ledgerState.status==='WAITING'?'WAITING':ledgerState.requiresReview?'RECONCILIATION_REQUIRED':ledgerState.status;
     const paymentTypeName=query?paymentTypeNameById[String(bill.paymentTypeId||'')]||String(bill.paymentTypeId||'Tagihan'):'';
     const searchValues=query?[
       candidate.fullName,candidate.name,registration.registrationNumber,
@@ -2537,7 +2538,7 @@ function getPaymentQueue(sessionToken, page, filters) {
     const paymentStatus=String(payment?.status||'').toUpperCase();
     const billStatus=String(bill.status||'').toUpperCase();
     const billLedger=reconcilePaymentLedger_([bill],billPayments).byBill[String(bill.billId||'')]||{status:'UNPAID',requiresReview:false};
-    const queueStatus=billLedger.status;
+    const queueStatus=billLedger.status==='WAITING'?'WAITING':billLedger.requiresReview?'RECONCILIATION_REQUIRED':billLedger.status;
     const paymentType=paymentTypesById[String(bill.paymentTypeId||'')]||{};
     return {
       billId:String(bill.billId||''),
@@ -4510,7 +4511,14 @@ function getDashboardPageData(sessionToken) {
   periodRegs.forEach(r => { candidateNameByReg[String(r.registrationId)] = String(candidateMap[String(r.candidateId)]?.fullName || '-'); });
   const makeTask = (r, type, label, action, extra) => ({registrationId:r.registrationId,registrationNumber:r.registrationNumber||'',candidateName:candidateNameByReg[String(r.registrationId)]||'-',status:String(r.status||''),statusLabel:statusLabel_(String(r.status||'')),type,label,action,updatedAt:r.updatedAt||r.createdAt||'',...extra});
   const verificationItems = canVerification ? periodRegs.filter(r=>['SUBMITTED','UNDER_REVIEW','REVISION'].indexOf(String(r.status||'').toUpperCase())>=0).sort((a,b)=>new Date(a.updatedAt||a.createdAt||0)-new Date(b.updatedAt||b.createdAt||0)) : [];
-  const paymentItems = canPayments ? periodBills.filter(b=>String(b.status||'').toUpperCase()==='PAYMENT_REVIEW'||String(latestPaymentByBill[String(b.billId||'')]?.status||'').toUpperCase()==='SUBMITTED').map(b=>{const r=periodRegMap[String(b.registrationId||'')];return r?makeTask(r,'PAYMENT','Bukti pembayaran menunggu verifikasi','payments',{billId:b.billId,amount:Number(b.amount)||0}):null;}).filter(Boolean).sort((a,b)=>new Date(a.updatedAt||0)-new Date(b.updatedAt||0)) : [];
+  const paymentItems = canPayments ? periodBills.filter(b=>{
+    const state=paymentLedger.byBill[String(b.billId||'')];
+    return state?.status==='WAITING'||state?.requiresReview;
+  }).map(b=>{
+    const r=periodRegMap[String(b.registrationId||'')],state=paymentLedger.byBill[String(b.billId||'')];
+    const label=state?.status==='WAITING'?'Bukti pembayaran menunggu verifikasi':'Pembayaran perlu rekonsiliasi Keuangan';
+    return r?makeTask(r,'PAYMENT',label,'payments',{billId:b.billId,amount:Number(b.amount)||0,reconciliationRequired:!!state?.requiresReview}):null;
+  }).filter(Boolean).sort((a,b)=>new Date(a.updatedAt||0)-new Date(b.updatedAt||0)) : [];
   const selectionItems = canSelection ? periodParticipants.filter(x=>['SCHEDULED','PRESENT','PENDING'].indexOf(String(x.status||'').toUpperCase())>=0).map(x=>{const r=periodRegMap[String(x.registrationId||'')];return r?makeTask(r,'SELECTION','Peserta tes perlu ditindaklanjuti','selection',{participantId:x.participantId,scheduleId:x.scheduleId,participantStatus:String(x.status||'')}):null;}).filter(Boolean) : [];
   const activeScheduleItems = [];
   let activeSchedulesCount = 0;
