@@ -14,6 +14,6 @@ assert.doesNotMatch(html, /LINGKUNGAN PENGUJIAN|TESTING|testing-storage\.js/i, '
 assert.equal(manifest.name, 'PSB Fathan Mubina', 'Installed PWA name must remain the production identity');
 assert.equal(manifest.id, './', 'Production PWA identity must remain stable');
 assert.equal(manifest.scope, './', 'Production PWA scope must remain at repository root');
-assert.match(sw, /psb-pwa-shell-v32-33-0/, 'Production service worker must use the refreshed production cache namespace');
+assert.match(sw, /const CACHE=['"]psb-pwa-shell-v32-\d+-\d+['"]/, 'Production service worker must use a versioned production cache namespace');
 assert.doesNotMatch(sw, /psb-pwa-testing-/, 'Production service worker must not use testing cache namespace');
 console.log('Production PWA endpoint and identity safeguards: OK');

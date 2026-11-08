@@ -21,7 +21,7 @@ assert.match(backend, /replace\(\/\\s\+\/g, '_'\)/,
   'Spaces in generated filenames must become underscores');
 assert.match(client, /server\('uploadDocument'/,
   'The existing upload API flow must remain in use');
-assert.match(client, /fileSize:file\.size,base64:base64/,
-  'The client must continue sending the original byte size and Base64 payload');
+assert.match(client, /fileSize:prepared\.fileSize,base64/,
+  'The client must send the processed file size with the matching Base64 payload');
 
 console.log('Document upload decode and filename safeguards: OK');

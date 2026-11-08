@@ -41,7 +41,7 @@
   </div>
 </section>
 <script src="./api-bridge.js?v=32.19.0"></script>
-<script src="./app.js?v=32.36.0"></script>
+<script src="./app.js?v=32.37.0"></script>
 <script>
 (function(){
   'use strict';
@@ -53,7 +53,7 @@
       window.location.reload();
     });
     window.addEventListener('load',function(){
-      navigator.serviceWorker.register('./sw.js?v=32.40.0',{updateViaCache:'none'})
+      navigator.serviceWorker.register('./sw.js?v=32.42.0',{updateViaCache:'none'})
         .then(function(reg){return reg.update().catch(function(e){console.warn('Service worker update:',e);});})
         .catch(function(e){console.warn('Service worker:',e);});
     });

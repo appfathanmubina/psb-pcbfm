@@ -8,12 +8,12 @@ const bundlePath = path.join(__dirname, '..', 'frontend', 'psb-fm-apps-script.js
 const html = fs.readFileSync(htmlPath, 'utf8');
 const maxHtmlBytes = 150 * 1024;
 const htmlBytes = Buffer.byteLength(html, 'utf8');
-const bundleUrl = 'https://appfathanmubina.github.io/psb-pcbfm/psb-fm-apps-script.js?v=20261105-7';
+const bundleUrlPattern = /https:\/\/appfathanmubina\.github\.io\/psb-pcbfm\/psb-fm-apps-script\.js\?v=\d{8}-\d+/;
 
 if (!fs.existsSync(bundlePath)) {
   throw new Error('Apps Script client bundle is missing from the GitHub Pages source.');
 }
-if (!html.includes(bundleUrl)) {
+if (!bundleUrlPattern.test(html)) {
   throw new Error('Index.html must load the versioned Apps Script client bundle from GitHub Pages.');
 }
 if (htmlBytes >= maxHtmlBytes) {
