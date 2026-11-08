@@ -63,13 +63,17 @@ const retry = persist(sheet, headers, record);
 assert.equal(rows.length, 1, 'A repeated persistence call with the same bill ID must not append a duplicate row');
 assert.equal(retry.object.billId, record.billId, 'A repeated call must return the original committed bill');
 
+const normalRecord = { ...record, billId: 'BIL-NORMAL-2' };
+const normal = persist(sheet, headers, normalRecord);
+assert.equal(normal.object.billId, normalRecord.billId, 'A normal append must return its readback record');
+assert.ok(flushCount >= 1, 'Successful append path must flush before readback');
+
 appendMode = 'fail-before-commit';
 const absentRecord = { ...record, billId: 'BIL-NOT-COMMITTED' };
 assert.throws(() => persist(sheet, headers, absentRecord), /simulated append failure before commit/,
   'If append did not commit and readback finds no row, the original error must propagate');
 assert.equal(findRowById_(sheet, 'billId', absentRecord.billId), null,
   'A failed append without a committed row must not be reported as success');
-assert.ok(flushCount >= 1, 'Successful append path must flush before readback');
 
 const autoBill = section(
   'function ensureFormBillForRegistration_(',
