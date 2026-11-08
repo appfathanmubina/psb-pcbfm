@@ -22,7 +22,12 @@ const verify = section(
 );
 
 assert.match(verify, /if\(!reregistrationNotification\|\|reregistrationNotification\.success!==true\)/,
-  'Payment verification must require an explicit successful re-registration synchronization result');assert.ok(
+  'Payment verification must require an explicit successful re-registration synchronization result');
+assert.ok(verify.indexOf("otherVerifiedPayment=sheetRowsMatchingValues_") < verify.indexOf("const verSheet="),
+  'A second payment for an already-paid bill must be rejected before verification history writes');
+assert.match(verify, /\['VERIFIED','PAYMENT_VERIFIED'\]\.includes\(String\(reg\.registration\.status\|\|''\)\.toUpperCase\(\)\)/,
+  'A retry must repair registration metadata even when the status transition already committed');
+assert.ok(
   verify.indexOf('const confirmedBill=findRowById_') <
   verify.indexOf('sheet.getRange(found.rowNumber,paymentStatusIdx+1).setValue(status)'),
   'PAYMENTS.status must be committed only after the linked bill is confirmed'
@@ -55,6 +60,15 @@ assert.match(verify, /notifyUsersByRolesOnce_\(\['SUPERADMIN','ADMIN_PSB','VERIF
 assert.ok(verify.indexOf("status||'').toUpperCase()==='CANCELLED'") < verify.indexOf('const verSheet='),
   'Cancelled-bill guard must run before verification history writes');
 
+const queue = section(
+  backend,
+  'function getPaymentQueue(sessionToken, page, filters) {',
+  '\nfunction ',
+  'Payment queue'
+);
+assert.match(queue, /paymentQueueStatus_\(bill\.status,billPayments\)/,
+  'Queue status must be derived from all payments rather than bill PAID alone');
+
 const submit = section(
   backend,
   'function submitPayment(sessionToken,payload){',
@@ -72,7 +86,11 @@ const render = section(
 );
 assert.ok(render.includes("p?.status==='REJECTED'&&p?.verificationNote"),
   'The Wali must see the rejection reason');
-assert.match(render, /isWali&&st!=='PAID'&&\(!p\|\|p\.status==='REJECTED'\)/,
-  'The Wali must be able to upload again after rejection');
+assert.match(render, /p\?\.status==='SUBMITTED'\?'PAYMENT_REVIEW'/,
+  'A submitted payment must remain in review even if the bill write already says PAID');
+assert.match(render, /isWali&&p\?\.status!=='SUBMITTED'&&st!=='PAID'/,
+  'The Wali must not be able to upload a duplicate proof while verification is pending');
+assert.match(render, /isWali&&p\?\.status!=='SUBMITTED'&&st!=='PAID'&&\(!p\|\|p\.status==='REJECTED'\)/,
+  'The Wali must be able to upload again after rejection without allowing duplicate uploads while pending');
 
 console.log('Payment verification and rejection recovery safeguards: OK');

@@ -68,6 +68,8 @@ jobs:
         run: node tests/bill-append-commit-recovery.test.js
       - name: Test payment verification and rejection recovery safeguards
         run: node tests/payment-verification-rejection-recovery.test.js
+      - name: Test payment verification state consistency and partial-failure recovery
+        run: node tests/payment-verification-state-consistency.test.js
       - name: Test event-keyed notification idempotency and transaction event identity
         run: node tests/notification-event-idempotency.test.js
       - name: Test payment and re-registration concurrency recovery
