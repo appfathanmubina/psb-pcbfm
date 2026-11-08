@@ -2,6 +2,7 @@
 const assert = require('node:assert/strict');
 const crypto = require('node:crypto');
 const fs = require('node:fs');
+const vm = require('node:vm');
 
 const source = fs.readFileSync('apps-script/Code.gs', 'utf8');
 const setup = fs.readFileSync('apps-script/SetupDatabase.gs', 'utf8');
@@ -41,9 +42,37 @@ assert.doesNotMatch(hash, /sha256Hex_/,
   'New passwords must never use the legacy single-round SHA-256 format');
 
 const pbkdf2Helper = section('pbkdf2Sha256Hex_');
-assert.match(pbkdf2Helper, /Utilities\.computeHmacSha256Signature/);
-assert.match(pbkdf2Helper, /saltBytes\.concat\(\[0, 0, 0, 1\]\)/);
-assert.match(pbkdf2Helper, /for \(let i = 1; i < iterations; i\+\+\)/);
+assert.match(pbkdf2Helper, /hmacSha256Prepared_\(innerState,outerState,firstBlock\)/);
+assert.match(pbkdf2Helper, /sha256Compress_/);
+assert.doesNotMatch(pbkdf2Helper, /Utilities\.computeHmacSha256Signature/,
+  'PBKDF2 must avoid a Utilities service call on each iteration');
+assert.match(pbkdf2Helper, /for\(let iteration=1;iteration<iterations;iteration\+\+\)/);
+
+// Execute the production derivation with UTF-8 byte conversion and compare it
+// to Node's PBKDF2 implementation, including Unicode and long HMAC keys.
+const cryptoSource = source.slice(
+  source.indexOf('const PSB_SHA256_INITIAL_ ='),
+  source.indexOf('\nfunction upgradePasswordHashAfterLogin_')
+);
+const cryptoContext = {
+  Utilities: {
+    newBlob(value) {
+      return {getBytes: () => Array.from(Buffer.from(String(value), 'utf8'))};
+    }
+  }
+};
+vm.runInNewContext(cryptoSource + '\nglobalThis.derivePasswordHash = pbkdf2Sha256Hex_;', cryptoContext);
+for (const [password, salt, iterations] of [
+  ['password', 'salt', 1],
+  ['password', 'salt', 2],
+  ['PSB-2027', '0123456789abcdef0123456789abcdef', 60000],
+  ['pässwörd🔐', 'salt-unik-123', 60000],
+  ['x'.repeat(100), 'long-key-salt', 17]
+]) {
+  const expected = crypto.pbkdf2Sync(password, salt, iterations, 32, 'sha256').toString('hex');
+  assert.equal(cryptoContext.derivePasswordHash(password, salt, iterations), expected,
+    'V8 PBKDF2 output must match standard PBKDF2-HMAC-SHA256');
+}
 
 const verify = section('verifyPasswordForUser_');
 assert.match(verify, /pbkdf2Sha256Hex_\(/, 'PBKDF2 hashes must be verified');
