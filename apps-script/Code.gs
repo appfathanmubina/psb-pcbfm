@@ -636,7 +636,7 @@ function setProductionControl(sessionToken, payload) {
   allowed.forEach(k => { if (Object.prototype.hasOwnProperty.call(payload,k)) changes[k] = payload[k]; });
   if (changes.RELEASE_STAGE) changes.RELEASE_STAGE = String(changes.RELEASE_STAGE).trim().toUpperCase();
   if (changes.APP_VERSION) changes.APP_VERSION = String(changes.APP_VERSION).trim();
-  if (changes.APP_VERSION && !/^\\d+\\.\\d+(?:\\.\\d+)?(?:[-._A-Za-z0-9]+)?$/.test(changes.APP_VERSION)) return fail_('Format APP_VERSION tidak valid.');
+  if (changes.APP_VERSION && !/^\d+\.\d+(?:\.\d+)?(?:[-._A-Za-z0-9]+)?$/.test(changes.APP_VERSION)) return fail_('Format APP_VERSION tidak valid.');
   ['REGISTRATION_OPEN','MAINTENANCE_MODE'].forEach(k => { if (Object.prototype.hasOwnProperty.call(changes,k)) changes[k] = (changes[k]===true || String(changes[k]).toUpperCase()==='TRUE') ? 'TRUE' : 'FALSE'; });
   if (!Object.keys(changes).length) return {success:true,message:'Tidak ada perubahan kontrol produksi.',config:productionConfigObject_()};
 
@@ -3303,7 +3303,7 @@ function createSelectionSchedule(sessionToken,payload){
     const requiredHeaders=['scheduleId','tahunAjaranId','name','selectionDate','location','isActive','createdAt','updatedAt'];
     const missingHeaders=requiredHeaders.filter(h=>headers.indexOf(h)<0);
     if(missingHeaders.length)return fail_('Struktur Sheet jadwal seleksi belum lengkap ('+missingHeaders.join(', ')+').');
-    const existing=sheetRows_(sheet).find(x=>
+    const existing=sheetRowsByFields_(sheet,['scheduleId','tahunAjaranId','name','selectionDate','location','isActive']).find(x=>
       String(x.tahunAjaranId||'')===tahunAjaranId &&
       String(x.name||'').trim().toLowerCase()===name.toLowerCase() &&
       String(x.selectionDate||'')===selectionDate &&
