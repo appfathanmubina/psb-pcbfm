@@ -2968,7 +2968,7 @@ function verifyPayment(sessionToken,payload){
         }
       }
       if(/daftar\s*ulang/i.test(String(type?.name||''))){
-        reregistrationNotification=syncReregistrationAfterPayment_(String(br.object.registrationId),actor.userId,true);
+        reregistrationNotification=syncReregistrationAfterPayment_(String(br.object.registrationId),actor.userId,true,true);
         if(!reregistrationNotification||reregistrationNotification.success!==true) {
           return reregistrationNotification||fail_('Sinkronisasi Daftar Ulang belum dapat dipastikan. Verifikasi pembayaran belum difinalisasi; silakan coba kembali.');
         }
@@ -3529,26 +3529,38 @@ function publishAnnouncement(sessionToken,payload) {
       if(!confirmed || String(confirmed.registration.status||'').toUpperCase()!==nextStatus)return fail_('Status pendaftaran belum berhasil disimpan setelah pengumuman. Silakan coba kembali.');
     }
 
+    const userId=String(latestReg.registration.userId||'').trim(),candidateName=String(latestReg.candidate?.fullName||latestReg.candidate?.name||'Calon santri');
+    const title=latestStatus==='PASSED'?'Pengumuman Hasil Seleksi':latestStatus==='NOT_PASSED'?'Pengumuman Hasil Seleksi':'Informasi Hasil Seleksi';
+    const message=latestStatus==='PASSED'?'Hasil seleksi untuk '+candidateName+': LULUS. Silakan buka menu Pengumuman untuk melihat informasi selanjutnya.':latestStatus==='NOT_PASSED'?'Hasil seleksi untuk '+candidateName+': TIDAK LULUS. Silakan buka menu Pengumuman untuk melihat detail hasil.':'Hasil seleksi untuk '+candidateName+': CADANGAN. Silakan buka menu Pengumuman untuk melihat informasi selanjutnya.';
+    // Rebuild the notification payload on retry as well. The announcement
+    // marker is durable, but notification delivery may have failed previously.
+    notificationPayload={userId,status:latestStatus,title,message};
     if(alreadyPublished){
       response={success:true,message:'Pengumuman sudah dipublikasikan dan data tindak lanjut telah dipastikan.',announcementDate:rpcSafe_(latest.object.announcementDate),result:rpcSafe_(latest.object),alreadyPublished:true};
     } else {
       const previous=latest.object, now=new Date();
       // announcementDate is the commit marker; write it after follow-up data is ready.
       resultSheet.getRange(latest.rowNumber,dateIdx+1).setValue(now);
-      const userId=String(latestReg.registration.userId||'').trim(),candidateName=String(latestReg.candidate?.fullName||latestReg.candidate?.name||'Calon santri');
-      const title=latestStatus==='PASSED'?'Pengumuman Hasil Seleksi':latestStatus==='NOT_PASSED'?'Pengumuman Hasil Seleksi':'Informasi Hasil Seleksi';
-      const message=latestStatus==='PASSED'?'Hasil seleksi untuk '+candidateName+': LULUS. Silakan buka menu Pengumuman untuk melihat informasi selanjutnya.':latestStatus==='NOT_PASSED'?'Hasil seleksi untuk '+candidateName+': TIDAK LULUS. Silakan buka menu Pengumuman untuk melihat detail hasil.':'Hasil seleksi untuk '+candidateName+': CADANGAN. Silakan buka menu Pengumuman untuk melihat informasi selanjutnya.';
-      notificationPayload={userId,status:latestStatus,title,message};
-      writeAudit_(actor.userId,'ANNOUNCEMENT','ANNOUNCEMENT',String(latest.object.resultId||registrationId),JSON.stringify(previous),JSON.stringify(Object.assign({},previous,{announcementDate:now})),'Pengumuman hasil seleksi dipublikasikan: '+latestStatus);
-      response={success:true,message:'Pengumuman berhasil dipublikasikan.',announcementDate:rpcSafe_(now),result:rpcSafe_(Object.assign({},previous,{announcementDate:now}))};
+      const confirmedAnnouncement=findRowById_(resultSheet,'registrationId',registrationId);
+      if(!confirmedAnnouncement || !String(confirmedAnnouncement.object.announcementDate||'').trim()) {
+        return fail_('Penanda pengumuman belum tersimpan. Silakan coba kembali.');
+      }
+      try {
+        writeAudit_(actor.userId,'ANNOUNCEMENT','ANNOUNCEMENT',String(latest.object.resultId||registrationId),JSON.stringify(previous),JSON.stringify(Object.assign({},previous,{announcementDate:now})),'Pengumuman hasil seleksi dipublikasikan: '+latestStatus);
+      } catch(auditError) {
+        // Do not skip the already-prepared Wali notification after the
+        // announcement marker has been committed.
+        console.error('Announcement audit write failed after publish: '+auditError);
+      }
+      response={success:true,message:'Pengumuman berhasil dipublikasikan.',announcementDate:rpcSafe_(confirmedAnnouncement.object.announcementDate),result:rpcSafe_(Object.assign({},previous,{announcementDate:confirmedAnnouncement.object.announcementDate}))};
     }
   }finally{lock.releaseLock();}
   // Fanout notification is deliberately outside the lock; state is committed.
   if(notificationPayload?.userId){
     const p=notificationPayload;
     try{
-      createNotification_(p.userId,p.title,p.message,p.status==='PASSED'?'SUCCESS':p.status==='NOT_PASSED'?'INFO':'WARNING');
-      if(p.status==='PASSED')createNotification_(p.userId,'Daftar Ulang Dibuka','Karena hasil seleksi dinyatakan LULUS, tahap Daftar Ulang sudah dibuka. Silakan lengkapi dokumen dan pembayaran daftar ulang.','SUCCESS');
+      createNotificationOnce_(p.userId,p.title,p.message,p.status==='PASSED'?'SUCCESS':p.status==='NOT_PASSED'?'INFO':'WARNING');
+      if(p.status==='PASSED')createNotificationOnce_(p.userId,'Daftar Ulang Dibuka','Karena hasil seleksi dinyatakan LULUS, tahap Daftar Ulang sudah dibuka. Silakan lengkapi dokumen dan pembayaran daftar ulang.','SUCCESS');
     }catch(notificationError){console.error('Announcement notification failed after publish: '+notificationError);}
   }
   return response;
@@ -3643,6 +3655,30 @@ function createNotification_(userId,title,message,type){
   const headers=sheet.getRange(1,1,1,sheet.getLastColumn()).getValues()[0].map(String), record={}; headers.forEach(h=>record[h]='');
   Object.assign(record,{notificationId:generateId_('NTF'),userId:String(userId),title:clean_(title),message:clean_(message),type:String(type||'INFO'),isRead:false,createdAt:new Date(),readAt:''});
   sheet.appendRow(headers.map(h=>record[h])); return record;
+}
+
+function createNotificationOnce_(userId,title,message,type){
+  const id=String(userId||'').trim();
+  if(!id)return null;
+  const lock=LockService.getScriptLock();
+  try { lock.waitLock(10000); } catch(lockError) {
+    throw new Error('Notifikasi sedang diproses; pengiriman dapat dicoba kembali.');
+  }
+  try {
+    const sheet=getDatabaseSpreadsheet_().getSheetByName(PSB_SHEETS.NOTIFICATIONS);
+    if(!sheet)return null;
+    const existing=sheetRowsMatchingValues_(sheet,'userId',[id]).find(row=>
+      String(row.title||'')===String(title||'') && String(row.message||'')===String(message||'')
+    );
+    if(existing)return existing;
+    const headers=sheet.getRange(1,1,1,sheet.getLastColumn()).getValues()[0].map(String), record={};
+    headers.forEach(h=>record[h]='');
+    Object.assign(record,{notificationId:generateId_('NTF'),userId:id,title:clean_(title),message:clean_(message),type:String(type||'INFO'),isRead:false,createdAt:new Date(),readAt:''});
+    sheet.appendRow(headers.map(h=>record[h]));
+    const confirmed=findRowById_(sheet,'notificationId',record.notificationId);
+    if(!confirmed)return null;
+    return confirmed.object;
+  } finally { lock.releaseLock(); }
 }
 
 function notifyUsersByRoles_(roles,title,message,type){
@@ -3993,7 +4029,29 @@ function finalizeReregistration(sessionToken, registrationId) {
   if(notificationPayload?.userId){try{createNotification_(notificationPayload.userId,'Daftar Ulang Selesai','Proses daftar ulang untuk '+notificationPayload.candidateName+' telah selesai.','SUCCESS');}catch(notificationError){console.error('Reregistration completion notification failed: '+notificationError);}}
   return {success:true,message:'Daftar ulang berhasil diselesaikan.',status:'COMPLETED'};
 }
-function syncReregistrationAfterPayment_(registrationId, actorUserId, deferNotification) {
+function syncReregistrationAfterPayment_(registrationId, actorUserId, deferNotification, lockAlreadyHeld) {
+  if(lockAlreadyHeld) return syncReregistrationAfterPaymentLocked_(registrationId,actorUserId,deferNotification);
+
+  const lock=LockService.getScriptLock();
+  try { lock.waitLock(10000); } catch (lockError) {
+    return fail_('Server sedang memproses permintaan lain. Sinkronisasi Daftar Ulang belum dilakukan; silakan coba kembali.');
+  }
+  let result;
+  try {
+    // The inner operation always defers notification until after the lock is released.
+    result=syncReregistrationAfterPaymentLocked_(registrationId,actorUserId,true);
+  } finally { lock.releaseLock(); }
+  if(result?.success && result.completed && result.userId) {
+    try {
+      createNotificationOnce_(result.userId,'Daftar Ulang Selesai','Dokumen dan pembayaran daftar ulang telah lengkap.','SUCCESS');
+    } catch(notificationError) {
+      console.error('Reregistration completion notification failed: '+notificationError);
+    }
+  }
+  return result;
+}
+
+function syncReregistrationAfterPaymentLocked_(registrationId, actorUserId, deferNotification) {
   const id=String(registrationId||'');
   const rrSheet=getDatabaseSpreadsheet_().getSheetByName(PSB_SHEETS.REREGISTRATIONS);
   const rrFound=findRowById_(rrSheet,'registrationId',id);
@@ -4747,7 +4805,12 @@ function verifyDocument(sessionToken, payload) {
   const docType=findMasterItemById_('MASTER_DOKUMEN','documentTypeId',documentTypeId);
   if(status==='REVISION') notifyRegistrationOwner_(registrationId,'Dokumen Perlu Diperbaiki','Dokumen '+String(docType?.name||'yang diunggah')+' perlu diperbaiki.'+(note?' Catatan: '+note:''),'WARNING');
   const latestRegistration=findRegistration_(registrationId);
-  if(latestRegistration && String(latestRegistration.registration.status)==='REREGISTRATION' && status==='VERIFIED') syncReregistrationAfterPayment_(registrationId,actor.userId);
+  if(latestRegistration && String(latestRegistration.registration.status)==='REREGISTRATION' && status==='VERIFIED') {
+    const syncResult=syncReregistrationAfterPayment_(registrationId,actor.userId);
+    if(!syncResult?.success) {
+      return fail_('Dokumen berhasil diverifikasi, tetapi sinkronisasi Daftar Ulang belum selesai. Silakan ulangi verifikasi/sinkronisasi; perubahan dokumen sudah tersimpan. '+String(syncResult?.message||''));
+    }
+  }
   return {success:true,message:status==='VERIFIED'?'Dokumen ditandai terverifikasi.':'Dokumen ditandai perlu diperbaiki.'};
 }
 
@@ -4795,13 +4858,26 @@ function setRegistrationStatus_(registration, status, actorUserId, note) {
   const sheet=getDatabaseSpreadsheet_().getSheetByName(PSB_SHEETS.REGISTRATIONS);
   if(!sheet) return fail_('Sheet REGISTRATIONS belum tersedia.');
   const headers=sheet.getRange(1,1,1,sheet.getLastColumn()).getValues()[0].map(String);
-  const row=registration.rowNumber, now=new Date();
+  const row=Number(registration?.rowNumber||0), now=new Date();
   const statusIdx=headers.indexOf('status'), verifiedIdx=headers.indexOf('verifiedAt'), updatedIdx=headers.indexOf('updatedAt');
-  if(statusIdx>=0) sheet.getRange(row,statusIdx+1).setValue(status);
+  if(statusIdx<0) return fail_('Struktur kolom REGISTRATIONS belum memiliki kolom status.');
+  if(!row || row<2) return fail_('Baris pendaftaran tidak valid; status belum diperbarui.');
+  sheet.getRange(row,statusIdx+1).setValue(status);
   if(verifiedIdx>=0 && status==='VERIFIED') sheet.getRange(row,verifiedIdx+1).setValue(now);
   if(verifiedIdx>=0 && status==='REVISION') sheet.getRange(row,verifiedIdx+1).setValue('');
   if(updatedIdx>=0) sheet.getRange(row,updatedIdx+1).setValue(now);
-  writeAudit_(actorUserId,status==='REVISION'?'REVISION':status==='VERIFIED'?'VERIFY':'UPDATE','REGISTRATION',registration.registrationId,JSON.stringify({status:registration.status}),JSON.stringify({status:status,note:note}),note);
+
+  const confirmed=findRowById_(sheet,'registrationId',String(registration.registrationId||''));
+  if(!confirmed || String(confirmed.object.status||'').toUpperCase()!==String(status).toUpperCase()) {
+    return fail_('Status pendaftaran belum berhasil disimpan. Silakan periksa kembali sebelum melanjutkan proses.');
+  }
+  try {
+    writeAudit_(actorUserId,status==='REVISION'?'REVISION':status==='VERIFIED'?'VERIFY':'UPDATE','REGISTRATION',registration.registrationId,JSON.stringify({status:registration.status}),JSON.stringify({status:status,note:note}),note);
+  } catch(auditError) {
+    // The registration status is already confirmed in the sheet. Keep the
+    // committed transition successful; audit repair can be handled separately.
+    console.error('Registration status audit write failed after commit: '+auditError);
+  }
   return {success:true,message:status==='VERIFIED'?'Pendaftaran berhasil diverifikasi.':status==='REREGISTRATION'?'Tahap Daftar Ulang dibuka.':status==='COMPLETED'?'Daftar ulang selesai.':'Pendaftaran dikembalikan untuk perbaikan.',status:status};
 }
 
