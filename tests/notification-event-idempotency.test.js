@@ -29,10 +29,9 @@ function findRowById_(targetSheet, field, value) {
   return rowIndex < 0 ? null : { rowNumber: rowIndex + 2, object: asObject(storedRows[rowIndex]) };
 }
 function sheetRowsMatchingValues_(targetSheet, field, values) {
-  const index = headers.indexOf(field);
   return storedRows
-    .map((row, rowIndex) => ({ rowNumber: rowIndex + 2, object: asObject(row) }))
-    .filter(row => values.map(String).includes(String(row.object[field])));
+    .map((row, rowIndex) => Object.assign({ rowNumber: rowIndex + 2 }, asObject(row)))
+    .filter(row => values.map(String).includes(String(row[field])));
 }
 let generatedId = 0;
 const sandbox = {
