@@ -48,8 +48,8 @@ assert.match(queue, /const billFields = query/,
   'Queue must select the smallest bill projection needed for the active global filters');
 assert.match(queue, /sheetRowsByFields_\(billSheet, billFields\)/,
   'Queue must use the conditional narrow bill projection');
-assert.match(queue, /statusFilter \? \['billId','status','createdAt'\] : \['status','createdAt'\]/,
-  'Unfiltered queue requests must retain the original status/createdAt-only bill scan');
+assert.match(queue, /: \['billId','status','createdAt'\]/,
+  'Unfiltered queue requests must include billId for all-payment status aggregation while retaining a narrow bill scan');
 assert.match(queue, /sheetRowsByFields_\(ss\.getSheetByName\(PSB_SHEETS\.REGISTRATIONS\)/,
   'Global search must index registration number and candidate ID without loading full registration rows');
 assert.match(queue, /sheetRowsByFields_\(ss\.getSheetByName\(PSB_SHEETS\.CANDIDATES\)/,
