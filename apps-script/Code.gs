@@ -4864,13 +4864,17 @@ function verifyDocument(sessionToken, payload) {
   const note=String(payload.note||'').trim();
   if(!documentId) return fail_('Dokumen belum dipilih.');
   if(['VERIFIED','REVISION'].indexOf(status)<0) return fail_('Status verifikasi dokumen tidak valid.');
+  if(note.length>500) return fail_('Catatan verifikasi maksimal 500 karakter.');
   const lock=LockService.getScriptLock();
   try { lock.waitLock(10000); } catch (lockError) { return fail_('Server sedang memproses permintaan lain. Silakan coba kembali beberapa saat lagi.'); }
-  let registrationId='', documentTypeId='';
+  let registrationId='', documentTypeId='', ownerUserId='';
   try {
     const sheet=getDatabaseSpreadsheet_().getSheetByName(PSB_SHEETS.DOCUMENTS);
     if(!sheet || sheet.getLastRow()<2) return fail_('Dokumen tidak ditemukan.');
     const headers=sheet.getRange(1,1,1,sheet.getLastColumn()).getValues()[0].map(String);
+    const requiredHeaders=['documentId','registrationId','documentTypeId','status','verifiedAt','verifiedBy','revisionNote'];
+    const missingHeaders=requiredHeaders.filter(header=>headers.indexOf(header)<0);
+    if(missingHeaders.length) return fail_('Struktur Sheet DOCUMENTS belum lengkap ('+missingHeaders.join(', ')+'). Verifikasi dibatalkan.');
     const found=findRowById_(sheet,'documentId',documentId);
     if(!found) return fail_('Dokumen tidak ditemukan.');
     // A replaced document is historical only and must never be reactivated
@@ -4882,16 +4886,39 @@ function verifyDocument(sessionToken, payload) {
     if(String(reg.registration.status).toUpperCase()!=='REREGISTRATION' && !isFormPaymentVerified_(String(reg.registration.registrationId||''))) return fail_('Dokumen baru dapat diverifikasi setelah pembayaran formulir dikonfirmasi oleh bagian Keuangan.');
     registrationId=String(found.object.registrationId||'');
     documentTypeId=String(found.object.documentTypeId||'');
+    ownerUserId=String(reg.registration.userId||'');
     const statusIdx=headers.indexOf('status'), verifiedIdx=headers.indexOf('verifiedAt'), byIdx=headers.indexOf('verifiedBy'), noteIdx=headers.indexOf('revisionNote');
     const now=new Date();
     if(statusIdx>=0) sheet.getRange(found.rowNumber,statusIdx+1).setValue(status);
     if(verifiedIdx>=0) sheet.getRange(found.rowNumber,verifiedIdx+1).setValue(status==='VERIFIED'?now:'');
     if(byIdx>=0) sheet.getRange(found.rowNumber,byIdx+1).setValue(status==='VERIFIED'?actor.userId:'');
     if(noteIdx>=0) sheet.getRange(found.rowNumber,noteIdx+1).setValue(status==='REVISION'?note:'');
-    writeAudit_(actor.userId,status==='VERIFIED'?'VERIFY':'REVISION','DOCUMENT',documentId,JSON.stringify(found.object),JSON.stringify({status:status,note:note}),status==='VERIFIED'?'Dokumen diverifikasi':'Dokumen perlu diperbaiki');
+    const confirmed=findRowById_(sheet,'documentId',documentId);
+    const confirmedVerifiedAt=confirmed&&confirmed.object.verifiedAt?new Date(confirmed.object.verifiedAt):null;
+    const verificationFieldsMatch=confirmed &&
+      String(confirmed.object.status||'').toUpperCase()===status &&
+      (status==='VERIFIED'
+        ? !!confirmedVerifiedAt && Number.isFinite(confirmedVerifiedAt.getTime()) &&
+          String(confirmed.object.verifiedBy||'')===String(actor.userId) &&
+          String(confirmed.object.revisionNote||'')===''
+        : String(confirmed.object.verifiedAt||'')==='' &&
+          String(confirmed.object.verifiedBy||'')==='' &&
+          String(confirmed.object.revisionNote||'')===note);
+    if(!verificationFieldsMatch) return fail_('Perubahan verifikasi dokumen belum berhasil dikonfirmasi tersimpan. Silakan muat ulang dan periksa status sebelum mencoba kembali.');
+    try {
+      writeAudit_(actor.userId,status==='VERIFIED'?'VERIFY':'REVISION','DOCUMENT',documentId,JSON.stringify(found.object),JSON.stringify({status:status,note:note}),status==='VERIFIED'?'Dokumen diverifikasi':'Dokumen perlu diperbaiki');
+    } catch(auditError) {
+      console.error('Document verification audit failed after confirmed commit: '+auditError);
+    }
   } finally { lock.releaseLock(); }
   const docType=findMasterItemById_('MASTER_DOKUMEN','documentTypeId',documentTypeId);
-  if(status==='REVISION') notifyRegistrationOwner_(registrationId,'Dokumen Perlu Diperbaiki','Dokumen '+String(docType?.name||'yang diunggah')+' perlu diperbaiki.'+(note?' Catatan: '+note:''),'WARNING');
+  if(status==='REVISION' && ownerUserId) {
+    try {
+      createNotificationOnce_(ownerUserId,'Dokumen Perlu Diperbaiki','Dokumen '+String(docType?.name||'yang diunggah')+' perlu diperbaiki.'+(note?' Catatan: '+note:''),'WARNING','DOCUMENT_VERIFICATION:'+documentId+':REVISION');
+    } catch(notificationError) {
+      console.error('Document revision notification recovery pending: '+notificationError);
+    }
+  }
   const latestRegistration=findRegistration_(registrationId);
   if(latestRegistration && String(latestRegistration.registration.status)==='REREGISTRATION' && status==='VERIFIED') {
     const syncResult=syncReregistrationAfterPayment_(registrationId,actor.userId);
@@ -4901,7 +4928,6 @@ function verifyDocument(sessionToken, payload) {
   }
   return {success:true,message:status==='VERIFIED'?'Dokumen ditandai terverifikasi.':'Dokumen ditandai perlu diperbaiki.'};
 }
-
 function finalizeVerification(sessionToken, payload) {
   const actor=requireRole_(sessionToken,PSB_VERIFICATION_ROLES);
   assertOperationalMutation_(actor);
