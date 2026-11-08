@@ -2705,6 +2705,25 @@ function createBill(sessionToken,payload){
   return result;
 }
 
+function dispatchPaymentSubmissionNotifications_(paymentId, actorRole){
+  const paymentFound=findRowById_(getDatabaseSpreadsheet_().getSheetByName(PSB_SHEETS.PAYMENTS),'paymentId',String(paymentId||''));
+  if(!paymentFound)return false;
+  const payment=paymentFound.object;
+  const status=String(payment.status||'').toUpperCase();
+  if(status!=='SUBMITTED')return false;
+  const registrationFound=findRegistration_(String(payment.registrationId||''));
+  if(!registrationFound)return false;
+  const paymentType=findMasterItemById_('MASTER_JENIS_PEMBAYARAN','paymentTypeId',String(findRowById_(getDatabaseSpreadsheet_().getSheetByName(PSB_SHEETS.BILLS),'billId',String(payment.billId||''))?.object.paymentTypeId||''));
+  const candidateName=String(registrationFound.candidate?.fullName||'calon santri');
+  const paymentName=String(paymentType?.name||'pembayaran');
+  const eventKey='PAYMENT_SUBMISSION:'+String(payment.paymentId);
+  notifyUsersByRolesOnce_(['SUPERADMIN','ADMIN_PSB','KEUANGAN'],'Bukti Pembayaran Baru',candidateName+' mengirim bukti '+paymentName+' dan menunggu verifikasi.','INFO',eventKey);
+  if(String(actorRole||'').toUpperCase()==='WALI' && registrationFound.registration.userId){
+    createNotificationOnce_(String(registrationFound.registration.userId),'Bukti Pembayaran Terkirim','Bukti '+paymentName+' berhasil dikirim dan menunggu verifikasi.','SUCCESS',eventKey);
+  }
+  return true;
+}
+
 function submitPayment(sessionToken,payload){
   const actor=requireRole_(sessionToken,['WALI','SUPERADMIN','ADMIN_PSB','KEUANGAN']);
   assertOperationalMutation_(actor);
@@ -2714,6 +2733,8 @@ function submitPayment(sessionToken,payload){
   let uploadedFile=null;
   let paymentRowWritten=false;
   let savedPayment=null;
+  let billId='';
+  let bills=null;
   let stage='VALIDATE_REQUEST';
   const discardUploadedProof=()=>{
     if(!uploadedFile)return;
@@ -2723,7 +2744,7 @@ function submitPayment(sessionToken,payload){
 
   try {
     payload=payload||{};
-    const billId=String(payload.billId||'').trim();
+    billId=String(payload.billId||'').trim();
     const base64=String(payload.base64||'').trim();
     const fileName=sanitizeFileName_(payload.fileName||'bukti-pembayaran');
     const mimeType=String(payload.mimeType||'').toLowerCase();
@@ -2734,7 +2755,7 @@ function submitPayment(sessionToken,payload){
     if(clientSize>5*1024*1024) return fail_('Ukuran bukti pembayaran maksimal 5 MB.');
 
     stage='READ_BILL';
-    const bills=getDatabaseSpreadsheet_().getSheetByName(PSB_SHEETS.BILLS);
+    bills=getDatabaseSpreadsheet_().getSheetByName(PSB_SHEETS.BILLS);
     const br=findRowById_(bills,'billId',billId);
     if(!br) return fail_('Tagihan tidak ditemukan.');
     const found=findRegistration_(String(br.object.registrationId));
@@ -2764,8 +2785,20 @@ function submitPayment(sessionToken,payload){
 
     stage='CHECK_DUPLICATE_PAYMENT';
     const existingRows=sheetRowsMatchingValues_(paymentSheet,'billId',[billId]);
-    if(existingRows.some(r=>['SUBMITTED','VERIFIED'].indexOf(String(r.status||'').toUpperCase())>=0)) {
-      return fail_('Bukti pembayaran untuk tagihan ini sudah pernah dikirim dan sedang diproses.');
+    const existingPayment=existingRows.find(r=>String(r.status||'').toUpperCase()==='SUBMITTED');
+    if(existingPayment) {
+      if(String(existingPayment.registrationId||'')!==String(br.object.registrationId||'') || String(existingPayment.billId||'')!==billId) {
+        return fail_('Bukti pembayaran aktif tidak sesuai dengan tagihan ini.');
+      }
+      const existingPaymentId=String(existingPayment.paymentId||'');
+      lock.releaseLock();
+      lockAcquired=false;
+      try {
+        dispatchPaymentSubmissionNotifications_(existingPaymentId,actor.role);
+      } catch(notificationError) {
+        console.error('Payment submission notification recovery failed: '+String(notificationError&&notificationError.stack||notificationError));
+      }
+      return {success:true,message:'Bukti pembayaran sudah tercatat dan sedang diproses. Tidak perlu mengunggah ulang.',payment:rpcSafe_(existingPayment)};
     }
 
     stage='GET_PAYMENT_FOLDER';
@@ -2855,11 +2888,8 @@ function submitPayment(sessionToken,payload){
     }
 
     stage='SEND_NOTIFICATIONS';
-    const paymentType=findMasterItemById_('MASTER_JENIS_PEMBAYARAN','paymentTypeId',String(br.object.paymentTypeId||''));
-    const candidateName=String(found.candidate?.fullName||'calon santri');
     try {
-      notifyUsersByRoles_(['SUPERADMIN','ADMIN_PSB','KEUANGAN'],'Bukti Pembayaran Baru',candidateName+' mengirim bukti '+String(paymentType?.name||'pembayaran')+' dan menunggu verifikasi.','INFO');
-      if(String(actor.role||'').toUpperCase()==='WALI') notifyRegistrationOwner_(found.registration.registrationId,'Bukti Pembayaran Terkirim','Bukti '+String(paymentType?.name||'pembayaran')+' berhasil dikirim dan menunggu verifikasi.','SUCCESS');
+      dispatchPaymentSubmissionNotifications_(paymentId,actor.role);
     } catch(notificationError) {
       console.error('Payment notification failed after payment was saved: '+String(notificationError&&notificationError.stack||notificationError));
     }
@@ -2882,6 +2912,13 @@ function submitPayment(sessionToken,payload){
         }
       } catch(recoveryError) {
         console.error('PSB_PAYMENT_BILL_STATUS_RECOVERY_FAILED: '+String(recoveryError&&recoveryError.message||recoveryError));
+      } finally {
+        if(lockAcquired){try{lock.releaseLock();lockAcquired=false;}catch(releaseError){}}
+      }
+      try {
+        dispatchPaymentSubmissionNotifications_(savedPayment?.paymentId,actor.role);
+      } catch(notificationError) {
+        console.error('Payment submission notification recovery failed: '+String(notificationError&&notificationError.stack||notificationError));
       }
       return {success:true,message:'Bukti pembayaran berhasil disimpan. Pembayaran tercatat dan akan masuk antrean verifikasi petugas.',payment:rpcSafe_(savedPayment)};
     }
