@@ -4058,7 +4058,6 @@ function getMonitoringPageData(sessionToken){
   const verificationsAll=sheetRowsByFields_(ss.getSheetByName(PSB_SHEETS.PAYMENT_VERIFICATIONS),['paymentId','verificationId','status','verifiedAt']);
   const schedules=sheetRowsByFields_(ss.getSheetByName(PSB_SHEETS.SELECTION_SCHEDULE),['scheduleId']);
   const scores=sheetRowsByFields_(ss.getSheetByName(PSB_SHEETS.SELECTION_SCORES),['participantId','scoreId']);
-  const allParticipants=sheetRowsByFields_(ss.getSheetByName(PSB_SHEETS.SELECTION_PARTICIPANTS),['participantId']);
   const incidents=sheetRowsByFields_(ss.getSheetByName(PSB_SHEETS.INCIDENTS),['status']);
   const candidateMap={};candidates.forEach(x=>candidateMap[String(x.candidateId)]=x);
   const regMap={};regs.forEach(x=>regMap[String(x.registrationId)]=x);
@@ -4079,7 +4078,7 @@ function getMonitoringPageData(sessionToken){
     latestPaymentByBill[k]=paymentsByBill[k].slice().sort((a,z)=>new Date(z.createdAt||0)-new Date(a.createdAt||0))[0];
   });
   const billMap={};bills.forEach(x=>billMap[String(x.billId)]=x);
-  const participantMap={};allParticipants.forEach(x=>{participantMap[String(x.participantId)]=x;});
+  const participantMap={};allChildRows.SELECTION_PARTICIPANTS.forEach(x=>{participantMap[String(x.participantId)]=x;});
   const scheduleIds={};schedules.forEach(x=>{scheduleIds[String(x.scheduleId)]=true;});
   const userMap={};users.forEach(x=>userMap[String(x.userId)]=x);
   const now=new Date();
