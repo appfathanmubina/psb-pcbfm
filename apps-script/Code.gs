@@ -629,33 +629,58 @@ function getProductionControlData(sessionToken) {
 
 function setProductionControl(sessionToken, payload) {
   const actor = requireRole_(sessionToken, ['SUPERADMIN']);
+  assertOperationalMutation_(actor);
   payload = payload || {};
   const changes = {};
   const allowed = ['APP_VERSION','RELEASE_STAGE','REGISTRATION_OPEN','REGISTRATION_START','REGISTRATION_END','MAINTENANCE_MODE'];
   allowed.forEach(k => { if (Object.prototype.hasOwnProperty.call(payload,k)) changes[k] = payload[k]; });
   if (changes.RELEASE_STAGE) changes.RELEASE_STAGE = String(changes.RELEASE_STAGE).trim().toUpperCase();
   if (changes.APP_VERSION) changes.APP_VERSION = String(changes.APP_VERSION).trim();
-  if (changes.APP_VERSION && !/^\d+\.\d+(?:\.\d+)?(?:[-._A-Za-z0-9]+)?$/.test(changes.APP_VERSION)) return fail_('Format APP_VERSION tidak valid.');
+  if (changes.APP_VERSION && !/^\\d+\\.\\d+(?:\\.\\d+)?(?:[-._A-Za-z0-9]+)?$/.test(changes.APP_VERSION)) return fail_('Format APP_VERSION tidak valid.');
   ['REGISTRATION_OPEN','MAINTENANCE_MODE'].forEach(k => { if (Object.prototype.hasOwnProperty.call(changes,k)) changes[k] = (changes[k]===true || String(changes[k]).toUpperCase()==='TRUE') ? 'TRUE' : 'FALSE'; });
-  const sheet = getDatabaseSpreadsheet_().getSheetByName(PSB_SHEETS.CONFIG);
-  if (!sheet) return fail_('Sheet CONFIG belum tersedia.');
-  const old = productionConfigObject_();
-  const headers = sheet.getRange(1,1,1,sheet.getLastColumn()).getValues()[0].map(String);
-  const keyIdx=headers.indexOf('key'), valueIdx=headers.indexOf('value'), updatedIdx=headers.indexOf('updatedAt');
-  if (keyIdx<0 || valueIdx<0) return fail_('Struktur CONFIG tidak sesuai.');
-  const rows=sheet.getLastRow()>=2?sheet.getRange(2,1,sheet.getLastRow()-1,sheet.getLastColumn()).getValues():[];
-  const index={}; rows.forEach((r,i)=>index[String(r[keyIdx]||'')]=i+2);
-  Object.keys(changes).forEach(k=>{
-    const row=index[k];
-    if (!row) { const values=new Array(headers.length).fill(''); values[keyIdx]=k; values[valueIdx]=changes[k]; if(updatedIdx>=0) values[updatedIdx]=new Date(); sheet.appendRow(values); }
-    else { sheet.getRange(row,valueIdx+1).setValue(changes[k]); if(updatedIdx>=0) sheet.getRange(row,updatedIdx+1).setValue(new Date()); }
-    try { const configCache = CacheService.getScriptCache(); configCache.remove('PSB_CFG_'+sha256Hex_(k).substring(0,24)); configCache.remove('PSB_CFG_MAP_V1'); } catch(e){}
-  });
-  try { CacheService.getScriptCache().remove('PSB_PUBLIC_CONFIG_V5'); CacheService.getScriptCache().remove('PSB_PUBLIC_CONFIG_V4'); } catch(e){}
-  writeAudit_(actor.userId,'PRODUCTION_CONFIG_UPDATE','SYSTEM','',JSON.stringify(old),JSON.stringify(productionConfigObject_()),'Konfigurasi produksi diubah oleh SUPERADMIN');
-  return {success:true,message:'Kontrol produksi berhasil diperbarui.',config:productionConfigObject_()};
-}
+  if (!Object.keys(changes).length) return {success:true,message:'Tidak ada perubahan kontrol produksi.',config:productionConfigObject_()};
 
+  const lock=LockService.getScriptLock();
+  try { lock.waitLock(10000); } catch(lockError) { return fail_('Server sedang memproses permintaan lain. Silakan coba kembali beberapa saat lagi.'); }
+  try {
+    const sheet = getDatabaseSpreadsheet_().getSheetByName(PSB_SHEETS.CONFIG);
+    if (!sheet) return fail_('Sheet CONFIG belum tersedia.');
+    const old = productionConfigObject_();
+    const headers = sheet.getRange(1,1,1,sheet.getLastColumn()).getValues()[0].map(String);
+    const keyIdx=headers.indexOf('key'), valueIdx=headers.indexOf('value'), updatedIdx=headers.indexOf('updatedAt');
+    if (keyIdx<0 || valueIdx<0 || updatedIdx<0) return fail_('Struktur CONFIG belum memiliki kolom key, value, dan updatedAt.');
+    const rows=sheet.getLastRow()>=2?sheet.getRange(2,1,sheet.getLastRow()-1,sheet.getLastColumn()).getValues():[];
+    const index={}; rows.forEach((row,i)=>{const key=String(row[keyIdx]||'');if(key)index[key]=i+2;});
+    Object.keys(changes).forEach(k=>{
+      const row=index[k], now=new Date();
+      if (!row) {
+        const values=new Array(headers.length).fill('');
+        values[keyIdx]=k; values[valueIdx]=changes[k]; values[updatedIdx]=now;
+        sheet.appendRow(values);
+      } else {
+        sheet.getRange(row,valueIdx+1).setValue(changes[k]);
+        sheet.getRange(row,updatedIdx+1).setValue(now);
+      }
+    });
+
+    const savedRows=sheet.getLastRow()>=2?sheet.getRange(2,1,sheet.getLastRow()-1,sheet.getLastColumn()).getValues():[];
+    const saved={};
+    savedRows.forEach(row=>{const key=String(row[keyIdx]||'');if(key)saved[key]=String(row[valueIdx]??'');});
+    const missing=Object.keys(changes).filter(k=>saved[k]!==String(changes[k]));
+    if(missing.length)return fail_('Konfigurasi belum berhasil dikonfirmasi tersimpan: '+missing.join(', ')+'. Silakan periksa sebelum mengulang perubahan.');
+
+    try {
+      const configCache = CacheService.getScriptCache();
+      Object.keys(changes).forEach(k=>configCache.remove('PSB_CFG_'+sha256Hex_(k).substring(0,24)));
+      configCache.remove('PSB_CFG_MAP_V1');
+      configCache.remove('PSB_PUBLIC_CONFIG_V5');
+      configCache.remove('PSB_PUBLIC_CONFIG_V4');
+    } catch(e){}
+    const updatedConfig=productionConfigObject_();
+    writeAudit_(actor.userId,'PRODUCTION_CONFIG_UPDATE','SYSTEM','',JSON.stringify(old),JSON.stringify(updatedConfig),'Konfigurasi produksi diubah oleh SUPERADMIN');
+    return {success:true,message:'Kontrol produksi berhasil diperbarui.',config:updatedConfig};
+  } finally { lock.releaseLock(); }
+}
 function getDataIntegrityReport(sessionToken) {
   const actor = requireRole_(sessionToken, PSB_PRODUCTION_ADMIN_ROLES);
   const ss = getDatabaseSpreadsheet_();
@@ -1703,26 +1728,31 @@ function setActiveAcademicYear(sessionToken, tahunAjaranId) {
     if (!name) return fail_('Nama tahun ajaran tidak valid.');
     const activeIdx = headers.indexOf('isActive');
     const updatedIdx = headers.indexOf('updatedAt');
+    const idIdx = headers.indexOf('tahunAjaranId');
+    if(activeIdx<0||updatedIdx<0||idIdx<0)return fail_('Struktur master tahun ajaran belum lengkap (tahunAjaranId/isActive/updatedAt).');
     const oldActive = getActiveAcademicYear_();
     const rows = sheet.getLastRow() >= 2 ? sheet.getRange(2,1,sheet.getLastRow()-1,sheet.getLastColumn()).getValues() : [];
-    const idIdx = headers.indexOf('tahunAjaranId');
-    if (rows.length && idIdx >= 0 && activeIdx >= 0) {
-      const now = new Date();
-      const activeValues = rows.map(row => [String(row[idIdx] || '') === id]);
-      const updatedValues = rows.map((row,i) => {
-        const wasActive = row[activeIdx] === true || String(row[activeIdx]).toUpperCase() === 'TRUE';
-        return [activeValues[i][0] || wasActive ? now : (updatedIdx >= 0 ? row[updatedIdx] : '')];
-      });
-      sheet.getRange(2,activeIdx+1,rows.length,1).setValues(activeValues);
-      if (updatedIdx >= 0) sheet.getRange(2,updatedIdx+1,rows.length,1).setValues(updatedValues);
-    }
+    if(!rows.length)return fail_('Data tahun ajaran belum tersedia.');
+    const now = new Date();
+    const activeValues = rows.map(row => [String(row[idIdx] || '') === id]);
+    const updatedValues = rows.map((row,i) => {
+      const wasActive = row[activeIdx] === true || String(row[activeIdx]).toUpperCase() === 'TRUE';
+      return [activeValues[i][0] || wasActive ? now : row[updatedIdx]];
+    });
+    sheet.getRange(2,activeIdx+1,rows.length,1).setValues(activeValues);
+    sheet.getRange(2,updatedIdx+1,rows.length,1).setValues(updatedValues);
+
+    const confirmedRows=sheet.getRange(2,1,sheet.getLastRow()-1,sheet.getLastColumn()).getValues();
+    const activeRows=confirmedRows.filter(row=>row[activeIdx]===true||String(row[activeIdx]).toUpperCase()==='TRUE');
+    const confirmedTarget=confirmedRows.find(row=>String(row[idIdx]||'')===id);
+    if(activeRows.length!==1||!confirmedTarget||(confirmedTarget[activeIdx]!==true&&String(confirmedTarget[activeIdx]).toUpperCase()!=='TRUE'))return fail_('Tahun ajaran aktif belum berhasil dikonfirmasi tersimpan. Silakan periksa kembali.');
     setConfigValue_('ACTIVE_YEAR_ID', id);
     setConfigValue_('ACTIVE_YEAR', name);
+    if(String(getConfig_('ACTIVE_YEAR_ID')||'')!==id||String(getConfig_('ACTIVE_YEAR')||'')!==name)return fail_('Master tahun ajaran sudah diperbarui, tetapi konfigurasi tahun aktif belum sinkron. Ulangi pemilihan tahun aktif.');
     writeAudit_(actor.userId,'ACADEMIC_YEAR_ACTIVATE','MASTER_TAHUN_AJARAN',id,oldActive?JSON.stringify({tahunAjaranId:oldActive.tahunAjaranId,name:oldActive.name}):'',JSON.stringify({tahunAjaranId:id,name}), 'Tahun ajaran aktif diganti');
     return {success:true,message:'Tahun ajaran '+name+' sekarang menjadi tahun ajaran aktif.',activeYearId:id,activeYearName:name};
   } finally { lock.releaseLock(); }
 }
-
 function generateId_(prefix) {
   return prefix + '-' + Utilities.getUuid().replace(/-/g, '').substring(0, 12).toUpperCase();
 }
@@ -1819,7 +1849,6 @@ function saveMasterItem(sessionToken, masterKey, payload) {
   const def = PSB_MASTER_DEFINITIONS[key];
   if (!def) return fail_('Master data tidak dikenali.');
   payload = payload || {};
-
   const validation = validateMasterPayload_(key, payload);
   if (!validation.success) return validation;
 
@@ -1832,16 +1861,13 @@ function saveMasterItem(sessionToken, masterKey, payload) {
     const idField = def.idField;
     const id = String(payload[idField] || '').trim();
     const now = new Date();
-    let rowNumber = 0;
-    let oldObj = null;
-
+    let rowNumber = 0, oldObj = null;
     if (id) {
       const existing = findMasterRow_(sheet, headers, idField, id);
       if (!existing) return fail_('Data master yang akan diubah tidak ditemukan.');
       rowNumber = existing.rowNumber;
       oldObj = existing.object;
     }
-
     if (key === 'MASTER_TAHUN_AJARAN') {
       const activeYear = getActiveAcademicYear_();
       const isCurrent = !!(activeYear && id && String(activeYear.tahunAjaranId) === id);
@@ -1850,7 +1876,6 @@ function saveMasterItem(sessionToken, masterKey, payload) {
       if (isCurrent && Object.prototype.hasOwnProperty.call(payload,'isActive') && !requestedActive) return fail_('Tahun ajaran aktif tidak dapat dinonaktifkan dari form. Pindahkan tahun aktif ke periode lain terlebih dahulu.');
       if (!id) payload.isActive = false;
     }
-
     const duplicate = findMasterDuplicate_(sheet, headers, def, payload, id);
     if (duplicate) return fail_('Data dengan nama yang sama sudah ada pada konteks master ini.');
 
@@ -1858,49 +1883,56 @@ function saveMasterItem(sessionToken, masterKey, payload) {
     const rowObject = {};
     headers.forEach(h => rowObject[h] = '');
     rowObject[idField] = recordId;
-    def.fields.forEach(field => {
-      rowObject[field.key] = normalizeMasterWriteValue_(payload[field.key], field);
-    });
+    def.fields.forEach(field => { rowObject[field.key] = normalizeMasterWriteValue_(payload[field.key], field); });
     rowObject.createdAt = oldObj ? oldObj.createdAt : now;
     rowObject.updatedAt = now;
-
     const row = headers.map(h => rowObject[h] !== undefined ? rowObject[h] : '');
     if (rowNumber) sheet.getRange(rowNumber, 1, 1, headers.length).setValues([row]);
     else { sheet.appendRow(row); rowNumber = sheet.getLastRow(); }
 
-    const action = id ? 'UPDATE' : 'CREATE';
+    const confirmed=findMasterRow_(sheet,headers,idField,recordId);
+    if(!confirmed)return fail_('Data master belum berhasil dikonfirmasi tersimpan. Silakan periksa kembali.');
+    const mismatched=def.fields.filter(field=>String(confirmed.object[field.key]??'')!==String(rowObject[field.key]??''));
+    if(mismatched.length)return fail_('Data master belum tersimpan sesuai permintaan ('+mismatched.map(field=>field.key).join(', ')+').');
+
     if (key === 'MASTER_TAHUN_AJARAN' && rowObject.isActive === true) {
       setConfigValue_('ACTIVE_YEAR_ID', recordId);
       setConfigValue_('ACTIVE_YEAR', String(rowObject.name || ''));
+      if(String(getConfig_('ACTIVE_YEAR_ID')||'')!==recordId||String(getConfig_('ACTIVE_YEAR')||'')!==String(rowObject.name||''))return fail_('Data tahun ajaran tersimpan, tetapi konfigurasi tahun aktif belum sinkron. Periksa kembali.');
     }
-    writeAudit_(actor.userId, action, 'MASTER_DATA', recordId, oldObj ? JSON.stringify(oldObj) : '', JSON.stringify(rowObject), def.title + ' ' + (id ? 'diperbarui' : 'dibuat'));
-    return { success:true, message:def.title + ' berhasil ' + (id ? 'diperbarui.' : 'ditambahkan.'), item: masterObjectFromRow_(headers, row, rowNumber) };
+    writeAudit_(actor.userId, id ? 'UPDATE' : 'CREATE', 'MASTER_DATA', recordId, oldObj ? JSON.stringify(oldObj) : '', JSON.stringify(confirmed.object), def.title + ' ' + (id ? 'diperbarui' : 'dibuat'));
+    return { success:true, message:def.title + ' berhasil ' + (id ? 'diperbarui.' : 'ditambahkan.'), item:confirmed.object };
   } finally {
     lock.releaseLock();
   }
 }
-
 function deactivateMasterItem(sessionToken, masterKey, id) {
   const actor = requireRole_(sessionToken, PSB_MASTER_ACCESS_ROLES);
   assertOperationalMutation_(actor);
   const def = PSB_MASTER_DEFINITIONS[String(masterKey || '')];
   if (!def) return fail_('Master data tidak dikenali.');
-  const sheet = getDatabaseSpreadsheet_().getSheetByName(def.sheet);
-  const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0].map(String);
-  const existing = findMasterRow_(sheet, headers, def.idField, String(id || ''));
-  if (!existing) return fail_('Data master tidak ditemukan.');
-  if (def.sheet === 'MASTER_TAHUN_AJARAN') {
-    const activeYear = getActiveAcademicYear_();
-    if (activeYear && String(activeYear.tahunAjaranId) === String(id)) return fail_('Tahun ajaran aktif tidak dapat dinonaktifkan. Pindahkan tahun aktif ke periode lain terlebih dahulu.');
-  }
-  const activeIndex = headers.indexOf('isActive');
-  if (activeIndex < 0) return fail_('Master data ini tidak mendukung status aktif.');
-  sheet.getRange(existing.rowNumber, activeIndex + 1).setValue(false);
-  sheet.getRange(existing.rowNumber, headers.indexOf('updatedAt') + 1).setValue(new Date());
-  writeAudit_(actor.userId, 'DEACTIVATE', 'MASTER_DATA', String(id), JSON.stringify(existing.object), JSON.stringify(Object.assign({}, existing.object, {isActive:false})), def.title + ' dinonaktifkan');
-  return { success:true, message:def.title + ' dinonaktifkan.' };
+  const lock=LockService.getScriptLock();
+  try { lock.waitLock(10000); } catch(lockError) { return fail_('Server sedang memproses permintaan lain. Silakan coba kembali beberapa saat lagi.'); }
+  try {
+    const sheet = getDatabaseSpreadsheet_().getSheetByName(def.sheet);
+    if(!sheet)return fail_('Sheet master data belum tersedia.');
+    const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0].map(String);
+    const activeIndex = headers.indexOf('isActive'), updatedIndex=headers.indexOf('updatedAt');
+    if(activeIndex<0||updatedIndex<0)return fail_('Struktur master data belum memiliki kolom isActive dan updatedAt.');
+    const existing = findMasterRow_(sheet, headers, def.idField, String(id || ''));
+    if (!existing) return fail_('Data master tidak ditemukan.');
+    if (def.sheet === 'MASTER_TAHUN_AJARAN') {
+      const activeYear = getActiveAcademicYear_();
+      if (activeYear && String(activeYear.tahunAjaranId) === String(id)) return fail_('Tahun ajaran aktif tidak dapat dinonaktifkan. Pindahkan tahun aktif ke periode lain terlebih dahulu.');
+    }
+    sheet.getRange(existing.rowNumber, activeIndex + 1).setValue(false);
+    sheet.getRange(existing.rowNumber, updatedIndex + 1).setValue(new Date());
+    const confirmed=findMasterRow_(sheet,headers,def.idField,String(id||''));
+    if(!confirmed||(confirmed.object.isActive===true||String(confirmed.object.isActive).toUpperCase()==='TRUE'))return fail_('Status master belum berhasil dikonfirmasi dinonaktifkan. Silakan periksa kembali.');
+    writeAudit_(actor.userId, 'DEACTIVATE', 'MASTER_DATA', String(id), JSON.stringify(existing.object), JSON.stringify(Object.assign({}, confirmed.object, {isActive:false})), def.title + ' dinonaktifkan');
+    return { success:true, message:def.title + ' dinonaktifkan.' };
+  } finally { lock.releaseLock(); }
 }
-
 function validateMasterPayload_(masterKey, payload) {
   const def = PSB_MASTER_DEFINITIONS[masterKey];
   for (let i = 0; i < def.fields.length; i++) {
@@ -3254,20 +3286,48 @@ function getSelectionDetailData_(actor, isWali, ss, registrationId) {
 function createSelectionSchedule(sessionToken,payload){
   const actor=requireRole_(sessionToken,PSB_SELECTION_ADMIN_ROLES);
   assertOperationalMutation_(actor); payload=payload||{};
-  const configuredYearId=String(getConfig_('ACTIVE_YEAR_ID')||'').trim(), configuredYearName=String(getConfig_('ACTIVE_YEAR')||'').trim();
-  const activeYear=configuredYearId ? findMasterItemById_('MASTER_TAHUN_AJARAN','tahunAjaranId',configuredYearId) : getActiveMasterItems_('MASTER_TAHUN_AJARAN').find(x=>String(x.name)===configuredYearName);
-  const tahunAjaranId=String(payload.tahunAjaranId||activeYear?.tahunAjaranId||'').trim();
   const name=clean_(payload.name), selectionDate=clean_(payload.selectionDate), location=clean_(payload.location);
-  if(!tahunAjaranId||!name||!selectionDate) return fail_('Tahun ajaran, nama tes, dan tanggal tes wajib diisi.');
-  const year=findMasterItemById_('MASTER_TAHUN_AJARAN','tahunAjaranId',tahunAjaranId); if(!year||!year.isActive)return fail_('Tahun ajaran tidak aktif atau tidak ditemukan.');
-  const sheet=getDatabaseSpreadsheet_().getSheetByName(PSB_SHEETS.SELECTION_SCHEDULE); if(!sheet)return fail_('Sheet jadwal seleksi belum tersedia.');
-  const headers=sheet.getRange(1,1,1,sheet.getLastColumn()).getValues()[0].map(String), now=new Date(), record={}; headers.forEach(h=>record[h]='');
-  Object.assign(record,{scheduleId:generateId_('SCH'),tahunAjaranId,name,selectionDate,location,isActive:true,createdAt:now,updatedAt:now});
-  sheet.appendRow(headers.map(h=>record[h]));
-  writeAudit_(actor.userId,'CREATE','SELECTION_SCHEDULE',record.scheduleId,'',JSON.stringify(record),'Jadwal tes dibuat');
-  return {success:true,message:'Jadwal tes berhasil dibuat.',schedule:rpcSafe_(record)};
+  if(!name||name.length>160||!selectionDate||selectionDate.length>40||location.length>200)return fail_('Nama tes, tanggal tes, atau lokasi tidak valid.');
+  const lock=LockService.getScriptLock();
+  try{lock.waitLock(10000);}catch(lockError){return fail_('Server sedang memproses permintaan lain. Silakan coba kembali beberapa saat lagi.');}
+  try{
+    const configuredYearId=String(getConfig_('ACTIVE_YEAR_ID')||'').trim(), configuredYearName=String(getConfig_('ACTIVE_YEAR')||'').trim();
+    const activeYear=configuredYearId ? findMasterItemById_('MASTER_TAHUN_AJARAN','tahunAjaranId',configuredYearId) : getActiveMasterItems_('MASTER_TAHUN_AJARAN').find(x=>String(x.name)===configuredYearName);
+    const tahunAjaranId=String(payload.tahunAjaranId||activeYear?.tahunAjaranId||'').trim();
+    if(!tahunAjaranId)return fail_('Tahun ajaran aktif belum ditentukan.');
+    const year=findMasterItemById_('MASTER_TAHUN_AJARAN','tahunAjaranId',tahunAjaranId);
+    if(!year||!year.isActive)return fail_('Tahun ajaran tidak aktif atau tidak ditemukan.');
+    const sheet=getDatabaseSpreadsheet_().getSheetByName(PSB_SHEETS.SELECTION_SCHEDULE);
+    if(!sheet)return fail_('Sheet jadwal seleksi belum tersedia.');
+    const headers=sheet.getRange(1,1,1,sheet.getLastColumn()).getValues()[0].map(String);
+    const requiredHeaders=['scheduleId','tahunAjaranId','name','selectionDate','location','isActive','createdAt','updatedAt'];
+    const missingHeaders=requiredHeaders.filter(h=>headers.indexOf(h)<0);
+    if(missingHeaders.length)return fail_('Struktur Sheet jadwal seleksi belum lengkap ('+missingHeaders.join(', ')+').');
+    const existing=sheetRows_(sheet).find(x=>
+      String(x.tahunAjaranId||'')===tahunAjaranId &&
+      String(x.name||'').trim().toLowerCase()===name.toLowerCase() &&
+      String(x.selectionDate||'')===selectionDate &&
+      String(x.location||'').trim().toLowerCase()===location.toLowerCase()
+    );
+    if(existing){
+      if(existing.isActive===true||String(existing.isActive).toUpperCase()==='TRUE')return {success:true,message:'Jadwal tes yang sama sudah tersedia.',schedule:rpcSafe_(existing),alreadyExists:true};
+      return fail_('Jadwal tes dengan nama, tanggal, dan lokasi yang sama sudah ada tetapi tidak aktif. Periksa jadwal tersebut sebelum membuat ulang.');
+    }
+    const now=new Date(),record={};
+    headers.forEach(h=>record[h]='');
+    Object.assign(record,{scheduleId:generateId_('SCH'),tahunAjaranId,name,selectionDate,location,isActive:true,createdAt:now,updatedAt:now});
+    sheet.appendRow(headers.map(h=>record[h]));
+    const confirmed=findRowById_(sheet,'scheduleId',record.scheduleId);
+    if(!confirmed||String(confirmed.object.tahunAjaranId||'')!==tahunAjaranId||
+      String(confirmed.object.name||'')!==name||String(confirmed.object.selectionDate||'')!==selectionDate||
+      String(confirmed.object.location||'')!==location||
+      !(confirmed.object.isActive===true||String(confirmed.object.isActive).toUpperCase()==='TRUE')){
+      return fail_('Jadwal tes belum berhasil dikonfirmasi tersimpan. Silakan periksa daftar jadwal sebelum mencoba kembali.');
+    }
+    writeAudit_(actor.userId,'CREATE','SELECTION_SCHEDULE',record.scheduleId,'',JSON.stringify(confirmed.object),'Jadwal tes dibuat');
+    return {success:true,message:'Jadwal tes berhasil dibuat.',schedule:rpcSafe_(confirmed.object)};
+  }finally{lock.releaseLock();}
 }
-
 function updateSelectionScheduleStatus(sessionToken,payload){
   const actor=requireRole_(sessionToken,PSB_SELECTION_ADMIN_ROLES);
   assertOperationalMutation_(actor); payload=payload||{};
@@ -3392,7 +3452,7 @@ function saveSelectionScore(sessionToken,payload){
   assertOperationalMutation_(actor); payload=payload||{};
   const participantId=String(payload.participantId||'').trim(), component=clean_(payload.component), note=clean_(payload.note);
   const score=Number(payload.score);
-  if(!participantId||!component||component.length>100||!Number.isFinite(score)||score<0||score>100)return fail_('Peserta, komponen nilai, dan nilai 0–100 wajib diisi.');
+  if(!participantId||!component||component.length>100||note.length>500||!Number.isFinite(score)||score<0||score>100)return fail_('Peserta, komponen nilai, dan nilai 0–100 wajib diisi dengan benar.');
   const lock=LockService.getScriptLock(); try { lock.waitLock(10000); } catch (lockError) { return fail_('Server sedang memproses permintaan lain. Silakan coba kembali beberapa saat lagi.'); }
   try {
     const ss=getDatabaseSpreadsheet_();
@@ -3402,13 +3462,24 @@ function saveSelectionScore(sessionToken,payload){
     if(publishedResult && String(publishedResult.object.announcementDate||'').trim()!=='')return fail_('Nilai tidak dapat diubah setelah hasil seleksi dipublikasikan.');
     const sheet=ss.getSheetByName(PSB_SHEETS.SELECTION_SCORES);
     if(!sheet)return fail_('Sheet nilai seleksi belum tersedia.');
+    const headers=sheet.getRange(1,1,1,sheet.getLastColumn()).getValues()[0].map(String);
+    const requiredHeaders=['scoreId','participantId','component','score','note','createdAt','updatedAt'];
+    const missingHeaders=requiredHeaders.filter(h=>headers.indexOf(h)<0);
+    if(missingHeaders.length)return fail_('Struktur Sheet nilai seleksi belum lengkap ('+missingHeaders.join(', ')+').');
     const rows=sheetRows_(sheet);
     const existing=rows.find(x=>String(x.participantId)===participantId&&String(x.component).trim().toLowerCase()===component.toLowerCase());
     const now=new Date();
     const record=existing?Object.assign({},existing,{score,note,updatedAt:now}):{scoreId:generateId_('SCR'),participantId,component,score,note,createdAt:now,updatedAt:now};
     upsertById_(sheet,'scoreId',record.scoreId,record);
-    writeAudit_(actor.userId,existing?'UPDATE':'CREATE','SELECTION_SCORE',record.scoreId,existing?JSON.stringify(existing):'',JSON.stringify(record),'Nilai seleksi disimpan');
-    return {success:true,message:'Nilai seleksi berhasil disimpan.',score:rpcSafe_(record)};
+    const confirmed=findRowById_(sheet,'scoreId',record.scoreId);
+    if(!confirmed||String(confirmed.object.participantId||'')!==participantId||
+      String(confirmed.object.component||'').trim().toLowerCase()!==component.toLowerCase()||
+      Number(confirmed.object.score)!==score||String(confirmed.object.note||'')!==note){
+      return fail_('Nilai seleksi belum berhasil dikonfirmasi tersimpan. Silakan periksa kembali sebelum mencoba ulang.');
+    }
+    try{writeAudit_(actor.userId,existing?'UPDATE':'CREATE','SELECTION_SCORE',record.scoreId,existing?JSON.stringify(existing):'',JSON.stringify(confirmed.object),'Nilai seleksi disimpan');}
+    catch(auditError){console.error('Selection score audit failed after confirmed commit: '+auditError);}
+    return {success:true,message:'Nilai seleksi berhasil disimpan.',score:rpcSafe_(confirmed.object)};
   } finally { lock.releaseLock(); }
 }
 function saveSelectionResult(sessionToken,payload){
