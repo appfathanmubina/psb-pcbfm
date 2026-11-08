@@ -46,6 +46,10 @@ assert.match(invalidate, /const current=sheet\.getRange\(found\.rowNumber,1,1,7\
   'Invalidation must re-read the current session row before changing status');
 assert.match(invalidate, /current\[6\]\|\|''\)\.toUpperCase\(\)!=='ACTIVE'[\s\S]*?return true/,
   'An already terminal session must not be overwritten or reactivated');
+assert.match(invalidate, /reason==='IDLE_TIMEOUT'[\s\S]*?current\[5\][\s\S]*?return true/,
+  'A session refreshed while invalidation waited for the lock must not be expired from a stale activity snapshot');
+assert.match(invalidate, /reason==='EXPIRED'[\s\S]*?expires>now/,
+  'Expiry must be rechecked against the latest session row before invalidation');
 assert.match(invalidate, /PSB_SESSION_ROW_V1_/,
   'Invalidation must clear the actual session row-index cache');
 
