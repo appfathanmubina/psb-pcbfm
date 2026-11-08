@@ -3643,32 +3643,44 @@ function openReregistration(sessionToken, registrationId) {
   assertOperationalMutation_(actor);
   const id = String(registrationId || '').trim();
   if (!id) return fail_('Pendaftaran wajib dipilih.');
-  const found = findRegistration_(id); if (!found) return fail_('Pendaftaran tidak ditemukan.');
-  if (hasRoleDirect_(actor,['WALI']) && String(found.registration.userId)!==String(actor.userId)) return fail_('Anda tidak memiliki akses ke pendaftaran ini.');
-  const result=findRowById_(getDatabaseSpreadsheet_().getSheetByName(PSB_SHEETS.SELECTION_RESULTS),'registrationId',id);
-  if(!result || String(result.object.status||'').toUpperCase()!=='PASSED' || !String(result.object.announcementDate||'').trim()) return fail_('Daftar ulang hanya dapat dibuka setelah hasil LULUS dipublikasikan.');
   const lock=LockService.getScriptLock(); try { lock.waitLock(10000); } catch (lockError) { return fail_('Server sedang memproses permintaan lain. Silakan coba kembali beberapa saat lagi.'); }
   let notificationUserId='', response;
   try {
-    const rrSheet=getDatabaseSpreadsheet_().getSheetByName(PSB_SHEETS.REREGISTRATIONS);
+    const ss=getDatabaseSpreadsheet_();
+    // Re-read ownership, published result, and workflow status only after
+    // acquiring the same lock used by result edits and announcement commits.
+    const found=findRegistration_(id); if(!found)return fail_('Pendaftaran tidak ditemukan.');
+    if(hasRoleDirect_(actor,['WALI']) && String(found.registration.userId)!==String(actor.userId))return fail_('Anda tidak memiliki akses ke pendaftaran ini.');
+    const result=findRowById_(ss.getSheetByName(PSB_SHEETS.SELECTION_RESULTS),'registrationId',id);
+    if(!result || String(result.object.status||'').toUpperCase()!=='PASSED' || !String(result.object.announcementDate||'').trim())return fail_('Daftar ulang hanya dapat dibuka setelah hasil LULUS dipublikasikan.');
+    const currentStatus=String(found.registration.status||'').toUpperCase();
+    if(!['PASSED','SELECTION','REREGISTRATION','PAYMENT_VERIFIED','COMPLETED'].includes(currentStatus))return fail_('Status pendaftaran tidak sesuai untuk membuka atau memperbaiki Daftar Ulang.');
+    const rrSheet=ss.getSheetByName(PSB_SHEETS.REREGISTRATIONS);
     const current=findRowById_(rrSheet,'registrationId',id);
+    if(['PAYMENT_VERIFIED','COMPLETED'].includes(currentStatus) && !current)return fail_('Status pendaftaran sudah berlanjut, tetapi data Daftar Ulang tidak ditemukan. Perlu pemeriksaan administrator sebelum membuka ulang.');
     // Always run the idempotent helper, even when the reregistration row
     // already exists. This repairs a missing bill after an earlier partial
     // attempt instead of returning a misleading "already open" response.
     const rr=ensureReregistration_(id,actor.userId,true);
-    if(!rr) return fail_('Daftar ulang atau tagihan belum dapat disiapkan. Periksa master jenis pembayaran dan sheet tagihan.');
+    if(!rr)return fail_('Daftar ulang atau tagihan belum dapat disiapkan. Periksa master jenis pembayaran dan sheet tagihan.');
     const regNow=findRegistration_(id);
-    if(regNow && ['PASSED','SELECTION'].includes(String(regNow.registration.status||'').toUpperCase())) {
+    if(!regNow)return fail_('Data pendaftaran tidak ditemukan saat menyelesaikan pembukaan Daftar Ulang.');
+    if(hasRoleDirect_(actor,['WALI']) && String(regNow.registration.userId)!==String(actor.userId))return fail_('Anda tidak memiliki akses ke pendaftaran ini.');
+    const latestStatus=String(regNow.registration.status||'').toUpperCase();
+    if(['PASSED','SELECTION'].includes(latestStatus)) {
       const moved=setRegistrationStatus_(regNow.registration,'REREGISTRATION',actor.userId,'Daftar ulang dibuka.');
-      if(!moved?.success) return moved;
+      if(!moved?.success)return moved;
+      const confirmed=findRegistration_(id);
+      if(!confirmed||String(confirmed.registration.status||'').toUpperCase()!=='REREGISTRATION')return fail_('Status pendaftaran belum berhasil diperbarui ke Daftar Ulang. Silakan coba kembali.');
+    } else if(!['REREGISTRATION','PAYMENT_VERIFIED','COMPLETED'].includes(latestStatus)) {
+      return fail_('Status pendaftaran berubah dan tidak lagi memenuhi syarat membuka Daftar Ulang.');
     }
-    if(!current) notificationUserId=String(found.registration.userId||'');
+    if(!current) notificationUserId=String(regNow.registration.userId||'');
     response={success:true,message:current?'Daftar ulang sudah terbuka dan tagihan telah dipastikan tersedia.':'Daftar ulang berhasil dibuka.',reregistration:rr,alreadyOpen:!!current};
   } finally { lock.releaseLock(); }
   if(notificationUserId){try{createNotification_(notificationUserId,'Daftar Ulang Dibuka','Tahap Daftar Ulang sudah dibuka. Silakan lengkapi dokumen dan pembayaran daftar ulang.','SUCCESS');}catch(notificationError){console.error('Reregistration opened notification failed: '+notificationError);}}
   return response;
 }
-
 
 function ensureReregistration_(registrationId, actorUserId, createBill) {
   const ss = getDatabaseSpreadsheet_();
