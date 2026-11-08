@@ -31,7 +31,7 @@ const duplicateGuard = verify.indexOf('otherVerifiedPayment=sheetRowsMatchingVal
 const historyWrite = verify.indexOf('const verSheet=');
 assert.ok(duplicateGuard >= 0 && duplicateGuard < historyWrite,
   'Duplicate VERIFIED guard must run before any verification history write');
-assert.match(verify, /x=>String\(x\.paymentId\|\|'\)!==paymentId&&String\(x\.status\|\|''\)\.toUpperCase\(\)==='VERIFIED'/,
+assert.ok(verify.includes(".find(x=>String(x.paymentId||'')!==paymentId&&String(x.status||'').toUpperCase()==='VERIFIED')"),
   'Duplicate guard must exclude the same payment ID so retries remain idempotent');
 
 const registrationStart = backend.indexOf('function setRegistrationStatus_(');
