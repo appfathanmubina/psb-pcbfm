@@ -5355,9 +5355,12 @@ function uploadDocument(sessionToken, payload) {
           documentRowWritten = true;
           savedDocument = committed.object;
           stage = 'RECONCILE_COMMITTED_DOCUMENT';
-          if (oldDocumentRowNumbers.length && pendingStatusColumn &&
-              !replaceCurrentDocumentStatuses_(pendingDocumentSheet, oldDocumentRowNumbers, pendingStatusColumn)) {
-            console.error('PSB_DOCUMENT_REPLACEMENT_RECONCILIATION_REQUIRED documentId=' + pendingDocumentId);
+          if (oldDocumentRowNumbers.length && pendingStatusColumn) {
+            replacementStatusesVerified = replaceCurrentDocumentStatuses_(
+              pendingDocumentSheet, oldDocumentRowNumbers, pendingStatusColumn);
+            if (!replacementStatusesVerified) {
+              console.error('PSB_DOCUMENT_REPLACEMENT_RECONCILIATION_REQUIRED documentId=' + pendingDocumentId);
+            }
           }
         }
       } catch (recoveryError) {
@@ -5381,7 +5384,7 @@ function uploadDocument(sessionToken, payload) {
     if (documentRowWritten) {
       return {
         success:true,
-        message:stage === 'REPLACE_OLD_DOCUMENTS' && !replacementStatusesVerified
+        message:(stage === 'REPLACE_OLD_DOCUMENTS' || stage === 'RECONCILE_COMMITTED_DOCUMENT') && oldDocumentRowNumbers.length && !replacementStatusesVerified
           ? 'Dokumen berhasil diunggah. Status dokumen sebelumnya perlu diperiksa petugas.'
           : 'Dokumen berhasil diunggah.',
         document:savedDocument
