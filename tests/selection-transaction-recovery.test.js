@@ -107,7 +107,7 @@ assert.ok(verification.indexOf('catch(notificationError)') > verification.indexO
 
 const statusHelper = section(
   'function setRegistrationStatus_(',
-  '\\n// =====================================================\\n// STAGE 5 - DOKUMEN',
+  '\n// =====================================================\n// STAGE 5 - DOKUMEN',
   'Registration status persistence helper'
 );
 assert.match(statusHelper, /if\(statusIdx<0\) return fail_/,
