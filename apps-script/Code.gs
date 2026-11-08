@@ -2774,6 +2774,48 @@ function dispatchPaymentSubmissionNotifications_(paymentId, actorRole){
   return true;
 }
 
+function appendPaymentRecordWithRecovery_(sheet, headers, record) {
+  const paymentId=String(record&&record.paymentId||'').trim();
+  if(!sheet||!Array.isArray(headers)||!paymentId) throw new Error('INVALID_PAYMENT_PERSISTENCE_INPUT');
+
+  const alreadyPersisted=findRowById_(sheet,'paymentId',paymentId);
+  if(alreadyPersisted) return alreadyPersisted;
+
+  try {
+    sheet.appendRow(safeSheetRow_(headers.map(h=>record[h] == null ? '' : record[h])));
+  } catch(writeError) {
+    try {
+      SpreadsheetApp.flush();
+      const recovered=findRowById_(sheet,'paymentId',paymentId);
+      if(recovered) return recovered;
+    } catch(recoveryError) {
+      const uncertainError=new Error('PAYMENT_PERSISTENCE_UNCERTAIN');
+      uncertainError.paymentPersistenceUncertain=true;
+      uncertainError.paymentId=paymentId;
+      console.error('PSB_PAYMENT_APPEND_RECOVERY_UNCERTAIN paymentId='+paymentId+': '+String(recoveryError&&recoveryError.message||recoveryError));
+      throw uncertainError;
+    }
+    throw writeError;
+  }
+
+  try {
+    SpreadsheetApp.flush();
+    const persisted=findRowById_(sheet,'paymentId',paymentId);
+    if(persisted) return persisted;
+  } catch(readbackError) {
+    const uncertainError=new Error('PAYMENT_PERSISTENCE_UNCERTAIN');
+    uncertainError.paymentPersistenceUncertain=true;
+    uncertainError.paymentId=paymentId;
+    console.error('PSB_PAYMENT_APPEND_READBACK_UNCERTAIN paymentId='+paymentId+': '+String(readbackError&&readbackError.message||readbackError));
+    throw uncertainError;
+  }
+
+  const uncertainError=new Error('PAYMENT_PERSISTENCE_UNCERTAIN');
+  uncertainError.paymentPersistenceUncertain=true;
+  uncertainError.paymentId=paymentId;
+  throw uncertainError;
+}
+
 function submitPayment(sessionToken,payload){
   const actor=requireRole_(sessionToken,['WALI','SUPERADMIN','ADMIN_PSB','KEUANGAN']);
   assertOperationalMutation_(actor);
@@ -2915,11 +2957,10 @@ function submitPayment(sessionToken,payload){
     const headers=initialHeaders, now=new Date(), paymentId=generateId_('PAY'), record={};
     headers.forEach(h=>record[h]='');
     Object.assign(record,{paymentId,billId,registrationId:latestBill.object.registrationId,amount:latestBillAmount,method:'TRANSFER',proofFileId:fileId,proofFileUrl:fileUrl,status:'SUBMITTED',submittedAt:now,createdAt:now,updatedAt:now});
-    const savedRowNumber=paymentSheet.getLastRow()+1;
-    const recordRow=safeSheetRow_(headers.map(h=>record[h]!==undefined?record[h]:''));
-    paymentSheet.appendRow(recordRow);
+    const persistedPayment=appendPaymentRecordWithRecovery_(paymentSheet,headers,record);
+    if(!persistedPayment||!persistedPayment.object) throw new Error('PAYMENT_PERSISTENCE_READBACK_MISSING');
     paymentRowWritten=true;
-    savedPayment=rowObject_(headers,recordRow,savedRowNumber);
+    savedPayment=persistedPayment.object;
 
     stage='UPDATE_BILL_STATUS';
     const billHeaders=bills.getRange(1,1,1,bills.getLastColumn()).getValues()[0].map(String);
@@ -2946,6 +2987,12 @@ function submitPayment(sessionToken,payload){
     return {success:true,message:'Bukti pembayaran berhasil dikirim dan menunggu verifikasi.',payment:rpcSafe_(savedPayment)};
   } catch(e) {
     console.error('PSB_PAYMENT_UPLOAD_FAILED stage='+stage+': '+String(e&&e.stack||e));
+    if(e&&e.paymentPersistenceUncertain) {
+      // A readback failure cannot prove that the payment row is absent.
+      // Preserve the Drive proof; a later retry is guarded by bill-level idempotency.
+      uploadedFile=null;
+      return fail_('Status pengiriman bukti pembayaran belum dapat dipastikan. Jangan unggah ulang dahulu. Muat ulang halaman atau hubungi petugas PSB untuk memastikan status pembayaran.');
+    }
     if(paymentRowWritten) {
       // The payment row is the durable submission record. Recover the linked
       // bill status before returning, without ever overwriting an already-paid bill.

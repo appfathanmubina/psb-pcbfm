@@ -56,6 +56,8 @@ jobs:
         run: node tests/document-replaced-verification-guard.test.js
       - name: Test payment proof upload lock and commit resilience
         run: node tests/payment-upload-resilience.test.js
+      - name: Test payment append ambiguous-commit recovery
+        run: node tests/payment-append-commit-recovery.test.js
       - name: Test payment partial-commit recovery safeguards
         run: node tests/payment-partial-commit-recovery.test.js
       - name: Test payment submission notification recovery and idempotent retry

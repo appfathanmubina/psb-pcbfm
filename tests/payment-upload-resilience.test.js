@@ -27,6 +27,10 @@ assert.match(upload, /stage='RECHECK_DUPLICATE_PAYMENT'/,
   'payment upload must recheck duplicate submissions before commit');
 assert.match(upload, /if\(paymentRowWritten\)\s*\{[\s\S]*?PSB_PAYMENT_BILL_STATUS_RECOVERY_FAILED[\s\S]*?return\s*\{/,
   'a committed payment row must recover the bill status before returning success, never prompting a duplicate retry');
+assert.match(upload, /appendPaymentRecordWithRecovery_\(paymentSheet,headers,record\)/,
+  'payment append must use stable-ID readback recovery');
+assert.match(upload, /if\(e&&e\.paymentPersistenceUncertain\)[\s\S]*?uploadedFile=null;[\s\S]*?if\(paymentRowWritten\)/,
+  'an uncertain payment readback must preserve the Drive proof before normal cleanup can run');
 assert.match(upload, /if\(uploadedFile\)\s*\{\s*try\{uploadedFile\.setTrashed\(true\)/,
   'uncommitted Drive files must be cleaned up after failed commits');
 assert.match(upload, /PSB_PAYMENT_UPLOAD_FAILED stage=/,
