@@ -50,6 +50,8 @@ jobs:
         run: node tests/upload-validation.test.js
       - name: Test document upload lock and timeout resilience
         run: node tests/document-upload-resilience.test.js
+      - name: Test replaced-document verification and non-blocking audit safeguards
+        run: node tests/document-replaced-verification-guard.test.js
       - name: Test payment proof upload lock and commit resilience
         run: node tests/payment-upload-resilience.test.js
       - name: Test payment partial-commit recovery safeguards
