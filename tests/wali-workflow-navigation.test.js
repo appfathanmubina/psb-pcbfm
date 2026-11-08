@@ -23,6 +23,10 @@ for (const [name, source] of [['PWA', app], ['Apps Script shell', shell]]) {
     name + ': all seven workflow stages must map to their matching pages');
   assert.match(source, /class=\"wali-flow-item wali-flow-clickable[^\"]*\" onclick=\"waliFlowAction\(/,
     name + ': each Wali flow stage must be a real clickable button');
+  assert.doesNotMatch(source, /Uang Pendaftaran Rp\. 300\.000/,
+    name + ': payment guide must not show a fixed amount that can disagree with the active bill');
+  assert.match(source, /Pemeriksaan Dokumen Daftar Ulang/,
+    name + ': re-registration document review must be clearly distinguished from final registration verification');
   assert.match(source, /async function renderWaliVerificationStatus\(\)/,
     name + ': Wali needs a separate verification-status page');
   assert.match(source, /server\('getWaliHomeData',state\.token\)/,
@@ -41,6 +45,8 @@ for (const [name, source] of [['PWA', app], ['Apps Script shell', shell]]) {
   assert.match(source, /page==='verificationStatus'\?'home':\['selection','reregistration'\]\.includes\(page\)\?'announcement':page/,
     name + ': hidden Wali workflow pages must highlight their related visible bottom-nav destination');
 }
+assert.match(app, /nominal mengikuti tagihan yang tampil di halaman ini/i,
+  'PWA Wali must be told that the active bill amount is authoritative');
 assert.match(css, /\.nav-inner\.wali-nav \.nav-btn\{[^}]*font-size:10px/,
   'PWA Wali bottom navigation must use readable styling for five buttons');
 assert.match(appScriptHtml, /\.nav-inner\.wali-nav \.nav-btn\{[^}]*font-size:10px/,
