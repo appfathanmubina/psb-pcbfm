@@ -62,7 +62,7 @@ for (const [name, pattern] of [
   ['publishAnnouncement', /createNotificationOnce_/],
   ['openReregistration', /createNotificationOnce_|createNotification_/],
   ['finalizeReregistration', /createNotificationOnce_|createNotification_/],
-  ['submitRegistration', /notifyUsersByRoles_|notifyRegistrationOwner_/]
+  ['submitRegistration', /dispatchRegistrationSubmissionNotifications_|notifyUsersByRolesOnce_|createNotificationOnce_/]
 ]) {
   assertNotificationAfterLockRelease(name, pattern);
 }
