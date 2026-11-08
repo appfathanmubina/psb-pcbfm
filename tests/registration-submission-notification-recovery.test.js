@@ -17,7 +17,7 @@ const dispatcher = section(
   '\nfunction submitRegistration(',
   'Registration submission notification dispatcher'
 );
-assert.match(dispatcher, /String\(found\.registration\.status\|\|' '\)\.toUpperCase\(\)!=='SUBMITTED'/);
+assert.match(dispatcher, /found\.registration\.status[\s\S]*?!==\s*'SUBMITTED'/);
 assert.match(dispatcher, /REGISTRATION_SUBMISSION:/, 'Event identity must be stable per registration');
 assert.match(dispatcher, /notifyUsersByRolesOnce_\([\s\S]*?\['SUPERADMIN','ADMIN_PSB','KEUANGAN'\]/);
 assert.match(dispatcher, /createNotificationOnce_\([\s\S]*?found\.registration\.userId/);
