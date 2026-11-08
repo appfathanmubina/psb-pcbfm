@@ -43,7 +43,7 @@ assert.match(submitRegistration, /unggah bukti pembayaran terlebih dahulu/i);
 assert.match(submitRegistration, /Upload Dokumen akan aktif setelah pembayaran dikonfirmasi oleh Keuangan/i);
 assert.match(submitRegistration, /ensureFormBillForRegistration_/);
 assert.match(submitRegistration, /Tagihan formulir telah dibuat otomatis/);
-assert.match(submitRegistration, /Verifikasi PSB dimulai setelah pembayaran dikonfirmasi/i);
+assert.match(registrationSubmissionNotifications, /Verifikasi PSB dimulai setelah pembayaran dikonfirmasi/i);
 
 const verifyPayment = section(backend, 'function verifyPayment(sessionToken,payload)', 'function getSelectionPageData(sessionToken, registrationId)');
 assert.match(verifyPayment, /notifyUsersByRolesOnce_\(\['SUPERADMIN','ADMIN_PSB','VERIFIKATOR'\]/);
