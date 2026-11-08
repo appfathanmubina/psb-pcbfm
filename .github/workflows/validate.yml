@@ -58,6 +58,8 @@ jobs:
         run: node tests/payment-partial-commit-recovery.test.js
       - name: Test payment verification and rejection recovery safeguards
         run: node tests/payment-verification-rejection-recovery.test.js
+      - name: Test event-keyed notification idempotency and transaction event identity
+        run: node tests/notification-event-idempotency.test.js
       - name: Test payment and re-registration concurrency recovery
         run: node tests/payment-reregistration-transaction-recovery.test.js
       - name: Test selection transaction recovery safeguards
