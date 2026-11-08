@@ -1914,7 +1914,7 @@ function getWaliHomeData(sessionToken) {
   const regSheet = ss.getSheetByName(PSB_SHEETS.REGISTRATIONS);
   if (!regSheet || regSheet.getLastRow() < 2) return {success:true, registrations:[], activeYear:String(getConfig_('ACTIVE_YEAR')||'2027/2028')};
 
-  const regs = sheetRowsMatchingValues_(regSheet, 'userId', [actor.userId]);
+  const regs = sheetRowsMatchingValues_(regSheet, 'userId', [actor.userId], ['registrationId','candidateId','tahunAjaranId','registrationNumber','status']);
   const activeYear = String(getConfig_('ACTIVE_YEAR') || '2027/2028');
   const yearItems = getActiveMasterItems_('MASTER_TAHUN_AJARAN', ['name','tahunAjaranId']);
   const activeYearId = yearItems.find(x => String(x.name) === activeYear)?.tahunAjaranId || '';
@@ -2510,12 +2510,12 @@ function sheetRowsProjected_(sheet, rowNumbers, fields, headers) {
   return rowValues.map((row,index)=>rowObject_(projectedHeaders,row,rowNumbers[index]));
 }
 
-function sheetRowsProjectedAll_(sheet, fields) {
+function sheetRowsProjectedAll_(sheet, fields, headers) {
   if (!sheet || sheet.getLastRow() < 2) return [];
   const lastRow=sheet.getLastRow(), lastColumn=sheet.getLastColumn();
-  const headers=sheet.getRange(1,1,1,lastColumn).getValues()[0].map(String);
+  const allHeaders=headers || sheet.getRange(1,1,1,lastColumn).getValues()[0].map(String);
   const rowNumbers=Array.from({length:lastRow-1},(_,index)=>index+2);
-  return sheetRowsProjected_(sheet,rowNumbers,fields,headers);
+  return sheetRowsProjected_(sheet,rowNumbers,fields,allHeaders);
 }
 
 function sheetRowsMatchingValues_(sheet, keyField, wantedValues, fields) {
@@ -5329,7 +5329,7 @@ function getActiveMasterItems_(masterKey, fields) {
   if (!sheet || sheet.getLastRow() < 2) return [];
   const headers = sheet.getRange(1,1,1,sheet.getLastColumn()).getValues()[0].map(String);
   const selectedFields = Array.isArray(fields) && fields.length ? fields.concat(['isActive']) : null;
-  const rows = sheetRowsProjectedAll_(sheet, selectedFields);
+  const rows = sheetRowsProjectedAll_(sheet, selectedFields, headers);
   return rows.map(row=>{
     const rowHeaders=Object.keys(row).filter(key=>key!=='rowNumber');
     return masterObjectFromRow_(rowHeaders,rowHeaders.map(key=>row[key]),row.rowNumber);
