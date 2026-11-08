@@ -552,7 +552,15 @@ function changePassword(sessionToken, currentPassword, newPassword) {
     const sheet = getDatabaseSpreadsheet_().getSheetByName('USERS');
     sheet.getRange(current.rowNumber, 7, 1, 3).setValues([[hash, salt, current.role]]);
     sheet.getRange(current.rowNumber, 14, 1, 2).setValues([[new Date(), false]]);
+    const confirmed = findUserById_(current.userId, true);
+    const passwordPersisted = !!confirmed &&
+      String(confirmed.status).toUpperCase() === 'ACTIVE' &&
+      confirmed.passwordHash === hash && confirmed.passwordSalt === salt &&
+      !(confirmed.mustChangePassword === true || String(confirmed.mustChangePassword).toUpperCase() === 'TRUE');
+    // Revoke other sessions even when readback is uncertain: a password write
+    // may have committed despite a failed or stale confirmation read.
     revokeOtherSessionsForUser_(current.userId, String(result.sessionRow.rowNumber));
+    if (!passwordPersisted) return fail_('Perubahan password belum berhasil dikonfirmasi tersimpan. Silakan masuk kembali dan periksa password sebelum mengulang proses.');
     try { CacheService.getScriptCache().remove('PSB_USER_V3_' + sha256Hex_(String(current.phoneNormalized || '').toLowerCase()).substring(0, 32)); } catch (e) {}
     if (current.emailNormalized) { try { CacheService.getScriptCache().remove('PSB_USER_V3_' + sha256Hex_(String(current.emailNormalized || '').toLowerCase()).substring(0, 32)); } catch (e) {} }
     try { CacheService.getScriptCache().remove('PSB_USER_ID_' + sha256Hex_(String(current.userId)).substring(0, 32)); } catch (e) {}
@@ -1188,7 +1196,15 @@ function adminResetUserPassword(sessionToken, payload) {
     sheet.getRange(target.rowNumber, 7, 1, 3).setValues([[hash, salt, target.role]]);
     sheet.getRange(target.rowNumber, 14, 1, 2).setValues([[new Date(), true]]);
 
+    const confirmed = findUserById_(target.userId, true);
+    const passwordPersisted = !!confirmed &&
+      String(confirmed.status).toUpperCase() === String(target.status).toUpperCase() &&
+      confirmed.passwordHash === hash && confirmed.passwordSalt === salt &&
+      (confirmed.mustChangePassword === true || String(confirmed.mustChangePassword).toUpperCase() === 'TRUE');
+    // Revoke existing sessions even when readback is uncertain, because the
+    // reset may already have committed in USERS.
     const revoked = revokeOtherSessionsForUser_(target.userId, 0);
+    if (!passwordPersisted) return fail_('Reset password belum berhasil dikonfirmasi tersimpan. Sesi lama sudah dicabut untuk keamanan; ulangi reset setelah memeriksa akun.');
     try {
       if (target.phoneNormalized) CacheService.getScriptCache().remove('PSB_USER_V3_' + sha256Hex_(String(target.phoneNormalized).toLowerCase()).substring(0, 32));
       if (target.emailNormalized) CacheService.getScriptCache().remove('PSB_USER_V3_' + sha256Hex_(String(target.emailNormalized).toLowerCase()).substring(0, 32));
