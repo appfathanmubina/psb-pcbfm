@@ -35,7 +35,7 @@ assert.match(page, /const registrationRows = isWali\s*\?\s*sheetRowsMatchingValu
   'Wali registrations must be owner-filtered and staff registration reads must be column-scoped');
 assert.match(page, /registrationById\[key\] = r/,
   'A complete first-match registration lookup index must be built');
-assert.match(page, /const candidateRows = isWali\s*\?\s*sheetRowsMatchingValues_\(candidateSheet, 'candidateId', candidateIds\)\s*:\s*sheetRowsByFields_\(candidateSheet,/,
+assert.match(page, /const candidateRows = isWali\s*\?\s*sheetRowsMatchingValuesByFields_\(candidateSheet, 'candidateId', candidateIds, \['name','fullName'\]\)\s*:\s*sheetRowsByFields_\(candidateSheet,/ ,
   'Wali candidate reads must be restricted to owned registrations and staff candidate reads must be column-scoped');
 assert.match(page, /const candidateMap = \{\}/,
   'Candidate lookup map must be built once from the preloaded candidate rows');
