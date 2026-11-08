@@ -296,16 +296,22 @@ function login(identifier, password) {
     // PBKDF2 policy. Never downgrade an existing PBKDF2 hash.
     if (passwordCheck.needsUpgrade) {
       enterTimingStage_('passwordHashUpgrade');
-      try { upgradePasswordHashAfterLogin_(user, password); }
+      let upgradedUser = null;
+      try {
+        const upgradeResult = upgradePasswordHashAfterLogin_(user, password);
+        if (upgradeResult && typeof upgradeResult === 'object') upgradedUser = upgradeResult;
+      }
       catch (migrationError) { console.warn('AUTH_PASSWORD_HASH_UPGRADE_SKIPPED'); }
-      // The upgrade may have replaced the stored hash. Refresh and verify
-      // again before the session commit so a concurrent password reset wins.
+      // Successful migration already read back and confirmed the exact hash
+      // derived from this verified password. Avoid deriving PBKDF2 twice on
+      // the first login; the session lock below still rejects a concurrent reset.
       const refreshedUser=findUserById_(user.userId,true);
-      if(!refreshedUser || String(refreshedUser.status).toUpperCase()!=='ACTIVE' || !verifyPasswordForUser_(password,refreshedUser).valid){
+      if(!refreshedUser || String(refreshedUser.status).toUpperCase()!=='ACTIVE' ||
+          (!upgradedUser && !verifyPasswordForUser_(password,refreshedUser).valid)){
         registerLoginFailure_(key);
         return finishLoginTiming_(fail_('Login gagal. Periksa No. HP/email dan password.'),'credentials_changed');
       }
-      user=refreshedUser;
+      user=upgradedUser || refreshedUser;
     }
 
     // Serialize the final credential check with password changes/resets.
@@ -1417,7 +1423,7 @@ function upgradePasswordHashAfterLogin_(verifiedUser, password) {
         'LEGACY_OR_OLD_PBKDF2', PSB_PASSWORD_HASH_SCHEME_.toUpperCase(),
         'Hash password ditingkatkan ke PBKDF2-HMAC-SHA256 setelah login berhasil');
     } catch (auditError) {}
-    return true;
+    return confirmed;
   } finally { lock.releaseLock(); }
 }
 function sha256Hex_(value) {
@@ -1594,45 +1600,62 @@ function getAuditLogPageData(sessionToken, filters) {
 }
 
 
+var PSB_CONFIG_MAP_MEMO_ = { expiresAt: 0, value: null };
+
+function getConfigMap_() {
+  const now = Date.now();
+  if (PSB_CONFIG_MAP_MEMO_.value && PSB_CONFIG_MAP_MEMO_.expiresAt > now) {
+    return PSB_CONFIG_MAP_MEMO_.value;
+  }
+
+  let cache = null;
+  try { cache = CacheService.getScriptCache(); } catch (cacheInitError) {}
+  const mapKey = 'PSB_CFG_MAP_V1';
+  try {
+    if (!cache) throw new Error('CONFIG_CACHE_UNAVAILABLE');
+    const rawMap = cache.get(mapKey);
+    if (rawMap) {
+      const cachedMap = JSON.parse(rawMap);
+      if (cachedMap && typeof cachedMap === 'object' && !Array.isArray(cachedMap)) {
+        PSB_CONFIG_MAP_MEMO_ = { expiresAt: now + 600000, value: cachedMap };
+        return cachedMap;
+      }
+    }
+  } catch (cacheReadError) {}
+
+  const sheet = getDatabaseSpreadsheet_().getSheetByName('CONFIG');
+  const configMap = {};
+  if (sheet) {
+    const lastRow = sheet.getLastRow();
+    if (lastRow >= 2) {
+      const values = sheet.getRange(2, 1, lastRow - 1, 2).getValues();
+      for (let i = 0; i < values.length; i++) {
+        const configKey = String(values[i][0] || '');
+        if (configKey) configMap[configKey] = values[i][1] == null ? '' : values[i][1];
+      }
+    }
+  }
+  PSB_CONFIG_MAP_MEMO_ = { expiresAt: now + 600000, value: configMap };
+  if (cache) try { cache.put(mapKey, JSON.stringify(configMap), 600); } catch (cacheWriteError) {}
+  return configMap;
+}
+
 function getConfig_(key) {
   const k = String(key || '');
   if (!k) return '';
-  const cache = CacheService.getScriptCache();
-  const mapKey = 'PSB_CFG_MAP_V1';
-  let configMap = null;
-
-  // CONFIG is a small reference table. Cache the complete key/value map so a
-  // cold request does not issue one Spreadsheet read for every distinct key.
-  // Fall back to the legacy per-key cache if CacheService is unavailable.
-  try {
-    const rawMap = cache.get(mapKey);
-    if (rawMap) configMap = JSON.parse(rawMap);
-  } catch (cacheReadError) {}
-
-  if (configMap && Object.prototype.hasOwnProperty.call(configMap, k)) {
-    return configMap[k];
-  }
-
-  if (!configMap) {
-    const sheet = getDatabaseSpreadsheet_().getSheetByName('CONFIG');
-    if (!sheet || sheet.getLastRow() < 2) return '';
-    const values = sheet.getRange(2, 1, sheet.getLastRow() - 1, 2).getValues();
-    configMap = {};
-    for (let i = 0; i < values.length; i++) {
-      const configKey = String(values[i][0] || '');
-      if (configKey) configMap[configKey] = values[i][1] == null ? '' : values[i][1];
-    }
-    try { cache.put(mapKey, JSON.stringify(configMap), 600); } catch (cacheWriteError) {}
-    if (Object.prototype.hasOwnProperty.call(configMap, k)) return configMap[k];
-  }
+  let cache = null;
+  try { cache = CacheService.getScriptCache(); } catch (cacheInitError) {}
+  const configMap = getConfigMap_();
+  if (Object.prototype.hasOwnProperty.call(configMap, k)) return configMap[k];
 
   // Compatibility fallback for missing keys and transient cache failures.
   const cacheKey = 'PSB_CFG_' + sha256Hex_(k).substring(0, 24);
   try {
+    if (!cache) throw new Error('CONFIG_CACHE_UNAVAILABLE');
     const cached = cache.get(cacheKey);
     if (cached !== null && cached !== '') return cached;
   } catch (cacheReadError) {}
-  return Object.prototype.hasOwnProperty.call(configMap || {}, k) ? configMap[k] : '';
+  return '';
 }
 
 function setConfigValue_(key, value) {
@@ -1655,6 +1678,7 @@ function setConfigValue_(key, value) {
     sheet.appendRow(row);
   }
   try { const configCache = CacheService.getScriptCache(); configCache.remove('PSB_CFG_'+sha256Hex_(k).substring(0,24)); configCache.remove('PSB_CFG_MAP_V1'); } catch (e) {}
+  PSB_CONFIG_MAP_MEMO_ = { expiresAt: 0, value: null };
   try { CacheService.getScriptCache().remove('PSB_PUBLIC_CONFIG_V5'); CacheService.getScriptCache().remove('PSB_PUBLIC_CONFIG_V4'); } catch (e) {}
   return true;
 }
@@ -1755,20 +1779,26 @@ function setActiveAcademicYear(sessionToken, tahunAjaranId) {
     const activeIdx = headers.indexOf('isActive');
     const updatedIdx = headers.indexOf('updatedAt');
     const oldActive = getActiveAcademicYear_();
-    const rows = sheet.getLastRow() >= 2 ? sheet.getRange(2,1,sheet.getLastRow()-1,sheet.getLastColumn()).getValues() : [];
     const idIdx = headers.indexOf('tahunAjaranId');
-    if (rows.length && idIdx >= 0 && activeIdx >= 0) {
+    const lastRow = sheet.getLastRow();
+    if (lastRow >= 2 && idIdx >= 0 && activeIdx >= 0) {
+      const firstIndex = Math.min(idIdx, activeIdx, updatedIdx >= 0 ? updatedIdx : activeIdx);
+      const lastIndex = Math.max(idIdx, activeIdx, updatedIdx);
+      const rows = sheet.getRange(2,firstIndex+1,lastRow-1,lastIndex-firstIndex+1).getValues();
+      const idOffset = idIdx - firstIndex, activeOffset = activeIdx - firstIndex;
+      const updatedOffset = updatedIdx - firstIndex;
       const now = new Date();
-      const activeValues = rows.map(row => [String(row[idIdx] || '') === id]);
+      const activeValues = rows.map(row => [String(row[idOffset] || '') === id]);
       const updatedValues = rows.map((row,i) => {
-        const wasActive = row[activeIdx] === true || String(row[activeIdx]).toUpperCase() === 'TRUE';
-        return [activeValues[i][0] || wasActive ? now : (updatedIdx >= 0 ? row[updatedIdx] : '')];
+        const wasActive = row[activeOffset] === true || String(row[activeOffset]).toUpperCase() === 'TRUE';
+        return [activeValues[i][0] || wasActive ? now : (updatedIdx >= 0 ? row[updatedOffset] : '')];
       });
       sheet.getRange(2,activeIdx+1,rows.length,1).setValues(activeValues);
       if (updatedIdx >= 0) sheet.getRange(2,updatedIdx+1,rows.length,1).setValues(updatedValues);
     }
     setConfigValue_('ACTIVE_YEAR_ID', id);
     setConfigValue_('ACTIVE_YEAR', name);
+    invalidateActiveMasterItems_('MASTER_TAHUN_AJARAN');
     writeAudit_(actor.userId,'ACADEMIC_YEAR_ACTIVATE','MASTER_TAHUN_AJARAN',id,oldActive?JSON.stringify({tahunAjaranId:oldActive.tahunAjaranId,name:oldActive.name}):'',JSON.stringify({tahunAjaranId:id,name}), 'Tahun ajaran aktif diganti');
     return {success:true,message:'Tahun ajaran '+name+' sekarang menjadi tahun ajaran aktif.',activeYearId:id,activeYearName:name};
   } finally { lock.releaseLock(); }
@@ -1924,6 +1954,7 @@ function saveMasterItem(sessionToken, masterKey, payload) {
       setConfigValue_('ACTIVE_YEAR_ID', recordId);
       setConfigValue_('ACTIVE_YEAR', String(rowObject.name || ''));
     }
+    invalidateActiveMasterItems_(key);
     writeAudit_(actor.userId, action, 'MASTER_DATA', recordId, oldObj ? JSON.stringify(oldObj) : '', JSON.stringify(rowObject), def.title + ' ' + (id ? 'diperbarui' : 'dibuat'));
     return { success:true, message:def.title + ' berhasil ' + (id ? 'diperbarui.' : 'ditambahkan.'), item: masterObjectFromRow_(headers, row, rowNumber) };
   } finally {
@@ -1948,6 +1979,7 @@ function deactivateMasterItem(sessionToken, masterKey, id) {
   if (activeIndex < 0) return fail_('Master data ini tidak mendukung status aktif.');
   sheet.getRange(existing.rowNumber, activeIndex + 1).setValue(false);
   sheet.getRange(existing.rowNumber, headers.indexOf('updatedAt') + 1).setValue(new Date());
+  invalidateActiveMasterItems_(String(masterKey || ''));
   writeAudit_(actor.userId, 'DEACTIVATE', 'MASTER_DATA', String(id), JSON.stringify(existing.object), JSON.stringify(Object.assign({}, existing.object, {isActive:false})), def.title + ' dinonaktifkan');
   return { success:true, message:def.title + ' dinonaktifkan.' };
 }
@@ -1976,17 +2008,20 @@ function validateMasterPayload_(masterKey, payload) {
 function findMasterDuplicate_(sheet, headers, def, payload, currentId) {
   if (!payload.name) return null;
   const name = String(payload.name).trim().toLowerCase();
-  const rows = sheet.getLastRow() < 2 ? [] : sheet.getRange(2, 1, sheet.getLastRow()-1, sheet.getLastColumn()).getValues();
+  const lastRow = sheet.getLastRow();
   const idIdx = headers.indexOf(def.idField);
   const nameIdx = headers.indexOf('name');
-  if (nameIdx < 0) return null;
+  if (lastRow < 2 || idIdx < 0 || nameIdx < 0) return null;
   let contextIdx = -1, contextValue = '';
   if (def.sheet === 'MASTER_GELOMBANG') { contextIdx = headers.indexOf('tahunAjaranId'); contextValue = String(payload.tahunAjaranId || ''); }
   if (def.sheet === 'MASTER_KELAS') { contextIdx = headers.indexOf('jenjangId'); contextValue = String(payload.jenjangId || ''); }
+  const firstIndex = Math.min(idIdx, nameIdx, contextIdx >= 0 ? contextIdx : nameIdx);
+  const lastIndex = Math.max(idIdx, nameIdx, contextIdx);
+  const rows = sheet.getRange(2, firstIndex + 1, lastRow - 1, lastIndex - firstIndex + 1).getValues();
   for (let i=0;i<rows.length;i++) {
-    if (String(rows[i][idIdx] || '') === String(currentId || '')) continue;
-    if (String(rows[i][nameIdx] || '').trim().toLowerCase() !== name) continue;
-    if (contextIdx >= 0 && String(rows[i][contextIdx] || '') !== contextValue) continue;
+    if (String(rows[i][idIdx - firstIndex] || '') === String(currentId || '')) continue;
+    if (String(rows[i][nameIdx - firstIndex] || '').trim().toLowerCase() !== name) continue;
+    if (contextIdx >= 0 && String(rows[i][contextIdx - firstIndex] || '') !== contextValue) continue;
     return true;
   }
   return null;
@@ -1994,9 +2029,15 @@ function findMasterDuplicate_(sheet, headers, def, payload, currentId) {
 
 function findMasterRow_(sheet, headers, idField, id) {
   const idIdx = headers.indexOf(idField);
-  if (idIdx < 0 || sheet.getLastRow() < 2) return null;
-  const rows = sheet.getRange(2, 1, sheet.getLastRow()-1, sheet.getLastColumn()).getValues();
-  for (let i=0;i<rows.length;i++) if (String(rows[i][idIdx] || '') === String(id)) return {rowNumber:i+2, object:masterObjectFromRow_(headers, rows[i], i+2)};
+  const lastRow = sheet.getLastRow();
+  if (idIdx < 0 || lastRow < 2) return null;
+  const keys = sheet.getRange(2, idIdx + 1, lastRow - 1, 1).getValues();
+  for (let i=0;i<keys.length;i++) {
+    if (String(keys[i][0] || '') !== String(id)) continue;
+    const rowNumber = i + 2;
+    const row = sheet.getRange(rowNumber, 1, 1, headers.length).getValues()[0];
+    return {rowNumber:rowNumber, object:masterObjectFromRow_(headers, row, rowNumber)};
+  }
   return null;
 }
 
@@ -2046,13 +2087,15 @@ function getRegistrationFormOptions(sessionToken) {
 }
 
 function sheetRowsByFields_(sheet, fields) {
-  if (!sheet || !fields || !fields.length || !sheet || sheet.getLastRow() < 2) return [];
+  if (!sheet || !fields || !fields.length) return [];
+  const lastRow = sheet.getLastRow();
+  if (lastRow < 2) return [];
   const lastColumn = sheet.getLastColumn();
   if (lastColumn < 1) return [];
   const headers = sheet.getRange(1, 1, 1, lastColumn).getValues()[0].map(String);
   const indexes = fields.map(field => headers.indexOf(String(field)));
   if (indexes.some(index => index < 0)) return [];
-  return sheetRowsProjectedAll_(sheet, fields, headers);
+  return sheetRowsProjectedAll_(sheet, fields, headers, lastRow, lastColumn);
 }
 
 function getFormPaymentVerifiedRegistrationIds_() {
@@ -2612,14 +2655,15 @@ function sheetRowsAtRowNumbers_(sheet, rowNumbers) {
  * requested fields for matching rows. Keeps sheet order and rowNumber.
  */
 function sheetRowsMatchingValuesByFields_(sheet, keyField, wantedValues, fields) {
-  if (!sheet || sheet.getLastRow() < 2) return [];
+  if (!sheet) return [];
+  const lastRow = sheet.getLastRow();
+  if (lastRow < 2) return [];
   const wanted = Object.create(null);
   (wantedValues || []).forEach(value => {
     const key = String(value == null ? '' : value);
     if (key) wanted[key] = true;
   });
   if (!Object.keys(wanted).length) return [];
-  const lastRow = sheet.getLastRow();
   const lastColumn = sheet.getLastColumn();
   if (lastColumn < 1) return [];
   const headers = sheet.getRange(1, 1, 1, lastColumn).getValues()[0].map(String);
@@ -2633,12 +2677,12 @@ function sheetRowsMatchingValuesByFields_(sheet, keyField, wantedValues, fields)
     if (wanted[String(keys[i][0] == null ? '' : keys[i][0])]) matchingRows.push(i + 2);
   }
   if (!matchingRows.length) return [];
-  return sheetRowsProjected_(sheet, matchingRows, requestedFields, headers);
+  return sheetRowsProjected_(sheet, matchingRows, requestedFields, headers, lastColumn);
 }
 
-function sheetRowsProjected_(sheet, rowNumbers, fields, headers) {
+function sheetRowsProjected_(sheet, rowNumbers, fields, headers, knownLastColumn) {
   if (!sheet || !rowNumbers || !rowNumbers.length) return [];
-  const lastColumn = sheet.getLastColumn();
+  const lastColumn = knownLastColumn || sheet.getLastColumn();
   if (lastColumn < 1) return [];
   const allHeaders = headers || sheet.getRange(1, 1, 1, lastColumn).getValues()[0].map(String);
   const requested = Array.isArray(fields) && fields.length ? fields.map(String) : allHeaders;
@@ -2656,6 +2700,11 @@ function sheetRowsProjected_(sheet, rowNumbers, fields, headers) {
     if (last && index === last.end + 1) last.end = index;
     else columnGroups.push({start:index,end:index});
   });
+  const firstColumnIndex = indexes[0];
+  const lastColumnIndex = indexes[indexes.length-1];
+  if (columnGroups.length > 4 && lastColumnIndex-firstColumnIndex+1 <= indexes.length*2) {
+    columnGroups.splice(0,columnGroups.length,{start:firstColumnIndex,end:lastColumnIndex});
+  }
   const rowValues = rowNumbers.map(()=>Array(indexes.length));
   const rowBlocks = [];
   let blockStart = rowNumbers[0], previous = rowNumbers[0], startIndex = 0;
@@ -2668,30 +2717,59 @@ function sheetRowsProjected_(sheet, rowNumbers, fields, headers) {
   }
   rowBlocks.push({start:blockStart,end:previous,index:startIndex});
 
+  // Scattered matches otherwise create one Spreadsheet service call per row
+  // block and selected column group. Batch moderate spans while still reading
+  // only the requested fields; map selected rows back into their original order.
+  const firstSelectedRow = rowNumbers[0];
+  const lastSelectedRow = rowNumbers[rowNumbers.length-1];
+  if (rowBlocks.length * columnGroups.length > 8) {
+    const span = lastSelectedRow - firstSelectedRow + 1;
+    const maxBatchCells = 50000;
+    if (span <= 10000 && span * indexes.length <= maxBatchCells) {
+      rowBlocks.splice(0, rowBlocks.length, {start:firstSelectedRow,end:lastSelectedRow,index:0});
+    } else {
+      rowBlocks.splice(0, rowBlocks.length);
+      const batchSize = Math.max(1, Math.floor(maxBatchCells / indexes.length));
+      for (let start=firstSelectedRow; start<=lastSelectedRow; start+=batchSize) {
+        rowBlocks.push({start:start,end:Math.min(lastSelectedRow,start+batchSize-1),index:0});
+      }
+    }
+  }
+  const selectedRowIndex = Object.create(null);
+  rowNumbers.forEach((rowNumber,index)=>{selectedRowIndex[String(rowNumber)]=index;});
+
   columnGroups.forEach(group => {
     const positions = [];
     for (let i=0;i<indexes.length;i++) if(indexes[i]>=group.start&&indexes[i]<=group.end) positions.push(i);
     rowBlocks.forEach(block => {
       const values = sheet.getRange(block.start, group.start+1, block.end-block.start+1, group.end-group.start+1).getValues();
-      values.forEach((row,offset)=>positions.forEach(position=>{
-        rowValues[block.index+offset][position]=row[indexes[position]-group.start];
-      }));
+      values.forEach((row,offset)=>{
+        const outputIndex=selectedRowIndex[String(block.start+offset)];
+        if (outputIndex === undefined) return;
+        positions.forEach(position=>{
+          rowValues[outputIndex][position]=row[indexes[position]-group.start];
+        });
+      });
     });
   });
   const projectedHeaders=indexes.map(index=>allHeaders[index]);
   return rowValues.map((row,index)=>rowObject_(projectedHeaders,row,rowNumbers[index]));
 }
 
-function sheetRowsProjectedAll_(sheet, fields, headers) {
-  if (!sheet || sheet.getLastRow() < 2) return [];
-  const lastRow=sheet.getLastRow(), lastColumn=sheet.getLastColumn();
+function sheetRowsProjectedAll_(sheet, fields, headers, knownLastRow, knownLastColumn) {
+  if (!sheet) return [];
+  const lastRow = knownLastRow || sheet.getLastRow();
+  if (lastRow < 2) return [];
+  const lastColumn = knownLastColumn || sheet.getLastColumn();
   const allHeaders=headers || sheet.getRange(1,1,1,lastColumn).getValues()[0].map(String);
   const rowNumbers=Array.from({length:lastRow-1},(_,index)=>index+2);
-  return sheetRowsProjected_(sheet,rowNumbers,fields,allHeaders);
+  return sheetRowsProjected_(sheet,rowNumbers,fields,allHeaders,lastColumn);
 }
 
 function sheetRowsMatchingValues_(sheet, keyField, wantedValues, fields) {
-  if (!sheet || sheet.getLastRow() < 2) return [];
+  if (!sheet) return [];
+  const lastRow = sheet.getLastRow();
+  if (lastRow < 2) return [];
   const wanted = Object.create(null);
   (wantedValues || []).forEach(value => {
     const key = String(value == null ? '' : value);
@@ -2699,7 +2777,6 @@ function sheetRowsMatchingValues_(sheet, keyField, wantedValues, fields) {
   });
   if (!Object.keys(wanted).length) return [];
 
-  const lastRow = sheet.getLastRow();
   const lastColumn = sheet.getLastColumn();
   if (lastColumn < 1) return [];
   const headers = sheet.getRange(1, 1, 1, lastColumn).getValues()[0].map(String);
@@ -2711,7 +2788,7 @@ function sheetRowsMatchingValues_(sheet, keyField, wantedValues, fields) {
   for (let i = 0; i < keys.length; i++) {
     if (wanted[String(keys[i][0] == null ? '' : keys[i][0])]) matchingRows.push(i + 2);
   }
-  return matchingRows.length ? sheetRowsProjected_(sheet, matchingRows, fields, headers) : [];
+  return matchingRows.length ? sheetRowsProjected_(sheet, matchingRows, fields, headers, lastColumn) : [];
 }
 
 function paymentStatusPriority_(status) {
@@ -6143,15 +6220,49 @@ function sheetMapByIdForValues_(sheet,idField,wantedValues,fields) {
 }
 function getActiveMasterItems_(masterKey, fields) {
   const def = PSB_MASTER_DEFINITIONS[masterKey];
-  const sheet = getDatabaseSpreadsheet_().getSheetByName(def.sheet);
-  if (!sheet || sheet.getLastRow() < 2) return [];
-  const headers = sheet.getRange(1,1,1,sheet.getLastColumn()).getValues()[0].map(String);
-  const selectedFields = Array.isArray(fields) && fields.length ? fields.concat(['isActive']) : null;
-  const rows = sheetRowsProjectedAll_(sheet, selectedFields, headers);
-  return rows.map(row=>{
-    const rowHeaders=Object.keys(row).filter(key=>key!=='rowNumber');
-    return masterObjectFromRow_(rowHeaders,rowHeaders.map(key=>row[key]),row.rowNumber);
-  }).filter(x=>x.isActive===true);
+  if (!def) return [];
+  let cache = null;
+  try { cache = CacheService.getScriptCache(); } catch (cacheInitError) {}
+  const cacheKey = 'PSB_MASTER_ACTIVE_V1_' + String(masterKey);
+  let items = null;
+  if (cache) {
+    try {
+      const cached = cache.get(cacheKey);
+      if (cached) {
+        const parsed = JSON.parse(cached);
+        if (Array.isArray(parsed)) items = parsed;
+      }
+    } catch (cacheReadError) {}
+  }
+
+  if (!items) {
+    const sheet = getDatabaseSpreadsheet_().getSheetByName(def.sheet);
+    if (!sheet) return [];
+    const lastRow = sheet.getLastRow();
+    if (lastRow < 2) return [];
+    const lastColumn = sheet.getLastColumn();
+    const headers = sheet.getRange(1,1,1,lastColumn).getValues()[0].map(String);
+    const rows = sheetRowsProjectedAll_(sheet, null, headers, lastRow, lastColumn);
+    items = rows.map(row=>masterObjectFromRow_(headers,headers.map(key=>row[key]),row.rowNumber))
+      .filter(item=>item.isActive===true);
+    if (cache) try { cache.put(cacheKey, JSON.stringify(items), 60); } catch (cacheWriteError) {}
+  }
+
+  const selectedFields = Array.isArray(fields) && fields.length
+    ? Array.from(new Set(fields.concat(['isActive'])))
+    : null;
+  if (!selectedFields) return items.map(item=>Object.assign({},item));
+  return items.map(item=>{
+    const projected = {rowNumber:item.rowNumber};
+    selectedFields.forEach(field=>{
+      if (Object.prototype.hasOwnProperty.call(item, field)) projected[field]=item[field];
+    });
+    return projected;
+  });
+}
+
+function invalidateActiveMasterItems_(masterKey) {
+  try { CacheService.getScriptCache().remove('PSB_MASTER_ACTIVE_V1_' + String(masterKey)); } catch (cacheError) {}
 }
 
 function findMasterItemById_(masterKey, idField, id) {
@@ -6213,7 +6324,37 @@ function findRowById_(sheet,idField,id) {
   }
   return null;
 }
-function findFirstBy_(sheet,field,value,preferPrimary) { if(!sheet||sheet.getLastRow()<2)return null; const h=sheet.getRange(1,1,1,sheet.getLastColumn()).getValues()[0].map(String), idx=h.indexOf(field), primary=h.indexOf('isPrimary'); if(idx<0)return null; const rows=sheet.getRange(2,1,sheet.getLastRow()-1,sheet.getLastColumn()).getValues(); let fallback=null; for(let i=0;i<rows.length;i++){if(String(rows[i][idx]||'')!==String(value))continue; const obj=rowObject_(h,rows[i],i+2); if(!fallback)fallback={rowNumber:i+2,object:obj}; if(preferPrimary&&primary>=0&&(rows[i][primary]===true||String(rows[i][primary]).toUpperCase()==='TRUE'))return {rowNumber:i+2,object:obj};} return fallback; }
+function findFirstBy_(sheet,field,value,preferPrimary) {
+  if (!sheet) return null;
+  const lastRow = sheet.getLastRow();
+  if (lastRow < 2) return null;
+  const lastColumn = sheet.getLastColumn();
+  const headers = sheet.getRange(1,1,1,lastColumn).getValues()[0].map(String);
+  const valueIndex = headers.indexOf(field);
+  const primaryIndex = headers.indexOf('isPrimary');
+  if (valueIndex < 0) return null;
+  const usePrimary = !!preferPrimary && primaryIndex >= 0;
+  const firstColumn = Math.min(valueIndex, usePrimary ? primaryIndex : valueIndex) + 1;
+  const lastNeededColumn = Math.max(valueIndex, usePrimary ? primaryIndex : valueIndex) + 1;
+  const values = sheet.getRange(2,firstColumn,lastRow-1,lastNeededColumn-firstColumn+1).getValues();
+  let fallbackRowNumber = 0;
+  let selectedRowNumber = 0;
+  for (let i=0;i<values.length;i++) {
+    const row = values[i];
+    if (String(row[valueIndex+1-firstColumn] || '') !== String(value)) continue;
+    const rowNumber = i + 2;
+    if (!fallbackRowNumber) fallbackRowNumber = rowNumber;
+    if (preferPrimary && primaryIndex >= 0 &&
+        (row[primaryIndex+1-firstColumn] === true || String(row[primaryIndex+1-firstColumn]).toUpperCase() === 'TRUE')) {
+      selectedRowNumber = rowNumber;
+      break;
+    }
+  }
+  const rowNumber = selectedRowNumber || fallbackRowNumber;
+  if (!rowNumber) return null;
+  const row = sheet.getRange(rowNumber,1,1,lastColumn).getValues()[0];
+  return {rowNumber:rowNumber,object:rowObject_(headers,row,rowNumber)};
+}
 function sheetMapById_(sheet,idField,fields) {
   const out=Object.create(null);
   if (!sheet || sheet.getLastRow() < 2) return out;
