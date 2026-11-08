@@ -116,6 +116,30 @@ assert.doesNotMatch(passwordChange.slice(passwordLockAt), /verifyPasswordForUser
 assert.match(passwordChange.slice(passwordLockAt),
   /String\(current\.status\)\.toUpperCase\(\) !== 'ACTIVE'/,
   'Password change must recheck active account status under lock');
+assert.match(passwordChange.slice(passwordLockAt),
+  /const confirmed = findUserById_\(current\.userId, true\)/,
+  'Password change must read the updated user row back before reporting success');
+assert.match(passwordChange.slice(passwordLockAt),
+  /confirmed\.passwordHash === hash && confirmed\.passwordSalt === salt/,
+  'Password change must confirm the new hash and salt persisted');
+assert.ok(passwordChange.indexOf('passwordPersisted') < passwordChange.indexOf('revokeOtherSessionsForUser_('),
+  'Password change must determine readback state before session revocation');
+assert.match(passwordChange, /revokeOtherSessionsForUser_\(current\.userId, String\(result\.sessionRow\.rowNumber\)\)/,
+  'Password change must preserve only the current session while revoking others');
+
+const resetPassword = fn('adminResetUserPassword');
+const resetLockAt = resetPassword.indexOf('lock.waitLock(20000)');
+assert.match(resetPassword.slice(resetLockAt),
+  /const confirmed = findUserById_\(target\.userId, true\)/,
+  'Admin password reset must read the updated user row back');
+assert.match(resetPassword.slice(resetLockAt),
+  /confirmed\.passwordHash === hash && confirmed\.passwordSalt === salt/,
+  'Admin password reset must confirm the new hash and salt persisted');
+assert.match(resetPassword.slice(resetLockAt),
+  /confirmed\.mustChangePassword === true/,
+  'Admin password reset must confirm the forced password-change flag');
+assert.ok(resetPassword.indexOf('passwordPersisted') < resetPassword.indexOf('revokeOtherSessionsForUser_('),
+  'Admin reset must determine readback state before revoking sessions');
 
 const cleanup = fn('cleanupPSBSessions_');
 assert.match(cleanup, /EXPIRED/);
