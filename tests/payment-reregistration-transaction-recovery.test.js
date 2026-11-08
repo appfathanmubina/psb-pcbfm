@@ -28,6 +28,10 @@ assert.match(submitPayment, /latestBillStatus==='PAID'/,
   'A bill paid during Drive upload must reject the late payment submission');
 assert.match(submitPayment, /latestBillStatus==='CANCELLED'/,
   'A bill cancelled during Drive upload must reject the late payment submission');
+assert.match(submitPayment, /if\(latestBillStatus==='PAID'\)\{discardUploadedProof\(\);return fail_/,
+  'A proof uploaded for a bill that became paid must be removed from Drive');
+assert.match(submitPayment, /if\(latestBillStatus==='CANCELLED'\)\{discardUploadedProof\(\);return fail_/,
+  'A proof uploaded for a bill that became cancelled must be removed from Drive');
 assert.match(submitPayment, /amount:latestBillAmount/,
   'Payment amount must use the current bill amount, not the stale pre-upload snapshot');
 assert.match(submitPayment, /bills\.getRange\(latestBill\.rowNumber,billStatusIdx\+1\)/,
