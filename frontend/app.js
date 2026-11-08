@@ -106,6 +106,34 @@ function processPopupEnsure(){let root=$('psbProcessPopup');if(root)return root;
 function processPopupUpdate(percent,title,detail,done){const root=processPopupEnsure(),bar=$('psbProcessBar'),pct=$('psbProcessPercent'),heading=$('psbProcessTitle'),copy=$('psbProcessDetail');root.classList.toggle('is-done',done===true);root.classList.toggle('is-error',done==='error');if(bar)bar.style.width=Math.max(0,Math.min(100,Number(percent)||0))+'%';if(pct)pct.textContent=Math.max(0,Math.min(100,Number(percent)||0))+'%';if(heading)heading.textContent=title||'Memproses...';if(copy)copy.textContent=detail||'';}
 function processBegin(label){if(!state.appInitialized)return false;const p=window.PSBProcessUI||(window.PSBProcessUI={count:0,timer:null,hideTimer:null,cycle:0,failed:false,message:''});if(p.count===0){p.failed=false;p.message='';}p.count++;p.cycle++;clearTimeout(p.hideTimer);clearTimeout(p.timer);processPopupUpdate(Math.max(15,Number($('psbProcessPercent')?.textContent?.replace('%',''))||15),label||'Memproses...','Menyiapkan permintaan...',false);const cycle=p.cycle;p.timer=setTimeout(()=>{if(p.count>0&&p.cycle===cycle)processPopupUpdate(68,label||'Memproses...','Permintaan telah dikirim. Menunggu konfirmasi server.',false);},450);return true;}
 function processEnd(result,error){const p=window.PSBProcessUI;if(!p||p.count<1)return;const failed=!!error||result?.success===false;if(failed){p.failed=true;p.message=error?.message||result?.message||'Server belum dapat menyelesaikan permintaan.';}p.count=Math.max(0,p.count-1);if(p.count>0)return;clearTimeout(p.timer);processPopupUpdate(100,p.failed?'Proses belum berhasil':'Proses selesai',p.message||(p.failed?'Server belum dapat menyelesaikan permintaan.':'Data berhasil diproses.'),p.failed?'error':true);p.hideTimer=setTimeout(()=>{if(p.count===0)$('psbProcessPopup')?.remove();},p.failed?2200:850);}
+function sessionCheckNotice(message,status='loading'){
+  let notice=$('sessionCheckNotice');
+  if(!notice){document.body.insertAdjacentHTML('beforeend','<div class="session-check-notice" id="sessionCheckNotice" role="status" aria-live="polite"><span class="session-check-spinner"></span><span class="session-check-copy"></span></div>');notice=$('sessionCheckNotice');}
+  clearTimeout(window.PSBSessionCheckNoticeTimer);
+  notice.className='session-check-notice '+(status==='loading'?'is-loading':status==='success'?'is-success':'is-error');
+  const copy=notice.querySelector('.session-check-copy');if(copy)copy.textContent=message;
+  if(status!=='loading')window.PSBSessionCheckNoticeTimer=setTimeout(()=>notice.remove(),2600);
+}
+async function openLogin(){
+  renderLogin();
+  $('app')?.querySelector('.login-wrap')?.classList.add('session-check-open');
+  sessionCheckNotice('Mohon tunggu sebentar. Sedang cek sesi . . .','loading');
+  const token=String(state.token||localStorage.getItem('psb_session')||'');
+  const checkId=state.sessionCheckId=Number(state.sessionCheckId||0)+1;
+  state.processSilentDepth=Number(state.processSilentDepth||0)+1;
+  try{
+    const result=await server('validateSession',token);
+    if(state.sessionCheckId!==checkId)return;
+    if(String(state.token||'')!==token){clearTimeout(window.PSBSessionCheckNoticeTimer);$('sessionCheckNotice')?.remove();return;}
+    if(result?.success){sessionCheckNotice('Sesi aktif. Silakan lanjutkan masuk.','success');}
+    else{
+      state.token='';state.user=null;localStorage.removeItem('psb_session');sessionStorage.removeItem('psb_current_page');
+      sessionCheckNotice('Sesi berakhir. Silakan masuk dengan akun Anda.','error');
+    }
+  }catch(error){
+    sessionCheckNotice('Sesi belum dapat diperiksa. Anda tetap dapat mencoba masuk.','error');
+  }finally{state.processSilentDepth=Math.max(0,Number(state.processSilentDepth||1)-1);}
+}
 function loading(show,text='Memproses...'){const t=$('loadingText');if(t)t.textContent=text;if(!state.appInitialized){$('loading').classList.toggle('hidden',!show);return;}if(show)processBegin(text);else processEnd({success:true,message:'Proses selesai.'});}
 async function refreshPublicConfig(){
   try{
@@ -296,7 +324,7 @@ function renderSessionRecovery(message){
 function renderPublicHome(message=''){
   const year=esc(state.config.ACTIVE_YEAR||'2027/2028');
   $('app').innerHTML=`<div class="public-wrap"><div class="public-shell">
-    <header class="public-top"><div class="logo">${appLogoMarkup()}</div><div class="public-brand"><h1>PSB Fathan Mubina</h1><p>Pendaftaran Santri Baru · ${year}</p></div><button class="public-login" onclick="renderLogin()">Masuk</button></header>
+    <header class="public-top"><div class="logo">${appLogoMarkup()}</div><div class="public-brand"><h1>PSB Fathan Mubina</h1><p>Pendaftaran Santri Baru · ${year}</p></div><button class="public-login" onclick="openLogin()">Masuk</button></header>
     ${message?showMessage(message,'info'):''}
     <section class="public-hero"><h2>PCB FATHAN MUBINA</h2><p>Portal Pendaftaran Santri Baru (PSB) Pesantren Ciawi Bogor Fathan Mubina. Langkah Awal Perjalanan Impian menjadi santri berilmu, berakhlaq dan berprestasi</p></section>
 
@@ -471,7 +499,7 @@ function openRegistrationEntry(){
   renderLogin('Silakan masuk terlebih dahulu untuk membuka Pendaftaran.');
 }
 function renderPublicInfo(title,desc){
-  $('app').innerHTML=`<div class="public-wrap"><div class="public-shell"><header class="public-top"><div class="logo">${appLogoMarkup()}</div><div class="public-brand"><h1>PSB Fathan Mubina</h1><p>${esc(state.config.ACTIVE_YEAR||'2027/2028')}</p></div><button class="public-login" onclick="renderLogin()">Masuk</button></header><section class="hero"><h2>${esc(title)}</h2><p>${esc(desc)}</p></section><button class="btn btn-secondary" onclick="renderPublicHome()">Kembali ke Beranda</button></div></div>`;
+  $('app').innerHTML=`<div class="public-wrap"><div class="public-shell"><header class="public-top"><div class="logo">${appLogoMarkup()}</div><div class="public-brand"><h1>PSB Fathan Mubina</h1><p>${esc(state.config.ACTIVE_YEAR||'2027/2028')}</p></div><button class="public-login" onclick="openLogin()">Masuk</button></header><section class="hero"><h2>${esc(title)}</h2><p>${esc(desc)}</p></section><button class="btn btn-secondary" onclick="renderPublicHome()">Kembali ke Beranda</button></div></div>`;
 }
 function renderLogin(error='',identifier=''){
   $('app').innerHTML=`<div class="login-wrap"><div class="login-card">
@@ -498,7 +526,7 @@ function renderRegisterWali(error=''){
       <div class="field"><label>Konfirmasi Password *</label><input id="regConfirmPassword" type="password" autocomplete="new-password" placeholder="Ulangi password" required></div>
       <button class="btn btn-primary" id="registerBtn">Daftar & Masuk</button>
     </form>
-    <div class="center" style="margin-top:14px"><button type="button" class="link-btn" onclick="renderLogin()">Sudah punya akun? Masuk</button></div>
+    <div class="center" style="margin-top:14px"><button type="button" class="link-btn" onclick="openLogin()">Sudah punya akun? Masuk</button></div>
   </div></div>`;
 }
 function toggleRegisterPassword(id,button){const i=$(id);i.type=i.type==='password'?'text':'password';button.textContent=i.type==='password'?'Lihat':'Sembunyikan'}
