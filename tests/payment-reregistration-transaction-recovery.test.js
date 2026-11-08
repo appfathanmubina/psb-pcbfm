@@ -50,6 +50,17 @@ assert.match(finalize, /if\(completedAtMissing\)rrSheet\.getRange\(rrFound\.rowN
 assert.match(finalize, /rrReadback\.object\.completedAt/,
   'Completion status and timestamp must both be confirmed after repair');
 
+assert.match(finalize, /const alreadyCompleted=rrCompleted&&regStatus==='COMPLETED'/,
+  'A fully committed re-registration must have a dedicated notification-recovery retry path');
+assert.match(finalize, /if\(!alreadyCompleted\)\{/,
+  'Already-completed retries must not re-run mutable prerequisite checks');
+assert.match(finalize, /notificationPayload=\{userId:String\(confirmedReg\.registration\.userId\|\|''\)/,
+  'Completion notification must be reconstructed from persisted registration data on every successful call');
+assert.match(finalize, /createNotificationOnce_\(notificationPayload\.userId,'Daftar Ulang Selesai'/,
+  'Re-registration completion notification retry must be idempotent');
+assert.match(finalize, /wasAlreadyCompleted\?'/,
+  'Idempotent completion retry must preserve its already-completed response semantics');
+
 const submitRegistration = section(
   'function submitRegistration(sessionToken, registrationId) {',
   '\nfunction ',
