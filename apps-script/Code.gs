@@ -2929,9 +2929,20 @@ function verifyPayment(sessionToken,payload){
     // The bill is the linked financial state. Confirm it before committing
     // PAYMENTS.status, so retries can safely finish an interrupted decision.
     const targetBillStatus=status==='VERIFIED'?'PAID':'UNPAID';
-    bills.getRange(br.rowNumber,billStatusIdx+1).setValue(targetBillStatus);
+    const currentBillStatus=String(br.object.status||'').toUpperCase();
+    let preservePaidBill=false;
+    if(status==='REJECTED'&&currentBillStatus==='PAID'){
+      // A rejected older proof may be retried after a newer proof for the
+      // same bill has already been verified. Never downgrade that paid bill.
+      const newerVerifiedPayment=sheetRowsMatchingValues_(sheet,'billId',[String(found.object.billId||'')])
+        .find(x=>String(x.paymentId||'')!==paymentId&&String(x.status||'').toUpperCase()==='VERIFIED');
+      if(!newerVerifiedPayment)return fail_('Tagihan sudah berstatus LUNAS. Penolakan pembayaran ini tidak dapat mengubah status tagihan yang sudah lunas.');
+      preservePaidBill=true;
+    }
+    if(!preservePaidBill)bills.getRange(br.rowNumber,billStatusIdx+1).setValue(targetBillStatus);
     const confirmedBill=findRowById_(bills,'billId',String(found.object.billId||''));
-    if(!confirmedBill||String(confirmedBill.object.status||'').toUpperCase()!==targetBillStatus){
+    const expectedBillStatus=preservePaidBill?'PAID':targetBillStatus;
+    if(!confirmedBill||String(confirmedBill.object.status||'').toUpperCase()!==expectedBillStatus){
       return fail_('Status tagihan belum berhasil disimpan. Keputusan pembayaran belum difinalisasi; silakan coba kembali.');
     }
 
@@ -3841,8 +3852,9 @@ function ensureReregistration_(registrationId, actorUserId, createBill) {
   if (createBill) {
     const paymentType = getActiveMasterItems_('MASTER_JENIS_PEMBAYARAN')
       .find(x => /daftar\s*ulang/i.test(String(x.name || '')));
+    const paymentAmount = Number(paymentType?.amount);
     const billSheet = ss.getSheetByName(PSB_SHEETS.BILLS);
-    if (!paymentType || !billSheet) return null;
+    if (!paymentType || !Number.isFinite(paymentAmount) || paymentAmount <= 0 || !billSheet) return null;
     const bill = ensureReregistrationBill_(found, actorUserId || 'SYSTEM');
     if (!bill) return null;
   }
@@ -3864,7 +3876,8 @@ function ensureReregistration_(registrationId, actorUserId, createBill) {
 function ensureReregistrationBill_(found, actorUserId) {
   const typeItems = getActiveMasterItems_('MASTER_JENIS_PEMBAYARAN');
   const type = typeItems.find(x => /daftar\s*ulang/i.test(String(x.name || '')));
-  if (!type) return null;
+  const amount = Number(type?.amount);
+  if (!type || !Number.isFinite(amount) || amount <= 0) return null;
   const billSheet = getDatabaseSpreadsheet_().getSheetByName(PSB_SHEETS.BILLS);
   if (!billSheet) return null;
   const rows = sheetRows_(billSheet);
@@ -3873,7 +3886,7 @@ function ensureReregistrationBill_(found, actorUserId) {
   const headers = billSheet.getRange(1,1,1,billSheet.getLastColumn()).getValues()[0].map(String);
   const now = new Date();
   const due = new Date(now.getTime() + 7 * 86400000);
-  const record = {billId:generateId_('BIL'),registrationId:String(found.registration.registrationId),paymentTypeId:type.paymentTypeId,amount:Number(type.amount || 0),dueDate:due,status:'UNPAID',createdAt:now,updatedAt:now};
+  const record = {billId:generateId_('BIL'),registrationId:String(found.registration.registrationId),paymentTypeId:type.paymentTypeId,amount:amount,dueDate:due,status:'UNPAID',createdAt:now,updatedAt:now};
   billSheet.appendRow(headers.map(h => record[h] == null ? '' : record[h]));
   try { writeAudit_(actorUserId || 'SYSTEM','CREATE','PAYMENT',record.billId,'',JSON.stringify(record),'Tagihan Daftar Ulang dibuat otomatis'); } catch(e) {}
   return record;
