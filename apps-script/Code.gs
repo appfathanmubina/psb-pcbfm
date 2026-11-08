@@ -5142,6 +5142,30 @@ function getDocumentPageData(sessionToken, registrationId) {
   return { success:true, registrations:registrations, documentData:documentData };
 }
 
+/**
+ * Mark previous active rows as REPLACED with one contiguous Sheets write.
+ * Unrelated rows in the span retain their existing status values. Readback
+ * verification detects a failed or ambiguous write without claiming atomicity.
+ */
+function replaceCurrentDocumentStatuses_(sheet, rowNumbers, statusColumn) {
+  const targets = Array.from(new Set((rowNumbers || []).map(Number)))
+    .filter(row => Number.isInteger(row) && row >= 2)
+    .sort((a,b) => a-b);
+  if (!targets.length) return true;
+  if (!sheet || !Number.isInteger(statusColumn) || statusColumn < 1) return false;
+
+  const firstRow = targets[0];
+  const lastRow = targets[targets.length - 1];
+  const range = sheet.getRange(firstRow, statusColumn, lastRow - firstRow + 1, 1);
+  const values = range.getValues();
+  targets.forEach(row => { values[row - firstRow][0] = 'REPLACED'; });
+  range.setValues(values);
+  SpreadsheetApp.flush();
+
+  const verified = range.getValues();
+  return targets.every(row => String(verified[row - firstRow][0] || '').toUpperCase() === 'REPLACED');
+}
+
 function uploadDocument(sessionToken, payload) {
   const actor = requireRole_(sessionToken, PSB_DOCUMENT_ACCESS_ROLES);
   assertOperationalMutation_(actor);
@@ -5151,6 +5175,11 @@ function uploadDocument(sessionToken, payload) {
   let uploadedFile = null;
   let documentRowWritten = false;
   let savedDocument = null;
+  let pendingDocumentId = '';
+  let pendingDocumentSheet = null;
+  let pendingStatusColumn = 0;
+  let oldDocumentRowNumbers = [];
+  let replacementStatusesVerified = false;
   let stage = 'VALIDATE_REQUEST';
 
   try {
@@ -5212,6 +5241,7 @@ function uploadDocument(sessionToken, payload) {
     stage = 'CHECK_DATABASE';
     const ss = getDatabaseSpreadsheet_();
     const sheet = ss.getSheetByName(PSB_SHEETS.DOCUMENTS);
+    pendingDocumentSheet = sheet;
     if (!sheet) return fail_('Sheet DOCUMENTS belum tersedia. Jalankan setup database terlebih dahulu.');
     if (sheet.getLastColumn() < 1) return fail_('Struktur Sheet DOCUMENTS belum tersedia. Jalankan pemeriksaan database.');
 
@@ -5265,10 +5295,12 @@ function uploadDocument(sessionToken, payload) {
     stage = 'WRITE_DOCUMENT_RECORD';
     const now = new Date();
     const documentId = generateId_('DOC');
+    pendingDocumentId = documentId;
     const rows = sheet.getLastRow() < 2 ? [] : sheet.getRange(2,1,sheet.getLastRow()-1,sheet.getLastColumn()).getValues();
     const regIdx = headers.indexOf('registrationId');
     const typeIdx = headers.indexOf('documentTypeId');
     const statusIdx = headers.indexOf('status');
+    pendingStatusColumn = statusIdx + 1;
     const oldDocuments = [];
     for (let i=0;i<rows.length;i++) {
       if (String(rows[i][regIdx] || '') === registrationId && String(rows[i][typeIdx] || '') === documentTypeId && String(rows[i][statusIdx] || '').toUpperCase() !== 'REPLACED') {
@@ -5293,6 +5325,7 @@ function uploadDocument(sessionToken, payload) {
 
     // Calculate the row before append so a later display-mapping failure cannot
     // make a committed upload look like a failed upload to the caller.
+    oldDocumentRowNumbers = oldDocuments.map(old => old.rowNumber);
     const savedRowNumber = sheet.getLastRow() + 1;
     const recordRow = safeSheetRow_(headers.map(h => record[h] !== undefined ? record[h] : ''));
     sheet.appendRow(recordRow);
@@ -5300,9 +5333,10 @@ function uploadDocument(sessionToken, payload) {
     savedDocument = rowObject_(headers, recordRow, savedRowNumber);
 
     stage = 'REPLACE_OLD_DOCUMENTS';
-    oldDocuments.forEach(old => {
-      if (statusIdx >= 0) sheet.getRange(old.rowNumber, statusIdx + 1).setValue('REPLACED');
-    });
+    if (oldDocumentRowNumbers.length) {
+      replacementStatusesVerified = replaceCurrentDocumentStatuses_(sheet, oldDocumentRowNumbers, statusIdx + 1);
+      if (!replacementStatusesVerified) throw new Error('Previous document status replacement could not be verified.');
+    }
 
     stage = 'WRITE_AUDIT';
     writeAudit_(actor.userId, 'UPLOAD', 'DOCUMENT', documentId, oldDocuments.length ? JSON.stringify(oldDocuments.map(x => x.object)) : '', JSON.stringify({documentId:documentId,registrationId:registrationId,documentTypeId:documentTypeId,fileId:fileId,fileName:storedFileName,mimeType:mimeType,fileSize:actualSize,status:'PENDING'}), 'Dokumen diunggah ke Google Drive');
@@ -5311,12 +5345,46 @@ function uploadDocument(sessionToken, payload) {
   } catch (e) {
     console.error('PSB_DOCUMENT_UPLOAD_FAILED stage=' + stage + ': ' + String(e && e.stack || e));
 
+    // appendRow can commit in Sheets and still throw before returning. Re-read
+    // by the pre-generated document ID before deciding whether the Drive file
+    // is safe to trash or the caller should retry.
+    if (!documentRowWritten && pendingDocumentId && pendingDocumentSheet) {
+      try {
+        const committed = findRowById_(pendingDocumentSheet, 'documentId', pendingDocumentId);
+        if (committed) {
+          documentRowWritten = true;
+          savedDocument = committed.object;
+          stage = 'RECONCILE_COMMITTED_DOCUMENT';
+          if (oldDocumentRowNumbers.length && pendingStatusColumn) {
+            replacementStatusesVerified = replaceCurrentDocumentStatuses_(
+              pendingDocumentSheet, oldDocumentRowNumbers, pendingStatusColumn);
+            if (!replacementStatusesVerified) {
+              console.error('PSB_DOCUMENT_REPLACEMENT_RECONCILIATION_REQUIRED documentId=' + pendingDocumentId);
+            }
+          }
+        }
+      } catch (recoveryError) {
+        console.error('PSB_DOCUMENT_UPLOAD_COMMIT_RECOVERY_FAILED: ' + String(recoveryError && recoveryError.message || recoveryError));
+      }
+    }
+
+    // If the document row committed but the batched replacement write failed
+    // or had an ambiguous readback, retry the idempotent status reconciliation.
+    if (documentRowWritten && stage === 'REPLACE_OLD_DOCUMENTS' && oldDocumentRowNumbers.length) {
+      try {
+        replacementStatusesVerified = replaceCurrentDocumentStatuses_(
+          pendingDocumentSheet, oldDocumentRowNumbers, pendingStatusColumn);
+      } catch (replacementRecoveryError) {
+        console.error('PSB_DOCUMENT_REPLACEMENT_RETRY_FAILED: ' + String(replacementRecoveryError && replacementRecoveryError.message || replacementRecoveryError));
+      }
+    }
+
     // Once the document row exists, do not tell the user to retry the upload:
     // that could create a duplicate file. Report the committed upload as success.
     if (documentRowWritten) {
       return {
         success:true,
-        message:stage === 'REPLACE_OLD_DOCUMENTS'
+        message:(stage === 'REPLACE_OLD_DOCUMENTS' || stage === 'RECONCILE_COMMITTED_DOCUMENT') && oldDocumentRowNumbers.length && !replacementStatusesVerified
           ? 'Dokumen berhasil diunggah. Status dokumen sebelumnya perlu diperiksa petugas.'
           : 'Dokumen berhasil diunggah.',
         document:savedDocument
