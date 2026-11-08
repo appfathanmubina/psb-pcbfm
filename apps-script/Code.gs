@@ -4088,9 +4088,10 @@ function ensureReregistrationBill_(found, actorUserId) {
   const now = new Date();
   const due = new Date(now.getTime() + 7 * 86400000);
   const record = {billId:generateId_('BIL'),registrationId:String(found.registration.registrationId),paymentTypeId:type.paymentTypeId,amount:amount,dueDate:due,status:'UNPAID',createdAt:now,updatedAt:now};
-  billSheet.appendRow(headers.map(h => record[h] == null ? '' : record[h]));
+  const confirmed=appendBillRecordWithRecovery_(billSheet,headers,record);
+  if(!confirmed)return null;
   try { writeAudit_(actorUserId || 'SYSTEM','CREATE','PAYMENT',record.billId,'',JSON.stringify(record),'Tagihan Daftar Ulang dibuat otomatis'); } catch(e) {}
-  return record;
+  return confirmed.object;
 }
 
 function findReregistrationBillPayment_(registrationId) {
