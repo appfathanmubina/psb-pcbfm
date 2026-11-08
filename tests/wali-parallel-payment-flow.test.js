@@ -35,12 +35,15 @@ const finalizeVerification = section(backend, 'function finalizeVerification(ses
 assert.match(finalizeVerification, /isFormPaymentVerified_\(registrationId\)/);
 
 const submitRegistration = section(backend, 'function submitRegistration(sessionToken, registrationId)', 'function validateRegistrationPayload_(payload, strict)');
-assert.match(submitRegistration, /KEUANGAN/);
+const registrationSubmissionNotifications = section(backend, 'function dispatchRegistrationSubmissionNotifications_(', 'function submitRegistration(sessionToken, registrationId)');
+assert.match(registrationSubmissionNotifications, /SUPERADMIN','ADMIN_PSB','KEUANGAN/);
+assert.match(registrationSubmissionNotifications, /notifyUsersByRolesOnce_/);
+assert.match(registrationSubmissionNotifications, /createNotificationOnce_/);
 assert.match(submitRegistration, /unggah bukti pembayaran terlebih dahulu/i);
 assert.match(submitRegistration, /Upload Dokumen akan aktif setelah pembayaran dikonfirmasi oleh Keuangan/i);
 assert.match(submitRegistration, /ensureFormBillForRegistration_/);
 assert.match(submitRegistration, /Tagihan formulir telah dibuat otomatis/);
-assert.match(submitRegistration, /Verifikasi PSB dimulai setelah pembayaran dikonfirmasi/i);
+assert.match(registrationSubmissionNotifications, /Verifikasi PSB dimulai setelah pembayaran dikonfirmasi/i);
 
 const verifyPayment = section(backend, 'function verifyPayment(sessionToken,payload)', 'function getSelectionPageData(sessionToken, registrationId)');
 assert.match(verifyPayment, /notifyUsersByRolesOnce_\(\['SUPERADMIN','ADMIN_PSB','VERIFIKATOR'\]/);

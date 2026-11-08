@@ -629,3 +629,22 @@ Branch: `fix/payment-submission-notification-recovery`
 - Duplicate retry is allowed only after the caller passes the existing bill access check and the persisted payment matches the same bill and registration. No second Drive proof file or payment row is created.
 - No Spreadsheet schema, production data, or Apps Script deployment changed.
 - Regression coverage is source-contract based. Apps Script staging/runtime, Drive failure injection, and concurrent retry validation remain required before production rollout.
+
+
+## Repair batch 24 — registration submission notification recovery
+
+Branch: `fix/registration-submission-notification-recovery`
+
+| ID | Finding | Change | Status |
+|---|---|---|---|
+| TXN-005 | `submitRegistration()` committed `SUBMITTED` and ensured the Formulir bill, but a retry on an already-submitted registration returned before reconstructing staff/Wali notifications. An audit write failure could also interrupt the normal path after the business state had already been committed. | Add a persisted-registration notification dispatcher with stable event key `REGISTRATION_SUBMISSION:<registrationId>`; run it after ScriptLock release for both new submission and already-submitted retry. Isolate staff fan-out and Wali delivery errors, verify the persisted status before success, and make post-commit audit logging best-effort. | Implemented; regression test added; CI pending |
+
+### Scope and safety
+
+- Staff notifications remain limited to SUPERADMIN, ADMIN_PSB, and KEUANGAN. The Wali notification goes only to the persisted registration owner.
+- Staff and Wali delivery use the same registration event identity, deduplicated per recipient by the existing event-key notification helper.
+- A retry first passes the existing role/ownership checks and confirms the existing Formulir bill; it does not create another registration or replace a valid bill.
+- Notifications are dispatched after ScriptLock release. A failure in staff fan-out does not prevent the Wali notification attempt, and vice versa.
+- Missing registration status column or an unconfirmed status write now returns a failure rather than falsely reporting a successful submission.
+- No Spreadsheet schema, production data, or Apps Script deployment changed.
+- Regression coverage is source-contract based. Apps Script staging/runtime and concurrent retry/failure-injection validation remain required before production rollout.
