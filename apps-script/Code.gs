@@ -2983,15 +2983,15 @@ function verifyPayment(sessionToken,payload){
     if(!verified||String(verified.object.status||'').toUpperCase()!==status)return fail_('Status pembayaran belum berhasil disimpan. Silakan coba kembali.');
     if(!wasAlreadyFinalized)writeAudit_(actor.userId,'PAYMENT_VERIFY','PAYMENT',paymentId,'',JSON.stringify({status,note}),'Pembayaran diverifikasi');
     const paymentType=findMasterItemById_('MASTER_JENIS_PEMBAYARAN','paymentTypeId',String(br.object.paymentTypeId||''));
-    if(!wasAlreadyFinalized)notificationPayload={registrationId:String(regFound.registration.registrationId),candidateName:String(regFound.candidate?.fullName||'Calon santri'),paymentLabel:String(paymentType?.name||'pembayaran'),status,note,reregistrationNotification};
+    notificationPayload={registrationId:String(regFound.registration.registrationId),userId:String(regFound.registration.userId||''),candidateName:String(regFound.candidate?.fullName||'Calon santri'),paymentLabel:String(paymentType?.name||'pembayaran'),status,note:String(confirmedHistory.note||''),reregistrationNotification,paymentCreatedAt:found.object.createdAt};
   }finally{lock.releaseLock();}
   if(notificationPayload){
     const p=notificationPayload;
-    if(p.reregistrationNotification?.userId){try{createNotification_(p.reregistrationNotification.userId,'Daftar Ulang Selesai','Dokumen dan pembayaran Daftar Ulang telah lengkap.','SUCCESS');}catch(notificationError){console.error('Reregistration completion notification failed: '+notificationError);}}
+    if(p.reregistrationNotification?.userId){try{createNotificationOnce_(p.reregistrationNotification.userId,'Daftar Ulang Selesai','Dokumen dan pembayaran Daftar Ulang telah lengkap untuk '+p.candidateName+'.','SUCCESS');}catch(notificationError){console.error('Reregistration completion notification failed: '+notificationError);}}
     if(p.status==='VERIFIED'&&/formulir/i.test(p.paymentLabel)){
-      try{notifyUsersByRoles_(['SUPERADMIN','ADMIN_PSB','VERIFIKATOR'],'Pembayaran Formulir Terkonfirmasi',p.candidateName+' telah melunasi biaya formulir. Pendaftaran siap masuk antrean verifikasi PSB.','INFO');}catch(notificationError){console.error('Verification queue notification failed: '+notificationError);}
+      try{notifyUsersByRolesOnce_(['SUPERADMIN','ADMIN_PSB','VERIFIKATOR'],'Pembayaran Formulir Terkonfirmasi',p.candidateName+' telah melunasi biaya formulir. Pendaftaran siap masuk antrean verifikasi PSB.','INFO');}catch(notificationError){console.error('Verification queue notification failed: '+notificationError);}
     }
-    try{notifyRegistrationOwner_(p.registrationId,'Pembayaran '+(p.status==='VERIFIED'?'Terverifikasi':'Ditolak'),p.status==='VERIFIED'?('Pembayaran '+p.paymentLabel+' telah terverifikasi.'):('Pembayaran '+p.paymentLabel+' ditolak.'+(p.note?' Catatan: '+p.note:'')),p.status==='VERIFIED'?'SUCCESS':'WARNING');}catch(notificationError){console.error('Payment owner notification failed after verification: '+notificationError);}
+    try{createNotificationOnce_(p.userId,'Pembayaran '+(p.status==='VERIFIED'?'Terverifikasi':'Ditolak'),p.status==='VERIFIED'?('Pembayaran '+p.paymentLabel+' untuk '+p.candidateName+' telah terverifikasi.'):('Pembayaran '+p.paymentLabel+' untuk '+p.candidateName+' ditolak.'+(p.note?' Catatan: '+p.note:'')),p.status==='VERIFIED'?'SUCCESS':'WARNING');}catch(notificationError){console.error('Payment owner notification failed after verification: '+notificationError);}
   }
   return {success:true,message:status==='VERIFIED'?'Pembayaran berhasil diverifikasi.':'Pembayaran ditolak dan dapat diunggah ulang.'};
 }
@@ -3681,6 +3681,22 @@ function createNotificationOnce_(userId,title,message,type){
   } finally { lock.releaseLock(); }
 }
 
+function notifyUsersByRolesOnce_(roles,title,message,type){
+  const wanted=Array.isArray(roles)?roles.map(x=>String(x||'').trim().toUpperCase()).filter(Boolean):[];
+  if(!wanted.length)return 0;
+  const sheet=getDatabaseSpreadsheet_().getSheetByName(PSB_SHEETS.USERS);
+  if(!sheet||sheet.getLastRow()<2)return 0;
+  const rows=sheetRows_(sheet); let count=0;
+  rows.forEach(u=>{
+    const userRoles=String(u.role||'').split(',').map(x=>x.trim().toUpperCase()).filter(Boolean);
+    const status=String(u.status||'ACTIVE').toUpperCase();
+    if(wanted.some(role=>userRoles.indexOf(role)>=0) && status!=='INACTIVE' && status!=='DISABLED'){
+      createNotificationOnce_(String(u.userId),title,message,type); count++;
+    }
+  });
+  return count;
+}
+
 function notifyUsersByRoles_(roles,title,message,type){
   const wanted=Array.isArray(roles)?roles.map(x=>String(x||'').trim().toUpperCase()).filter(Boolean):[];
   if(!wanted.length)return 0;
@@ -3861,7 +3877,7 @@ function openReregistration(sessionToken, registrationId) {
   const id = String(registrationId || '').trim();
   if (!id) return fail_('Pendaftaran wajib dipilih.');
   const lock=LockService.getScriptLock(); try { lock.waitLock(10000); } catch (lockError) { return fail_('Server sedang memproses permintaan lain. Silakan coba kembali beberapa saat lagi.'); }
-  let notificationUserId='', response;
+  let notificationPayload=null, response;
   try {
     const ss=getDatabaseSpreadsheet_();
     // Re-read ownership, published result, and workflow status only after
@@ -3902,10 +3918,10 @@ function openReregistration(sessionToken, registrationId) {
     } else if(!['REREGISTRATION','PAYMENT_VERIFIED','COMPLETED'].includes(latestStatus)) {
       return fail_('Status pendaftaran berubah dan tidak lagi memenuhi syarat membuka Daftar Ulang.');
     }
-    if(!current) notificationUserId=String(regNow.registration.userId||'');
+    notificationPayload={userId:String(regNow.registration.userId||''),candidateName:String(regNow.candidate?.fullName||'calon santri'),registrationNumber:String(regNow.registration.registrationNumber||'')};
     response={success:true,message:current?'Daftar ulang sudah terbuka dan tagihan telah dipastikan tersedia.':'Daftar ulang berhasil dibuka.',reregistration:rr,alreadyOpen:!!current};
   } finally { lock.releaseLock(); }
-  if(notificationUserId){try{createNotification_(notificationUserId,'Daftar Ulang Dibuka','Tahap Daftar Ulang sudah dibuka. Silakan lengkapi dokumen dan pembayaran daftar ulang.','SUCCESS');}catch(notificationError){console.error('Reregistration opened notification failed: '+notificationError);}}
+  if(notificationPayload?.userId){try{createNotificationOnce_(notificationPayload.userId,'Daftar Ulang Dibuka','Tahap Daftar Ulang untuk '+notificationPayload.candidateName+(notificationPayload.registrationNumber?' ('+notificationPayload.registrationNumber+')':'')+' sudah dibuka. Silakan lengkapi dokumen dan pembayaran daftar ulang.','SUCCESS');}catch(notificationError){console.error('Reregistration opened notification failed: '+notificationError);}}
   return response;
 }
 
@@ -3983,25 +3999,29 @@ function finalizeReregistration(sessionToken, registrationId) {
   const id = String(registrationId || '').trim();
   if (!id) return fail_('Pendaftaran wajib dipilih.');
   const lock=LockService.getScriptLock(); try { lock.waitLock(10000); } catch (lockError) { return fail_('Server sedang memproses permintaan lain. Silakan coba kembali beberapa saat lagi.'); }
-  let notificationPayload=null;
+  let notificationPayload=null, wasAlreadyCompleted=false;
   try {
     const ss=getDatabaseSpreadsheet_(), rrSheet=ss.getSheetByName(PSB_SHEETS.REREGISTRATIONS);
     const rrFound=findRowById_(rrSheet,'registrationId',id), regFound=findRegistration_(id);
     if(!rrFound||!regFound)return fail_('Data daftar ulang tidak ditemukan.');
     const rrCompleted=String(rrFound.object.status||'').toUpperCase()==='COMPLETED';
     const regStatus=String(regFound.registration.status||'').toUpperCase();
-    if(rrCompleted&&regStatus==='COMPLETED')return {success:true,message:'Daftar ulang sudah selesai.',status:'COMPLETED',alreadyCompleted:true};
-    // Permit retry when one sheet was committed before a previous attempt failed.
-    if(!['REREGISTRATION','PAYMENT_VERIFIED','COMPLETED'].includes(regStatus))return fail_('Pendaftaran belum berada pada tahap Daftar Ulang.');
+    const alreadyCompleted=rrCompleted&&regStatus==='COMPLETED';
+    wasAlreadyCompleted=alreadyCompleted;
+    // A fully committed completion may be retried solely to recover its notification.
+    if(!alreadyCompleted){
+      // Permit retry when one sheet was committed before a previous attempt failed.
+      if(!['REREGISTRATION','PAYMENT_VERIFIED','COMPLETED'].includes(regStatus))return fail_('Pendaftaran belum berada pada tahap Daftar Ulang.');
 
-    const docs=getCurrentDocuments_(id);
-    const required=getActiveMasterItems_('MASTER_DOKUMEN').filter(x=>x.required);
-    for(const t of required){
-      const d=docs.find(x=>String(x.documentTypeId)===String(t.documentTypeId));
-      if(!d||String(d.status||'').toUpperCase()!=='VERIFIED')return fail_('Dokumen wajib belum lengkap/terverifikasi: '+String(t.name||t.documentTypeId));
+      const docs=getCurrentDocuments_(id);
+      const required=getActiveMasterItems_('MASTER_DOKUMEN').filter(x=>x.required);
+      for(const t of required){
+        const d=docs.find(x=>String(x.documentTypeId)===String(t.documentTypeId));
+        if(!d||String(d.status||'').toUpperCase()!=='VERIFIED')return fail_('Dokumen wajib belum lengkap/terverifikasi: '+String(t.name||t.documentTypeId));
+      }
+      const payment=findReregistrationBillPayment_(id);
+      if(!payment||String(payment.status||'').toUpperCase()!=='PAID')return fail_('Pembayaran Daftar Ulang belum lunas.');
     }
-    const payment=findReregistrationBillPayment_(id);
-    if(!payment||String(payment.status||'').toUpperCase()!=='PAID')return fail_('Pembayaran Daftar Ulang belum lunas.');
 
     const now=new Date(), headers=rrSheet.getRange(1,1,1,rrSheet.getLastColumn()).getValues()[0].map(String);
     const statusIdx=headers.indexOf('status'), completedIdx=headers.indexOf('completedAt'), updatedIdx=headers.indexOf('updatedAt'), noteIdx=headers.indexOf('note');
@@ -4017,17 +4037,19 @@ function finalizeReregistration(sessionToken, registrationId) {
     const rrReadback=findRowById_(rrSheet,'registrationId',id);
     if(!rrReadback||String(rrReadback.object.status||'').toUpperCase()!=='COMPLETED'||!rrReadback.object.completedAt)return fail_('Status penyelesaian daftar ulang belum tersimpan. Silakan coba kembali.');
 
-    if(regStatus!=='COMPLETED'){
+    if(!alreadyCompleted && regStatus!=='COMPLETED'){
       const moved=setRegistrationStatus_(regFound.registration,'COMPLETED',actor.userId,'Daftar ulang selesai.');
       if(!moved?.success)return moved;
       const regCheck=findRegistration_(id);
       if(!regCheck||String(regCheck.registration.status||'').toUpperCase()!=='COMPLETED')return fail_('Status pendaftaran belum berhasil diperbarui. Silakan coba kembali.');
       writeAudit_(actor.userId,'REREGISTRATION','REREGISTRATION',String(rrFound.object.reregistrationId),'',JSON.stringify({status:'COMPLETED'}),'Daftar ulang diselesaikan');
-      notificationPayload={userId:String(regFound.registration.userId||''),candidateName:String(regFound.candidate?.fullName||'calon santri')};
     }
+    const confirmedRereg=findRowById_(rrSheet,'registrationId',id), confirmedReg=findRegistration_(id);
+    if(!confirmedRereg||String(confirmedRereg.object.status||'').toUpperCase()!=='COMPLETED'||!confirmedReg||String(confirmedReg.registration.status||'').toUpperCase()!=='COMPLETED')return fail_('Status penyelesaian Daftar Ulang belum konsisten. Silakan coba kembali.');
+    notificationPayload={userId:String(confirmedReg.registration.userId||''),candidateName:String(confirmedReg.candidate?.fullName||'calon santri')};
   } finally { lock.releaseLock(); }
-  if(notificationPayload?.userId){try{createNotification_(notificationPayload.userId,'Daftar Ulang Selesai','Proses daftar ulang untuk '+notificationPayload.candidateName+' telah selesai.','SUCCESS');}catch(notificationError){console.error('Reregistration completion notification failed: '+notificationError);}}
-  return {success:true,message:'Daftar ulang berhasil diselesaikan.',status:'COMPLETED'};
+  if(notificationPayload?.userId){try{createNotificationOnce_(notificationPayload.userId,'Daftar Ulang Selesai','Proses daftar ulang untuk '+notificationPayload.candidateName+' telah selesai.','SUCCESS');}catch(notificationError){console.error('Reregistration completion notification failed: '+notificationError);}}
+  return {success:true,message:wasAlreadyCompleted?'Daftar ulang sudah selesai.':'Daftar ulang berhasil diselesaikan.',status:'COMPLETED',alreadyCompleted:wasAlreadyCompleted};
 }
 function syncReregistrationAfterPayment_(registrationId, actorUserId, deferNotification, lockAlreadyHeld) {
   if(lockAlreadyHeld) return syncReregistrationAfterPaymentLocked_(registrationId,actorUserId,deferNotification);
@@ -4825,13 +4847,17 @@ function finalizeVerification(sessionToken, payload) {
   if(['VERIFIED','REVISION'].indexOf(decision)<0) return fail_('Keputusan verifikasi tidak valid.');
   const lock=LockService.getScriptLock();
   try { lock.waitLock(10000); } catch (lockError) { return fail_('Server sedang memproses permintaan lain. Silakan coba kembali beberapa saat lagi.'); }
-  let result;
+  let result, notificationUserId='', notificationCandidateName='calon santri';
   try {
     const found=findRegistration_(registrationId);
     if(!found) return fail_('Pendaftaran tidak ditemukan.');
-    if(['SUBMITTED','UNDER_REVIEW','REVISION'].indexOf(String(found.registration.status))<0) return fail_('Pendaftaran tidak berada pada status verifikasi.');
-    if(!isFormPaymentVerified_(registrationId)) return fail_('Verifikasi administrasi baru dapat diselesaikan setelah pembayaran formulir dikonfirmasi oleh bagian Keuangan.');
-    if(decision==='VERIFIED') {
+    notificationUserId=String(found.registration.userId||'');
+    notificationCandidateName=String(found.candidate?.fullName||'calon santri');
+    const currentStatus=String(found.registration.status||'').toUpperCase();
+    const alreadyFinalized=currentStatus===decision;
+    if(!alreadyFinalized && ['SUBMITTED','UNDER_REVIEW','REVISION'].indexOf(currentStatus)<0) return fail_('Pendaftaran sudah memiliki keputusan berbeda atau tidak berada pada status verifikasi.');
+    if(!alreadyFinalized && !isFormPaymentVerified_(registrationId)) return fail_('Verifikasi administrasi baru dapat diselesaikan setelah pembayaran formulir dikonfirmasi oleh bagian Keuangan.');
+    if(!alreadyFinalized && decision==='VERIFIED') {
       const docs=getCurrentDocuments_(registrationId);
       const required=getActiveMasterItems_('MASTER_DOKUMEN').filter(x=>x.required===true||String(x.required).toUpperCase()==='TRUE');
       for(const t of required){
@@ -4840,11 +4866,13 @@ function finalizeVerification(sessionToken, payload) {
         if(String(d.status||'').toUpperCase()!=='VERIFIED') return fail_('Dokumen wajib belum diverifikasi: '+String(t.name||t.documentTypeId));
       }
     }
-    result=setRegistrationStatus_(found.registration,decision,actor.userId,note||(decision==='VERIFIED'?'Pendaftaran terverifikasi':'Pendaftaran dikembalikan untuk perbaikan'));
+    result=alreadyFinalized
+      ? {success:true,message:decision==='VERIFIED'?'Pendaftaran berhasil diverifikasi.':'Pendaftaran dikembalikan untuk perbaikan.',status:decision,alreadyFinalized:true}
+      : setRegistrationStatus_(found.registration,decision,actor.userId,note||(decision==='VERIFIED'?'Pendaftaran terverifikasi':'Pendaftaran dikembalikan untuk perbaikan'));
   } finally { lock.releaseLock(); }
   if(result?.success){
     try {
-      notifyRegistrationOwner_(registrationId,decision==='VERIFIED'?'Pendaftaran Terverifikasi':'Pendaftaran Perlu Perbaikan',decision==='VERIFIED'?'Pendaftaran dan dokumen wajib telah terverifikasi. Silakan menunggu informasi jadwal tes dan seleksi.':'Pendaftaran dikembalikan untuk perbaikan.'+(note?' Catatan: '+note:''),decision==='VERIFIED'?'SUCCESS':'WARNING');
+      createNotificationOnce_(notificationUserId,decision==='VERIFIED'?'Pendaftaran Terverifikasi':'Pendaftaran Perlu Perbaikan',decision==='VERIFIED'?'Pendaftaran '+notificationCandidateName+' dan dokumen wajib telah terverifikasi. Silakan menunggu informasi jadwal tes dan seleksi.':'Pendaftaran '+notificationCandidateName+' dikembalikan untuk perbaikan.'+(note?' Catatan: '+note:''),decision==='VERIFIED'?'SUCCESS':'WARNING');
     } catch(notificationError) {
       // Registration status is already committed. A notification failure must
       // not turn a successful verification into an apparent failed request.
