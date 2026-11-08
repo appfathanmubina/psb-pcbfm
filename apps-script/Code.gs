@@ -5531,25 +5531,28 @@ function dispatchRegistrationSubmissionNotifications_(registrationId){
   const eventKey='REGISTRATION_SUBMISSION:'+String(found.registration.registrationId);
   const candidateName=String(found.candidate?.fullName||'calon santri');
   const registrationNumber=String(found.registration.registrationNumber||found.registration.registrationId);
-  notifyUsersByRolesOnce_(
-    ['SUPERADMIN','ADMIN_PSB','KEUANGAN'],
-    'Pendaftaran Baru — Verifikasi Pembayaran Formulir',
-    candidateName+' telah mengirim pendaftaran '+registrationNumber+'. Tagihan formulir telah dibuat otomatis. Silakan periksa bukti pembayaran dan verifikasi setelah Wali mengunggahnya.',
-    'INFO',
-    eventKey
-  );
-  if(found.registration.userId){
-    createNotificationOnce_(
-      String(found.registration.userId),
-      'Pendaftaran Berhasil Dikirim',
-      'Formulir berhasil dikirim dan tagihan pembayaran formulir telah tersedia. Silakan unggah bukti pembayaran melalui menu Pembayaran. Menu Upload Dokumen akan aktif setelah pembayaran dikonfirmasi oleh Keuangan. Verifikasi PSB dimulai setelah pembayaran dikonfirmasi oleh bagian Keuangan.',
-      'SUCCESS',
+  try{
+    notifyUsersByRolesOnce_(
+      ['SUPERADMIN','ADMIN_PSB','KEUANGAN'],
+      'Pendaftaran Baru — Verifikasi Pembayaran Formulir',
+      candidateName+' telah mengirim pendaftaran '+registrationNumber+'. Tagihan formulir telah dibuat otomatis. Silakan periksa bukti pembayaran dan verifikasi setelah Wali mengunggahnya.',
+      'INFO',
       eventKey
     );
+  }catch(staffNotificationError){console.error('Registration submission staff notification failed: '+String(staffNotificationError&&staffNotificationError.stack||staffNotificationError));}
+  if(found.registration.userId){
+    try{
+      createNotificationOnce_(
+        String(found.registration.userId),
+        'Pendaftaran Berhasil Dikirim',
+        'Formulir berhasil dikirim dan tagihan pembayaran formulir telah tersedia. Silakan unggah bukti pembayaran melalui menu Pembayaran. Menu Upload Dokumen akan aktif setelah pembayaran dikonfirmasi oleh Keuangan. Verifikasi PSB dimulai setelah pembayaran dikonfirmasi oleh bagian Keuangan.',
+        'SUCCESS',
+        eventKey
+      );
+    }catch(ownerNotificationError){console.error('Registration submission owner notification failed: '+String(ownerNotificationError&&ownerNotificationError.stack||ownerNotificationError));}
   }
   return true;
 }
-
 function submitRegistration(sessionToken, registrationId) {
   const actor = requireRole_(sessionToken, ['WALI','SUPERADMIN','ADMIN_PSB']);
   assertOperationalMutation_(actor);
