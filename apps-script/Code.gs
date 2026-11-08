@@ -2673,21 +2673,37 @@ function createBill(sessionToken,payload){
     const sheet=getDatabaseSpreadsheet_().getSheetByName(PSB_SHEETS.BILLS); if(!sheet) return fail_('Sheet BILLS belum tersedia.');
     const headers=sheet.getRange(1,1,1,sheet.getLastColumn()).getValues()[0].map(String);
     const rows=sheetRowsMatchingValues_(sheet,'registrationId',[registrationId]);
-    const dup=rows.some(r=>String(r.paymentTypeId)===paymentTypeId&&String(r.status)!=='CANCELLED');
-    if(dup) return fail_('Tagihan untuk jenis pembayaran ini sudah ada.');
+    const existing=rows.find(r=>String(r.paymentTypeId)===paymentTypeId&&String(r.status).toUpperCase()!=='CANCELLED');
+    if(existing){
+      const existingAmount=Number(existing.amount||0);
+      const existingDueDate=existing.dueDate instanceof Date
+        ? Utilities.formatDate(existing.dueDate,Session.getScriptTimeZone(),'yyyy-MM-dd')
+        : String(existing.dueDate||'').trim().slice(0,10);
+      if(existingAmount!==amount||existingDueDate!==dueDate){
+        return fail_('Tagihan untuk jenis pembayaran ini sudah ada dengan nominal atau jatuh tempo berbeda.');
+      }
+      return {success:true,message:'Tagihan yang sama sudah tersedia.',bill:JSON.parse(JSON.stringify(existing)) ,alreadyExists:true};
+    }
     const now=new Date(), billId=generateId_('BIL'), record={}; headers.forEach(h=>record[h]='');
     Object.assign(record,{billId,registrationId,paymentTypeId,amount,dueDate,status:'UNPAID',createdAt:now,updatedAt:now});
     sheet.appendRow(headers.map(h=>record[h]));
-    writeAudit_(actor.userId,'CREATE','PAYMENT',billId,'',JSON.stringify(record),'Tagihan pembayaran dibuat');
-    return {success:true,message:'Tagihan berhasil dibuat.',bill:JSON.parse(JSON.stringify(record))};
+    const confirmed=findRowById_(sheet,'billId',billId);
+    if(!confirmed)return fail_('Tagihan belum dapat dikonfirmasi tersimpan. Silakan ulangi permintaan.');
+    try{
+      writeAudit_(actor.userId,'CREATE','PAYMENT',billId,'',JSON.stringify(record),'Tagihan pembayaran dibuat');
+    }catch(auditError){
+      console.error('Bill creation audit failed after confirmed persistence: '+auditError);
+    }
+    return {success:true,message:'Tagihan berhasil dibuat.',bill:JSON.parse(JSON.stringify(confirmed.object))};
   });
   if(result?.success && /formulir/i.test(String(type.name||''))){
-    try{notifyRegistrationOwner_(registrationId,'Tagihan Formulir Telah Diterbitkan','Tagihan biaya formulir sebesar Rp '+amount.toLocaleString('id-ID')+' telah tersedia. Silakan buka menu Pembayaran untuk mengunggah bukti transfer. Menu Upload Dokumen akan aktif setelah pembayaran dikonfirmasi oleh Keuangan.','INFO');}
-    catch(notificationError){console.error('Bill notification failed after bill creation: '+notificationError);}
+    try{
+      const owner=found.registration.userId;
+      if(owner)createNotificationOnce_(String(owner),'Tagihan Formulir Telah Diterbitkan','Tagihan biaya formulir sebesar Rp '+amount.toLocaleString('id-ID')+' telah tersedia. Silakan buka menu Pembayaran untuk mengunggah bukti transfer. Menu Upload Dokumen akan aktif setelah pembayaran dikonfirmasi oleh Keuangan.','INFO','MANUAL_BILL_CREATED:'+String(result.bill.billId));
+    }catch(notificationError){console.error('Bill notification failed after bill creation: '+notificationError);}
   }
   return result;
 }
-
 
 function submitPayment(sessionToken,payload){
   const actor=requireRole_(sessionToken,['WALI','SUPERADMIN','ADMIN_PSB','KEUANGAN']);
