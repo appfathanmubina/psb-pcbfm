@@ -72,6 +72,7 @@ const context = {
   getDatabaseSpreadsheet_: () => ({ getSheetByName: name => name }),
   getConfig_: () => '2027/2028',
   sheetRows_: name => fixtures[name] || [],
+  sheetRowsProjectedAll_: (name, fields) => (fixtures[name] || []).map(row => Object.fromEntries((fields || Object.keys(row)).map(key => [key, row[key]]))),
   sheetRowsMatchingValues_: (name, field, values) => {
     const wanted = new Set((values || []).map(value => String(value || '')));
     return (fixtures[name] || []).filter(row => wanted.has(String(row[field] || ''))).map(row => Object.assign({}, row));

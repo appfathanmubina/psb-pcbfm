@@ -108,6 +108,8 @@ jobs:
         run: node tests/dashboard-performance.test.js
       - name: Test dashboard role-scoped operational queue safeguards
         run: node tests/backend-dashboard-role-scope.test.js
+      - name: Test Dashboard and Wali narrow data projections
+        run: node tests/dashboard-wali-projection.test.js
       - name: Test backend batch-read optimization safeguards
         run: node tests/backend-read-optimization.test.js
       - name: Test document page and verification queue performance safeguards
