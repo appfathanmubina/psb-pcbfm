@@ -21,6 +21,8 @@ assert.doesNotMatch(dashboard, /sheetRows_\(/,
 
 assert.match(wali, /requireRole_\(sessionToken, \['WALI'\]\)/,
   'Wali ownership authorization must remain first');
+assert.match(wali, /sheetRowsMatchingValues_\(regSheet, 'userId', \[actor\.userId\], \['registrationId','candidateId','tahunAjaranId','registrationNumber','status'\]\)/,
+  'Wali registration lookup must return only fields used by the home response');
 assert.match(wali, /\['registrationId','status','createdAt','paymentTypeId','billId','amount'\]/);
 assert.match(wali, /\['registrationId','status','uploadedAt','documentTypeId'\]/);
 assert.match(wali, /getActiveMasterItems_\('MASTER_DOKUMEN', \['documentTypeId','required'\]\)/);
