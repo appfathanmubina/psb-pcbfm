@@ -650,13 +650,48 @@ function getDataIntegrityReport(sessionToken) {
     const targetSet=getSet(target,targetField); const bad=rowsBy(sheet).filter(r=>{const v=String(r[field]||'').trim();return v && !targetSet[v];});
     orphan+=bad.length; add('ref_'+sheet+'_'+field, sheet+'.'+field+' → '+target+'.'+targetField,bad.length?'ERROR':'OK',bad.length?bad.length+' baris memiliki referensi yang tidak ditemukan.':'Semua referensi valid.','References');
   });
-  const duplicateSpecs=[['USERS','userId'],['REGISTRATIONS','registrationId'],['CANDIDATES','candidateId'],['DOCUMENTS','documentId'],['BILLS','billId'],['PAYMENTS','paymentId']];
+  // Cover every persisted primary identifier, not only the original core tables.
+  const duplicateSpecs=[
+    ['CONFIG','key'],['USERS','userId'],['SESSIONS','sessionId'],['AUDIT_LOG','auditId'],['NOTIFICATIONS','notificationId'],
+    ['MASTER_TAHUN_AJARAN','tahunAjaranId'],['MASTER_GELOMBANG','gelombangId'],['MASTER_JENJANG','jenjangId'],
+    ['MASTER_KELAS','kelasId'],['MASTER_DOKUMEN','documentTypeId'],['MASTER_JENIS_PEMBAYARAN','paymentTypeId'],
+    ['REGISTRATIONS','registrationId'],['CANDIDATES','candidateId'],['GUARDIANS','guardianId'],['ADDRESSES','addressId'],
+    ['SCHOOLS','schoolId'],['DOCUMENTS','documentId'],['BILLS','billId'],['PAYMENTS','paymentId'],
+    ['PAYMENT_VERIFICATIONS','verificationId'],['SELECTION_SCHEDULE','scheduleId'],['SELECTION_PARTICIPANTS','participantId'],
+    ['SELECTION_SCORES','scoreId'],['SELECTION_RESULTS','resultId'],['REREGISTRATIONS','reregistrationId'],
+    ['INCIDENTS','incidentId'],['MIGRATION_LOG','migrationId']
+  ];
   let dup=0;
-  duplicateSpecs.forEach(([sheet,field])=>{const seen={};rowsBy(sheet).forEach(r=>{const v=String(r[field]||'').trim();if(v)seen[v]=(seen[v]||0)+1;});const bad=Object.keys(seen).filter(k=>seen[k]>1);dup+=bad.length;add('dup_'+sheet,sheet+'.'+field,bad.length?'ERROR':'OK',bad.length?'Duplikasi: '+bad.slice(0,8).join(', '):'Tidak ada ID duplikat.','Identifiers');});
+  duplicateSpecs.forEach(([sheet,field])=>{
+    const key='dup_'+sheet+'_'+field;
+    if(!exists(sheet)){add(key,sheet+'.'+field,'WARNING','Sheet belum tersedia; pemeriksaan duplikasi dilewati.','Identifiers');return;}
+    const seen={};rowsBy(sheet).forEach(r=>{const v=String(r[field]||'').trim();if(v)seen[v]=(seen[v]||0)+1;});
+    const bad=Object.keys(seen).filter(k=>seen[k]>1);dup+=bad.length;
+    add(key,sheet+'.'+field,bad.length?'ERROR':'OK',bad.length?'Duplikasi: '+bad.slice(0,8).join(', '):'Tidak ada ID duplikat.','Identifiers');
+  });
+
+  // Business keys protect one-to-one workflow relationships even when row IDs differ.
+  const businessUniqueSpecs=[
+    {key:'unique_registration_number',label:'REGISTRATIONS.registrationNumber',sheet:'REGISTRATIONS',getKey:r=>String(r.registrationNumber||'').trim()},
+    {key:'unique_active_bill_type',label:'BILLS.registrationId + paymentTypeId (non-CANCELLED)',sheet:'BILLS',getKey:r=>{const registrationId=String(r.registrationId||'').trim(),paymentTypeId=String(r.paymentTypeId||'').trim();return String(r.status||'').toUpperCase()==='CANCELLED'||!registrationId||!paymentTypeId?'':[registrationId,paymentTypeId].join('|');}},
+    {key:'unique_active_payment_per_bill',label:'PAYMENTS.billId (SUBMITTED/VERIFIED)',sheet:'PAYMENTS',getKey:r=>['SUBMITTED','VERIFIED'].includes(String(r.status||'').toUpperCase())?String(r.billId||'').trim():''},
+    {key:'unique_payment_verification',label:'PAYMENT_VERIFICATIONS.paymentId',sheet:'PAYMENT_VERIFICATIONS',getKey:r=>String(r.paymentId||'').trim()},
+    {key:'unique_current_document_type',label:'DOCUMENTS.registrationId + documentTypeId (non-REPLACED)',sheet:'DOCUMENTS',getKey:r=>{const registrationId=String(r.registrationId||'').trim(),documentTypeId=String(r.documentTypeId||'').trim();return String(r.status||'').toUpperCase()==='REPLACED'||!registrationId||!documentTypeId?'':[registrationId,documentTypeId].join('|');}},
+    {key:'unique_selection_participant',label:'SELECTION_PARTICIPANTS.registrationId',sheet:'SELECTION_PARTICIPANTS',getKey:r=>String(r.registrationId||'').trim()},
+    {key:'unique_selection_score_component',label:'SELECTION_SCORES.participantId + component',sheet:'SELECTION_SCORES',getKey:r=>{const participantId=String(r.participantId||'').trim(),component=String(r.component||'').trim().toLowerCase();return participantId&&component?[participantId,component].join('|'):'';}},
+    {key:'unique_selection_result',label:'SELECTION_RESULTS.registrationId',sheet:'SELECTION_RESULTS',getKey:r=>String(r.registrationId||'').trim()},
+    {key:'unique_reregistration',label:'REREGISTRATIONS.registrationId',sheet:'REREGISTRATIONS',getKey:r=>String(r.registrationId||'').trim()}
+  ];
+  businessUniqueSpecs.forEach(spec=>{
+    if(!exists(spec.sheet)){add(spec.key,spec.label,'WARNING','Sheet belum tersedia; pemeriksaan relasi unik dilewati.','Business Keys');return;}
+    const seen={};rowsBy(spec.sheet).forEach(r=>{const v=spec.getKey(r);if(v)seen[v]=(seen[v]||0)+1;});
+    const bad=Object.keys(seen).filter(k=>seen[k]>1);dup+=bad.length;
+    add(spec.key,spec.label,bad.length?'ERROR':'OK',bad.length?'Duplikasi: '+bad.slice(0,8).join(', '):'Tidak ada duplikasi relasi.','Business Keys');
+  });
   const testTokens=['TEST-','example.test']; let testRows=0; Object.keys(PSB_SHEETS).forEach(k=>{const name=PSB_SHEETS[k];rowsBy(name).forEach(r=>{const joined=Object.keys(r).map(x=>String(r[x]||'')).join('|');if(testTokens.some(t=>joined.indexOf(t)>=0))testRows++;});});
   add('testData','Dummy/test indicators',testRows?'WARNING':'OK',testRows?testRows+' baris terindikasi sebagai data test/dummy.':'Tidak ditemukan indikator TEST-/example.test.','Production');
   add('orphanSummary','Total orphan references',orphan?'ERROR':'OK',orphan?orphan+' referensi orphan ditemukan.':'Tidak ada orphan reference.','Summary');
-  add('duplicateSummary','Total kelompok ID duplikat',dup?'ERROR':'OK',dup?dup+' kelompok ID duplikat ditemukan.':'Tidak ada kelompok ID duplikat.','Summary');
+  add('duplicateSummary','Total kelompok duplikasi identifier/relasi',dup?'ERROR':'OK',dup?dup+' kelompok duplikasi identifier/relasi ditemukan.':'Tidak ada kelompok duplikasi identifier/relasi.','Summary');
   const errors=checks.filter(x=>x.status==='ERROR').length, warnings=checks.filter(x=>x.status==='WARNING').length;
   const result={success:true,checks,summary:{total:checks.length,errors,warnings,ok:checks.length-errors-warnings},productionReady:errors===0,checkedAt:new Date().toISOString()};
   writeAudit_(actor.userId,'DATA_INTEGRITY_CHECK','SYSTEM','', '', JSON.stringify({errors,warnings,orphan,dup}), 'Pemeriksaan integritas data produksi dijalankan');
