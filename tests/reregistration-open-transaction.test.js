@@ -32,7 +32,7 @@ assert.match(open, /const confirmed=findRegistration_\(id\)/,
 assert.match(open, /finally \{ lock\.releaseLock\(\); \}/,
   'Opening re-registration must always release ScriptLock');
 
-const amountGuard = open.indexOf('reregistrationAmount=Number(reregistrationType?.amount)');
+const amountGuard = open.indexOf('reregistrationAmount=Number(reregistrationType.amount)');
 assert.ok(amountGuard > lock,
   'Re-registration fee must be validated inside the transaction lock');
 assert.match(open, /!Number\.isFinite\(reregistrationAmount\)\|\|reregistrationAmount<=0/,
