@@ -2566,6 +2566,11 @@ function submitPayment(sessionToken,payload){
   let paymentRowWritten=false;
   let savedPayment=null;
   let stage='VALIDATE_REQUEST';
+  const discardUploadedProof=()=>{
+    if(!uploadedFile)return;
+    try{uploadedFile.setTrashed(true);uploadedFile=null;}
+    catch(cleanupError){console.error('PSB_PAYMENT_UPLOAD_CLEANUP_FAILED: '+String(cleanupError&&cleanupError.message||cleanupError));}
+  };
 
   try {
     payload=payload||{};
@@ -2659,13 +2664,13 @@ function submitPayment(sessionToken,payload){
     // Re-read its durable state under the commit lock; never commit against the
     // stale pre-upload snapshot.
     const latestBill=findRowById_(bills,'billId',billId);
-    if(!latestBill) return fail_('Tagihan tidak ditemukan saat penyimpanan bukti pembayaran.');
-    if(String(latestBill.object.registrationId||'')!==String(br.object.registrationId||'')) return fail_('Relasi tagihan dan pendaftaran berubah. Bukti pembayaran tidak disimpan.');
+    if(!latestBill){discardUploadedProof();return fail_('Tagihan tidak ditemukan saat penyimpanan bukti pembayaran.');}
+    if(String(latestBill.object.registrationId||'')!==String(br.object.registrationId||'')){discardUploadedProof();return fail_('Relasi tagihan dan pendaftaran berubah. Bukti pembayaran tidak disimpan.');}
     const latestBillStatus=String(latestBill.object.status||'').toUpperCase();
-    if(latestBillStatus==='PAID') return fail_('Tagihan ini sudah lunas.');
-    if(latestBillStatus==='CANCELLED') return fail_('Tagihan ini sudah dibatalkan dan tidak dapat dibayar.');
+    if(latestBillStatus==='PAID'){discardUploadedProof();return fail_('Tagihan ini sudah lunas.');}
+    if(latestBillStatus==='CANCELLED'){discardUploadedProof();return fail_('Tagihan ini sudah dibatalkan dan tidak dapat dibayar.');}
     const latestBillAmount=Number(latestBill.object.amount);
-    if(!Number.isFinite(latestBillAmount)||latestBillAmount<=0) return fail_('Nominal tagihan sudah berubah atau tidak valid. Hubungi petugas PSB.');
+    if(!Number.isFinite(latestBillAmount)||latestBillAmount<=0){discardUploadedProof();return fail_('Nominal tagihan sudah berubah atau tidak valid. Hubungi petugas PSB.');}
     const latestRows=sheetRowsMatchingValues_(paymentSheet,'billId',[billId]);
     if(latestRows.some(r=>['SUBMITTED','VERIFIED'].indexOf(String(r.status||'').toUpperCase())>=0)) {
       lock.releaseLock();
