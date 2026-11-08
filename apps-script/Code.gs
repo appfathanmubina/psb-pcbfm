@@ -519,7 +519,7 @@ function validateSession(sessionToken) {
 function logout(sessionToken) {
   const result = getSessionUser_(sessionToken, false);
   if (!result.success) return { success: true };
-  invalidateSession_(result.sessionRow, 'LOGOUT');
+  if(!invalidateSession_(result.sessionRow, 'LOGOUT'))return fail_('Sesi belum berhasil diakhiri. Silakan coba kembali.');
   writeAudit_(result.user.userId, 'LOGOUT', 'AUTH', result.user.userId, '', '', 'Logout berhasil');
   return { success: true };
 }
@@ -992,8 +992,12 @@ function invalidateSession_(found, status) {
     const current=sheet.getRange(found.rowNumber,1,1,7).getValues()[0];
     const expectedHash=String((found.row||[])[2]||'');
     if(expectedHash && !constantTimeEqual_(String(current[2]||''),expectedHash))return false;
-    // Never overwrite a terminal status written by logout, reset, or cleanup.
-    if(String(current[6]||'').toUpperCase()!=='ACTIVE')return false;
+    // A concurrent logout/reset/cleanup may already have ended this session.
+    // Treat that as success, but never overwrite its more specific terminal state.
+    if(String(current[6]||'').toUpperCase()!=='ACTIVE'){
+      try{const tokenHash=String(current[2]||'');if(tokenHash)CacheService.getScriptCache().remove('PSB_SESSION_ROW_V1_'+tokenHash.substring(0,40));}catch(e){}
+      return true;
+    }
     sheet.getRange(found.rowNumber,7).setValue(status || 'REVOKED');
     try {
       const tokenHash=String(current[2]||'');
