@@ -998,6 +998,27 @@ function invalidateSession_(found, status) {
       try{const tokenHash=String(current[2]||'');if(tokenHash)CacheService.getScriptCache().remove('PSB_SESSION_ROW_V1_'+tokenHash.substring(0,40));}catch(e){}
       return true;
     }
+    // A stale validation snapshot must not expire a session that another
+    // request refreshed while this invalidation waited for the lock.
+    const now=new Date(), reason=String(status||'REVOKED').toUpperCase();
+    if(reason==='INVALID_EXPIRY'){
+      const expires=current[4]?new Date(current[4]):null;
+      if(expires && Number.isFinite(expires.getTime()))return true;
+    } else if(reason==='EXPIRED'){
+      const expires=current[4]?new Date(current[4]):null;
+      if(expires && Number.isFinite(expires.getTime()) && expires>now)return true;
+    } else if(reason==='INVALID_ACTIVITY'){
+      const activity=current[5]?new Date(current[5]):(current[3]?new Date(current[3]):null);
+      if(activity && Number.isFinite(activity.getTime()) && activity.getTime()<=now.getTime()+5*60000)return true;
+    } else if(reason==='IDLE_TIMEOUT'){
+      const activity=current[5]?new Date(current[5]):(current[3]?new Date(current[3]):null);
+      const idleMinutes=Number(getConfig_('SESSION_IDLE_MINUTES'))||PSB_AUTH.SESSION_IDLE_MINUTES;
+      if(activity && Number.isFinite(activity.getTime()) && activity.getTime()<=now.getTime()+5*60000 &&
+          (now.getTime()-activity.getTime())<=idleMinutes*60000)return true;
+    } else if(reason==='ACCOUNT_INACTIVE'){
+      const user=findUserById_(String(current[1]||''),true);
+      if(user && String(user.status).toUpperCase()==='ACTIVE')return true;
+    }
     sheet.getRange(found.rowNumber,7).setValue(status || 'REVOKED');
     try {
       const tokenHash=String(current[2]||'');
