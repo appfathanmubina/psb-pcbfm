@@ -9,9 +9,14 @@ const start = backend.indexOf('function createBill(sessionToken,payload){');
 const end = backend.indexOf('\n\nfunction submitPayment(sessionToken,payload){', start);
 assert.ok(start >= 0 && end > start, 'Manual bill creation function must exist');
 const source = backend.slice(start, end);
+const helperStart = backend.indexOf('function appendBillRecordWithRecovery_(sheet, headers, record) {');
+const helperEnd = backend.indexOf('\\nfunction ensureFormBillForRegistration_', helperStart);
+assert.ok(helperStart >= 0 && helperEnd > helperStart, 'Bill persistence recovery helper must exist');
+const helperSource = backend.slice(helperStart, helperEnd);
 
 const headers = ['billId','registrationId','paymentTypeId','amount','dueDate','status','createdAt','updatedAt'];
 const rows = [];
+let throwAfterAppend = true;
 const sheet = {
   getLastRow() { return rows.length + 1; },
   getLastColumn() { return headers.length; },
@@ -24,7 +29,13 @@ const sheet = {
       }
     };
   },
-  appendRow(values) { rows.push(values.slice()); }
+  appendRow(values) {
+    rows.push(values.slice());
+    if (throwAfterAppend) {
+      throwAfterAppend = false;
+      throw new Error('simulated lost response after bill row commit');
+    }
+  }
 };
 function objectFrom(values, rowNumber) {
   return Object.assign({ _rowNumber: rowNumber }, Object.fromEntries(headers.map((h, i) => [h, values[i]])));
@@ -43,6 +54,7 @@ let id = 0;
 const notifications = new Map();
 const notificationCalls = [];
 const sandbox = {
+  SpreadsheetApp: { flush() {} },
   PSB_SHEETS: { BILLS: 'BILLS' },
   requireRole_: () => ({ userId: 'admin-1' }),
   assertOperationalMutation_: () => {},
@@ -64,7 +76,7 @@ const sandbox = {
   Session: { getScriptTimeZone: () => 'Asia/Jakarta' },
   console: { error() {} }
 };
-vm.runInNewContext(source, sandbox, { timeout: 1000 });
+vm.runInNewContext(helperSource + '\\n' + source, sandbox, { timeout: 1000 });
 const createBill = sandbox.createBill;
 const payload = { registrationId: 'REG-1', paymentTypeId: 'TYPE-FORM', amount: 250000, dueDate: '2027-01-15' };
 
