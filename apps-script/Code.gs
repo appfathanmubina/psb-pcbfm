@@ -2799,7 +2799,7 @@ function buildPaymentData_(registrationId, paymentTypes) {
   const ss=getDatabaseSpreadsheet_();
   const billsSheet=ss.getSheetByName(PSB_SHEETS.BILLS), paymentsSheet=ss.getSheetByName(PSB_SHEETS.PAYMENTS);
   const bills=sheetRowsMatchingValues_(billsSheet,'registrationId',[registrationId]);
-  const payments=sheetRowsMatchingValues_(paymentsSheet,'registrationId',[registrationId]);
+  const payments=sheetRowsMatchingValues_(paymentsSheet,'billId',bills.map(x=>String(x.billId||'')).filter(Boolean));
   const types={}; (paymentTypes || getActiveMasterItems_('MASTER_JENIS_PEMBAYARAN')).forEach(x=>types[String(x.paymentTypeId)]=x);
   const paymentLedger=reconcilePaymentLedger_(bills,payments);
   const paymentByBill={}; payments.forEach(x=>{const key=String(x.billId);paymentByBill[key]=preferredPaymentForBill_(paymentByBill[key],x);});
@@ -4467,7 +4467,7 @@ function getDashboardPageData(sessionToken) {
     periodRegMap[id] = x;
   });
   const periodBills = bills.filter(x => periodRegIds[String(x.registrationId)]);
-  const periodPayments = payments.filter(x => periodRegIds[String(x.registrationId)]);
+  const periodPayments = payments;
   // Index pembayaran terbaru sekali; hindari filter + sort ulang untuk setiap tagihan.
   const latestPaymentByBill = {};
   periodPayments.forEach(payment => {
@@ -6044,7 +6044,7 @@ function getRegistrationPaymentDocumentStatusMap_(items) {
   (items||[]).forEach(x=>{const id=String(x.registrationId||'');if(id)ids[id]=true;});
   if(!Object.keys(ids).length)return Object.create(null);
   const formTypeIds=Object.create(null);
-  getActiveMasterItems_('MASTER_JENIS_PEMBAYARAN').forEach(x=>{if(/formulir/i.test(String(x.name||'')))formTypeIds[String(x.paymentTypeId)]=true;});
+  sheetRows_(ss.getSheetByName(PSB_SHEETS.MASTER_JENIS_PEMBAYARAN)).forEach(x=>{if(/formulir/i.test(String(x.name||'')))formTypeIds[String(x.paymentTypeId)]=true;});
 
   // Select the newest eligible form bill per registration in one pass.
   // Strictly-greater comparison preserves the first sheet row on equal timestamps,
