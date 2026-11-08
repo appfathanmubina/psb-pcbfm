@@ -284,42 +284,12 @@ function scheduleWarmNavigationData(){
   }
 }
 async function boot(){
-  // Render the public landing page immediately. Bridge preparation, public
-  // configuration refresh, and saved-session validation continue in background.
+  // Never restore or validate a saved session during the public first-page load.
   renderPublicHome();
   if(window.PSBBridge&&typeof window.PSBBridge.prepare==='function'){
     window.PSBBridge.prepare().catch(error=>console.warn('PSB bridge warm-up skipped:',error));
   }
-  const hadStoredSession=!!state.token;
-  const configTask=refreshPublicConfig();
-  try{
-    if(hadStoredSession){
-      const session=await server('validateSession',state.token);
-      if(session?.success){
-        state.user=session.user;
-        const savedPage=sessionStorage.getItem('psb_current_page')||'home';
-        initializeAfterLogin();
-        // Hindari renderHome ganda saat sesi dipulihkan pada halaman selain Beranda.
-        renderApp({deferInitialPage:true});
-        await goPage(savedPage);
-      }else{
-        state.token='';
-        localStorage.removeItem('psb_session');
-        sessionStorage.removeItem('psb_current_page');
-        renderPublicHome('Sesi sebelumnya sudah berakhir. Silakan masuk kembali.');
-      }
-    }
-  }catch(e){
-    console.error('PSB boot error:',e);
-    // Keep the public page available when session validation or the network fails.
-    renderPublicHome(hadStoredSession
-      ? 'Sesi tersimpan belum dapat diverifikasi. Silakan masuk kembali atau periksa koneksi internet.'
-      : 'Sebagian informasi belum dapat dimuat. Periksa koneksi internet Anda.');
-  }
-  configTask.catch(()=>{});
-}
-function renderSessionRecovery(message){
-  $('app').innerHTML=`<div class="login-wrap"><div class="login-card"><div class="logo login-logo center">${appLogoMarkup()}</div><div class="center"><h1 class="login-title">PSB Fathan Mubina</h1><div class="login-sub">Memulihkan sesi pengguna</div></div>${showMessage(message,'warning')}<button class="btn btn-primary" style="width:100%;margin-top:16px" onclick="boot()">Coba Hubungkan Kembali</button><button class="btn btn-secondary" style="width:100%;margin-top:8px" onclick="renderPublicHome()">Ke Beranda Publik</button></div></div>`;
+  refreshPublicConfig().catch(()=>{});
 }
 function renderPublicHome(message=''){
   const year=esc(state.config.ACTIVE_YEAR||'2027/2028');
@@ -659,20 +629,8 @@ async function reloadCurrentData(){
     invalidateCurrentPageData();
     state.initialData=null;
     state.preloadReady=false;
-    const [pub,session]=await Promise.all([
-      server('getPublicConfig',true),
-      server('validateSession',state.token)
-    ]);
-    if(!session?.success){
-      localStorage.removeItem('psb_session');
-      state.token='';
-      state.user=null;
-      renderPublicHome('Sesi sudah berakhir. Silakan masuk kembali.');
-      showToast('Sesi sudah berakhir.','warning');
-      return;
-    }
+    const pub=await server('getPublicConfig',true);
     state.config=pub?.config||state.config||{};
-    state.user=session.user||state.user;
     applyAppIcon();
     const yearLabel=document.querySelector('.brand-copy p');
     if(yearLabel)yearLabel.textContent=String(state.config.ACTIVE_YEAR||'2027/2028');

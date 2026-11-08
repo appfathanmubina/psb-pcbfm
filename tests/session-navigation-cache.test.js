@@ -8,13 +8,16 @@ const appsScriptHtml = fs.readFileSync('apps-script/Index.html', 'utf8');
 
 assert.match(app, /localStorage\.getItem\('psb_session'\)/,
   'session token must survive a browser reload');
-assert.match(app, /sessionStorage\.getItem\('psb_current_page'\)/,
-  'boot must restore the last opened menu in the current tab');
 assert.match(app, /sessionStorage\.setItem\('psb_current_page',page\)/,
   'navigation must persist the current menu');
-assert.match(app, /renderSessionRecovery\(/,
-  'transient session validation failures must show a retry view, not the login form');
 for (const [source, label] of [[app, 'PWA'], [appsScriptBundle, 'Apps Script']]) {
+  const bootStart=source.indexOf('async function boot(');
+  const bootEnd=source.indexOf('\nfunction ',bootStart+1);
+  const boot=source.slice(bootStart,bootEnd<0?source.length:bootEnd);
+  assert.doesNotMatch(boot,/validateSession|psb_current_page/,
+    label + ' first-page boot must not restore or check a saved session');
+  assert.equal((source.match(/server\('validateSession',/g)||[]).length,1,
+    label + ' must validate a stored session only from the Masuk action');
   assert.match(source, /function openLogin\(/, label + ' login entry must validate a stored session');
   const start = source.indexOf('async function openLogin(');
   const end = source.indexOf('\nfunction ', start + 1);

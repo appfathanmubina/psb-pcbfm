@@ -224,53 +224,22 @@ async function initializeAfterLogin(){
   }finally{state.preloadRunning=false;}
 }
 async function boot(){
-  // Logo merek sudah tertanam di HTML; tampilkan sebelum request server.
+  // Keep the first page public; check any saved session only from the Masuk action.
   hydrateSplashLogo();
-  loading(true,'Memeriksa aplikasi...');
-  // Konfigurasi publik tidak boleh menahan tampilan awal.
-  const configTask=server('getPublicConfig',true).then(pub=>{
-    const config=pub?.config||{};
-    if(Object.keys(config).length){
-      state.config=config;
-      applyAppIcon();
-      if(!state.user){
-        const yearLabel=document.querySelector('.public-brand p');
-        if(yearLabel)yearLabel.textContent='Pendaftaran Santri Baru · '+String(state.config.ACTIVE_YEAR||'2027/2028');
-      }
-    }
-  }).catch(e=>console.warn('Public config refresh:',e));
-  try{
-    if(state.token){
-      // Validasi sesi tetap wajib sebelum area privat dibuka.
-      const session=await server('validateSession',state.token);
-      if(session?.success){
-        state.user=session.user;
-        const savedPage=sessionStorage.getItem('psb_current_page')||'home';
-        renderApp();
-        if(savedPage!=='home')goPage(savedPage);
-        loading(false);
-        initializeAfterLogin();
-      }else{
-        state.token='';
-        localStorage.removeItem('psb_session');
-        sessionStorage.removeItem('psb_current_page');
-        renderPublicHome('Sesi sebelumnya sudah berakhir. Silakan masuk kembali.');
-      }
-    }else{
-      renderPublicHome();
-    }
-  }catch(e){
-    console.error('PSB boot error:',e);
-    if(state.token)renderSessionRecovery('Sesi tersimpan, tetapi server belum dapat dihubungi. Muat ulang atau coba periksa koneksi internet.');
-    else renderPublicHome('Sebagian informasi belum dapat dimuat. Periksa koneksi internet Anda.');
-  }finally{
-    loading(false);
+  renderPublicHome();
+  if(window.PSBBridge&&typeof window.PSBBridge.prepare==='function'){
+    window.PSBBridge.prepare().catch(error=>console.warn('PSB bridge warm-up skipped:',error));
   }
-  configTask.catch(()=>{});
+  server('getPublicConfig',true).then(pub=>{
+    const config=pub?.config||{};
+    if(!Object.keys(config).length)return;
+    state.config=config;
+    applyAppIcon();
+    const yearLabel=document.querySelector('.public-brand p');
+    if(yearLabel)yearLabel.textContent='Pendaftaran Santri Baru · '+String(state.config.ACTIVE_YEAR||'2027/2028');
+  }).catch(error=>console.warn('Public config refresh:',error));
 }
-function renderSessionRecovery(message){
-  $('app').innerHTML=`<div class="login-wrap"><div class="login-card"><div class="logo login-logo center">${appLogoMarkup()}</div><div class="center"><h1 class="login-title">PSB Fathan Mubina</h1><div class="login-sub">Memulihkan sesi pengguna</div></div>${showMessage(message,'warning')}<button class="btn btn-primary" style="width:100%;margin-top:16px" onclick="boot()">Coba Hubungkan Kembali</button><button class="btn btn-secondary" style="width:100%;margin-top:8px" onclick="renderPublicHome()">Ke Beranda Publik</button></div></div>`;
-}
+
 function renderPublicHome(message=''){
   const year=esc(state.config.ACTIVE_YEAR||'2027/2028');
   $('app').innerHTML=`<div class="public-wrap"><div class="public-shell">
@@ -548,20 +517,8 @@ async function reloadCurrentData(){
     invalidateCurrentPageData();
     state.initialData=null;
     state.preloadReady=false;
-    const [pub,session]=await Promise.all([
-      server('getPublicConfig',true),
-      server('validateSession',state.token)
-    ]);
-    if(!session?.success){
-      localStorage.removeItem('psb_session');
-      state.token='';
-      state.user=null;
-      renderPublicHome('Sesi sudah berakhir. Silakan masuk kembali.');
-      showToast('Sesi sudah berakhir.','warning');
-      return;
-    }
+    const pub=await server('getPublicConfig',true);
     state.config=pub?.config||state.config||{};
-    state.user=session.user||state.user;
     applyAppIcon();
     const yearLabel=document.querySelector('.brand-copy p');
     if(yearLabel)yearLabel.textContent=String(state.config.ACTIVE_YEAR||'2027/2028');
