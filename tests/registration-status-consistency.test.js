@@ -15,8 +15,10 @@ function section(name, source = code) {
 // authorize document upload or move a registration into the verification queue.
 const paidIds = section('getFormPaymentVerifiedRegistrationIds_');
 assert.match(paidIds, /status\s*\|\|\s*''\)\.toUpperCase\(\)\s*===\s*'CANCELLED'\)\s*return/);
-assert.match(paidIds, /status\s*\|\|\s*''\)\.toUpperCase\(\)\s*===\s*'PAID'/);
-assert.match(paidIds, /verifiedPayments\[String\(x\.billId\s*\|\|\s*''\)\]/);
+assert.match(paidIds, /reconcilePaymentLedger_\(bills,payments\)/);
+assert.match(paidIds, /state\?\.status==='PAID'&&!state\.requiresReview/);
+assert.doesNotMatch(paidIds, /String\(x\.status\|\|''\)\.toUpperCase\(\)\s*===\s*'PAID'\s*\|\|/,
+  'A PAID bill flag without a matched verified payment must not authorize document uploads');
 
 // Admin lists and the Wali home must select the newest active bill, newest
 // payment attempt, and newest non-replaced document using the same timestamps.
