@@ -44,7 +44,7 @@ const fixtures = {
   CANDIDATES: [{ candidateId: 'c1', fullName: 'Calon Satu' }, { candidateId: 'c2', fullName: 'Calon Dua' }],
   USERS: [{ status: 'ACTIVE' }],
   BILLS: [{ billId: 'b1', registrationId: 'r1', status: 'PAYMENT_REVIEW', amount: 100, updatedAt: '2026-11-03' }],
-  PAYMENTS: [],
+  PAYMENTS: [{ paymentId: 'p1', billId: 'b1', registrationId: 'r1', amount: 100, status: 'SUBMITTED', createdAt: '2026-11-03' }],
   SELECTION_PARTICIPANTS: [{ participantId: 'p1', registrationId: 'r2', status: 'SCHEDULED', scheduleId: 's1' }],
   SELECTION_RESULTS: [{ resultId: 'z1', registrationId: 'r2', status: 'PASSED' }],
   REREGISTRATIONS: [{ reregistrationId: 'rr1', registrationId: 'r2', status: 'PENDING' }],
