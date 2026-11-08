@@ -47,7 +47,7 @@ assert.match(dashboard, /state\?\.status==='WAITING'\|\|state\?\.requiresReview/
 const render = section(frontend, 'function renderPaymentContent(){', '\nfunction openPaymentUpload(billId)', 'Payment renderer');
 assert.match(render, /displayStatus=p\?\.status==='SUBMITTED'\?'PAYMENT_REVIEW':b\.reconciliationRequired\?'RECONCILIATION_REQUIRED'/,
   'Wali payment UI must display a submitted proof as awaiting verification before showing a bill-level reconciliation warning');
-assert.match(render, /isWali&&p\?\.status!=='SUBMITTED'&&st!=='PAID'&&\(!p\|\|p\.status==='REJECTED'\)/,
-  'Wali must not be offered another upload while a proof is submitted or verified');
+assert.match(render, /isWali&&!b\.reconciliationRequired&&p\?\.status!=='SUBMITTED'&&st!=='PAID'&&\(!p\|\|p\.status==='REJECTED'\)/,
+  'Wali may upload only when no proof is pending, bill is not paid, and ledger does not require reconciliation');
 
 console.log('Payment partial-commit recovery safeguards: OK');
