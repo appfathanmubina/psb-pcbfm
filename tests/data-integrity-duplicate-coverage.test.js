@@ -39,6 +39,7 @@ for (const key of [
   'duplicate_verified_payment_per_bill',
   'paid_bill_without_verified_payment',
   'verified_payment_bill_status_mismatch',
+  'payment_on_cancelled_bill',
   'payment_verification_history_consistency',
   'unique_payment_verification',
   'unique_current_document_type',
