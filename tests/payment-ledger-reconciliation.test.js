@@ -130,5 +130,12 @@ for(const name of ['getDashboardPageData','getReportingPageData','getAdvancedRep
   assert.match(backend,new RegExp('function '+name+'\\([\\s\\S]*?reconcilePaymentLedger_\\('),
     name+' must use the canonical ledger calculation');
 }
+const frontend=fs.readFileSync('frontend/app.js','utf8');
+assert.match(frontend,/displayStatus=p\?\.status==='SUBMITTED'\?'PAYMENT_REVIEW'/,
+  'Wali must continue to see a valid submitted payment as pending during partial bill commits');
+assert.match(frontend,/RECONCILIATION_REQUIRED:'Perlu rekonsiliasi'/,
+  'Finance queue must label inconsistent ledger rows explicitly');
+assert.match(frontend,/x\.paymentStatus==='SUBMITTED'&&\(x\.queueStatus==='WAITING'\|\|!x\.reconciliationRequired\)/,
+  'A valid submitted partial commit must remain actionable for Finance retry');
 
 console.log('Payment ledger reconciliation and registration-to-reregistration workflow regression: OK');
