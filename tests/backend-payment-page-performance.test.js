@@ -48,14 +48,14 @@ assert.match(queue, /const billFields = query/,
   'Queue must select the smallest bill projection needed for the active global filters');
 assert.match(queue, /sheetRowsByFields_\(billSheet, billFields\)/,
   'Queue must use the conditional narrow bill projection');
-assert.match(queue, /: \['billId','status','createdAt'\]/,
-  'Unfiltered queue requests must include billId for all-payment status aggregation while retaining a narrow bill scan');
+assert.match(queue, /: \['billId','registrationId','status','amount','createdAt'\]/,
+  'Unfiltered queue requests must include bill identity, registration and amount for ledger reconciliation');
 assert.match(queue, /sheetRowsByFields_\(ss\.getSheetByName\(PSB_SHEETS\.REGISTRATIONS\)/,
   'Global search must index registration number and candidate ID without loading full registration rows');
 assert.match(queue, /sheetRowsByFields_\(ss\.getSheetByName\(PSB_SHEETS\.CANDIDATES\)/,
   'Global search must index candidate names using a narrow projection');
-assert.match(queue, /sheetRowsByFields_\(ss\.getSheetByName\(PSB_SHEETS\.PAYMENTS\), \['billId','status'\]\)/,
-  'Global status filtering must derive normalized status across all payments');
+assert.match(queue, /sheetRowsMatchingValuesByFields_\(ss\.getSheetByName\(PSB_SHEETS\.PAYMENTS\),'billId'/,
+  'Global status filtering must reconcile all payment attempts against the exact bill IDs');
 assert.match(queue, /\.filter\(item=>[\s\S]*statusFilter[\s\S]*query/,
   'Status and search filters must be applied before pagination');
 assert.match(queue, /const pageItems = indexed\.slice/,
