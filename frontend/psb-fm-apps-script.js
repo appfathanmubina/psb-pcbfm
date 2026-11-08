@@ -859,18 +859,24 @@ async function runSecurityMaintenanceUI(){showConfirm('Jalankan maintenance secu
 
 function renderFeaturePlaceholder(title,desc){$('content').innerHTML=`<section class="hero"><h2>${esc(title)}</h2><p>${esc(desc)}</p></section><div class="empty-state">Modul ini belum aktif pada stage saat ini.</div>`;}
 async function renderSelection(force=false){
-  if(!hasAnyRole(['WALI','SUPERADMIN','ADMIN_PSB','SELEKSI','VERIFIKATOR'])){renderMore();return}
+  if(!hasAnyRole(['WALI','SUPERADMIN','ADMIN_PSB','SELEKSI','VERIFIKATOR'])){renderMore();return true}
   state.selectionTab=state.selectionTab||'overview';
   $('content').innerHTML=`<section class="hero"><h2>Tes</h2><p>${hasAnyRole(['WALI'])?'Lihat jadwal tes, status peserta, dan hasil seleksi calon santri.':'Kelola jadwal tes, peserta, nilai, dan hasil seleksi.'}</p></section><div id="selectionPanel"><div class="selection-empty">Memuat data tes dan seleksi...</div></div>`;
   try{
     const id=state.selectionRegistrationId||'';
     const cached=!force&&(state.selectionData||(!id?pageDataCached('selection'):null));
-    if(cached&&!id){renderSelectionPanel(cached);return}
+    if(cached&&!id){renderSelectionPanel(cached);return true}
     const r=force?await server('getSelectionPageData',state.token,id):await warmPageData('selection',()=>server('getSelectionPageData',state.token,id));
-    if(!r?.success){$('selectionPanel').innerHTML=showMessage(r?.message||'Gagal memuat data tes dan seleksi.');return}
+    if(!r?.success){$('selectionPanel').innerHTML=showMessage(r?.message||'Gagal memuat data tes dan seleksi.');return false}
     state.selectionData=r;
     renderSelectionPanel(r);
-  }catch(e){$('selectionPanel').innerHTML=showMessage('Gagal memuat data tes dan seleksi.');}
+    return true;
+  }catch(e){$('selectionPanel').innerHTML=showMessage('Gagal memuat data tes dan seleksi.');return false}
+}
+async function refreshSelectionAfterMutation(){
+  const message='Perubahan berhasil disimpan, tetapi daftar belum diperbarui. Muat ulang halaman untuk melihat status terbaru.';
+  try{if(await renderSelection()===false)showToast(message,'warning')}
+  catch(refreshError){showToast(message,'warning')}
 }
 function renderSelectionPanel(data){
   const admin=hasAnyRole(['SUPERADMIN','ADMIN_PSB','SELEKSI']);
@@ -922,7 +928,7 @@ async function createSelectionScheduleUI(){
     showAlert('Gagal menyimpan','Terjadi gangguan saat membuat jadwal.','error');
   }finally{loading(false)}
 }
-async function toggleSelectionScheduleUI(id,isActive){loading(true,'Memperbarui jadwal...');try{const r=await server('updateSelectionScheduleStatus',state.token,{scheduleId:id,isActive});if(r.success){showToast(r.message,'success');state.selectionData=null;await renderSelection();state.selectionTab='schedule';}else showAlert('Belum dapat diproses',r.message,'warning')}catch(e){showAlert('Gagal memperbarui','Terjadi gangguan saat memperbarui jadwal.','error')}finally{loading(false)}}
+async function toggleSelectionScheduleUI(id,isActive){loading(true,'Memperbarui jadwal...');try{const r=await server('updateSelectionScheduleStatus',state.token,{scheduleId:id,isActive});if(r.success){showToast(r.message,'success');state.selectionData=null;state.selectionTab='schedule';await refreshSelectionAfterMutation()}else showAlert('Belum dapat diproses',r.message,'warning')}catch(e){showAlert('Status jadwal belum pasti','Koneksi terputus saat memperbarui jadwal. Muat ulang daftar jadwal sebelum mencoba lagi.','warning')}finally{loading(false)}}
 function renderSelectionParticipants(data){
   const el=$('selectionTabContent'), schedules=data.schedules||[], regs=(data.registrations||[]).filter(x=>['PAYMENT_VERIFIED','VERIFIED'].includes(String(x.status).toUpperCase()));
   const options=schedules.map(x=>`<option value="${esc(x.scheduleId)}">${esc(x.name)} · ${esc(x.selectionDate)}</option>`).join('');
@@ -950,14 +956,14 @@ async function generateSelectionParticipantsUI(){
     const r=await server('addSelectionParticipantsBulk',state.token,{registrationIds,scheduleId});
     if(!r.success){showAlert('Generate belum selesai',r.message||'Peserta belum dapat ditambahkan.','warning');return}
     const added=Number(r.addedCount||0),skipped=Number(r.skippedCount||0),failed=Number(r.failedCount||0);
-    showToast(`Generate selesai: ${added} peserta ditambahkan${skipped?`, ${skipped} dilewati`:''}${failed?`, ${failed} gagal`:''}.`,'success');
+    showToast(`Generate selesai: ${added} peserta ditambahkan${skipped?`, ${skipped} dilewati`:''}${failed?`, ${failed} gagal`:''}.`,failed?'warning':'success');
     state.selectionData=null; state.selectionTab='participants';
-    try{await renderSelection()}catch(refreshError){}
+    await refreshSelectionAfterMutation();
   }catch(e){showAlert('Generate gagal','Terjadi gangguan saat membuat peserta tes. Silakan cek daftar peserta sebelum mencoba lagi.','error')}
   finally{loading(false);if(box)box.classList.remove('processing');if(btn){btn.disabled=false;btn.textContent='Generate Tes Seleksi';}}
 }
-async function addSelectionParticipantUI(){const registrationId=$('selParticipantReg')?.value||'',scheduleId=$('selParticipantSchedule')?.value||'';if(!registrationId||!scheduleId){showAlert('Data belum lengkap','Pilih pendaftar dan jadwal tes.','warning');return}loading(true,'Menambahkan peserta...');try{const r=await server('addSelectionParticipant',state.token,{registrationId,scheduleId});if(r.success){showToast(r.message,'success');state.selectionData=null;state.selectionTab='participants';try{await renderSelection()}catch(refreshError){}}else showAlert('Belum dapat ditambahkan',r.message,'warning')}catch(e){showAlert('Gagal menambahkan','Terjadi gangguan saat menyimpan peserta.','error')}finally{loading(false)}}
-async function updateParticipantStatusUI(id,status){loading(true,'Memperbarui kehadiran...');try{const r=await server('updateSelectionParticipantStatus',state.token,{participantId:id,status});if(r.success){showToast(r.message,'success');state.selectionData=null;await renderSelection();state.selectionTab='participants';}else showAlert('Belum dapat diproses',r.message,'warning')}catch(e){showAlert('Gagal memperbarui','Terjadi gangguan saat menyimpan status peserta.','error')}finally{loading(false)}}
+async function addSelectionParticipantUI(){const registrationId=$('selParticipantReg')?.value||'',scheduleId=$('selParticipantSchedule')?.value||'';if(!registrationId||!scheduleId){showAlert('Data belum lengkap','Pilih pendaftar dan jadwal tes.','warning');return}loading(true,'Menambahkan peserta...');try{const r=await server('addSelectionParticipant',state.token,{registrationId,scheduleId});if(r.success){showToast(r.message,'success');state.selectionData=null;state.selectionTab='participants';await refreshSelectionAfterMutation()}else showAlert('Belum dapat ditambahkan',r.message,'warning')}catch(e){showAlert('Status penyimpanan belum pasti','Koneksi terputus saat menambahkan peserta. Muat ulang daftar sebelum mencoba lagi untuk menghindari duplikasi.','warning')}finally{loading(false)}}
+async function updateParticipantStatusUI(id,status){loading(true,'Memperbarui kehadiran...');try{const r=await server('updateSelectionParticipantStatus',state.token,{participantId:id,status});if(r.success){showToast(r.message,'success');state.selectionData=null;state.selectionTab='participants';await refreshSelectionAfterMutation();}else showAlert('Belum dapat diproses',r.message,'warning')}catch(e){showAlert('Status peserta belum pasti','Koneksi terputus saat menyimpan. Muat ulang daftar peserta sebelum mencoba lagi.','warning')}finally{loading(false)}}
 function renderSelectionResults(data){const el=$('selectionTabContent');const results=data.results||[];const regs=data.registrations||[];const rows=results.map(x=>{const reg=regs.find(r=>String(r.registrationId)===String(x.registrationId));return `<article class="selection-card"><div style="display:flex;justify-content:space-between;gap:10px"><div><h3>${esc(reg?.candidateName||x.registrationId)}</h3><div class="selection-note">${esc(reg?.registrationNumber||x.registrationId)}</div></div><span class="selection-status ${x.status==='PASSED'?'ok':x.status==='NOT_PASSED'?'bad':'warn'}">${esc(selectionStatusLabel(x.status))}</span></div><p class="selection-note" style="margin-top:10px">${esc(x.note||'Belum ada catatan.')}</p><button class="btn btn-primary" onclick="openSelectionDetailUI('${esc(x.registrationId)}')">Buka Detail</button></article>`}).join('');el.innerHTML=`<div class="selection-grid">${rows||'<div class="selection-empty" style="grid-column:1/-1">Belum ada hasil seleksi.</div>'}</div>`;}
 function renderSelectionWali(data,targetEl=null){
   const el=targetEl||$('selectionTabContent'),regs=data.registrations||[],pmap={};(data.participants||[]).forEach(p=>pmap[String(p.registrationId)]=p);const rmap={};(data.results||[]).forEach(r=>rmap[String(r.registrationId)]=r);const cards=regs.map(r=>{const p=pmap[String(r.registrationId)],res=rmap[String(r.registrationId)];return `<article class="selection-card"><h3>${esc(r.candidateName||'-')}</h3><div class="selection-note">${esc(r.registrationNumber||r.registrationId)} · ${esc(r.gelombangName||'-')}</div><div class="selection-progress"><div class="selection-progress-step done"></div><div class="selection-progress-step ${p?'done':''}"></div><div class="selection-progress-step ${res?'done':''}"></div></div><div class="selection-meta"><span>${esc(selectionStatusLabel(r.status))}</span>${p?`<span>${esc(p.status==='SCHEDULED'?'Terjadwal':selectionStatusLabel(p.status))}</span>`:''}${res?`<span>${esc(selectionStatusLabel(res.status))}</span>`:''}</div>${p?`<p class="selection-note" style="margin-top:10px">Jadwal: ${esc((data.schedules||[]).find(s=>String(s.scheduleId)===String(p.scheduleId))?.name||p.scheduleId)}</p>`:'<p class="selection-note" style="margin-top:10px">Belum memiliki jadwal tes.</p>'}</article>`}).join('');if(el)el.innerHTML=cards||'<div class="selection-empty">Belum ada data pendaftaran untuk proses tes.</div>';
@@ -1087,7 +1093,7 @@ async function renderNotifications(force=false){
 function notificationTypeLabel(type){return ({SUCCESS:'Berhasil',WARNING:'Perlu perhatian',INFO:'Informasi',ERROR:'Kesalahan'})[String(type||'INFO').toUpperCase()]||'Informasi'}
 function formatNotificationDate(value){const d=new Date(value);if(Number.isNaN(d.getTime()))return String(value||'-');return d.toLocaleString('id-ID',{day:'2-digit',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'});}
 function renderNotificationPanel(data){const el=$('notificationPanel');if(!el)return;const items=data.items||[];const unreadCount=Number(data.unreadCount||0);if(!items.length){el.innerHTML='<div class="announcement-empty">Belum ada notifikasi.</div>';updateNotificationBadge();return}el.innerHTML=`<div class="notification-toolbar" style="display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:12px"><div><strong>${unreadCount}</strong> belum dibaca</div><button class="btn btn-secondary" onclick="markAllNotificationsReadUI()">Tandai semua dibaca</button></div><div class="notification-list">${items.map(x=>{const unread=String(x.isRead).toUpperCase()!=='TRUE';const type=String(x.type||'INFO').toUpperCase();const cls=type==='SUCCESS'?'ok':type==='WARNING'?'warn':type==='ERROR'?'bad':'';return `<article class="notification-card ${unread?'unread':''}"><div class="announcement-top"><div><b>${esc(x.title||'Notifikasi')}</b><div class="notification-meta">${esc(notificationTypeLabel(type))} · ${esc(formatNotificationDate(x.createdAt))}</div></div><span class="announcement-status ${cls}">${esc(notificationTypeLabel(type))}</span></div><p>${esc(x.message||'')}</p>${unread?`<div class="notification-actions"><button class="btn btn-secondary" onclick="markNotificationReadUI('${esc(x.notificationId)}')">Tandai dibaca</button></div>`:''}</article>`}).join('')}</div>`;updateNotificationBadge();}
-async function markNotificationReadUI(id){try{const r=await server('markNotificationRead',state.token,id);if(r.success){await renderNotifications();updateNotificationBadge();}}catch(e){}}
+async function markNotificationReadUI(id){try{const r=await server('markNotificationRead',state.token,id);if(!r?.success){showToast(r?.message||'Notifikasi belum dapat diperbarui. Silakan coba lagi.','warning');return}await renderNotifications();updateNotificationBadge();}catch(e){showToast('Notifikasi belum dapat ditandai dibaca. Periksa koneksi, lalu coba lagi.','error')}}
 async function markAllNotificationsReadUI(){loading(true,'Memperbarui notifikasi...');try{const r=await server('markAllNotificationsRead',state.token);if(r.success){showToast('Semua notifikasi ditandai sudah dibaca.','success');await renderNotifications();updateNotificationBadge()}}catch(e){showToast('Gagal memperbarui notifikasi.','error')}finally{loading(false)}}
 
 async function renderVerification(force=false){

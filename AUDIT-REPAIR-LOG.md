@@ -29,11 +29,11 @@ File changed: `apps-script/Code.gs`
 
 | ID | Finding | Next action | Status |
 |---|---|---|---|
-| AUTH-003 | Password storage uses one-round SHA-256 with salt. | Design and test a backward-compatible password-hash migration; do not invalidate existing accounts. | Open |
+| AUTH-003 | Password storage uses one-round SHA-256 with salt. | Use the backward-compatible PBKDF2 migration recorded in later security batches; continue runtime testing before production rollout. | Source change and regression coverage complete; Apps Script staging/runtime test pending |
 | AUTH-004 | Wali signup does not verify ownership of the submitted phone/email. | Confirm product policy, then decide whether OTP/email verification is required. | Open — policy decision |
-| SYNC-001 | Ten functions differ between Apps Script UI and PWA UI. | Review each difference and confirm intentional parity or implement alignment. | Open |
-| PWA-001 | PWA icon assets are duplicated/inappropriately sized. | Generate and verify favicon, 192px, 512px, and maskable assets and references. | Open |
-| TXN-001 | Payment, bill, selection, and re-registration state transitions need a complete state-machine review. | Continue the next audit batch after the current repairs are tested. | Open |
+| SYNC-001 | Ten functions differ between Apps Script UI and PWA UI. | Review each difference and confirm intentional parity or implement alignment. | Reconciled by later UI parity review; 39 intentional differences are recorded in the regression check |
+| PWA-001 | PWA icon assets are duplicated/inappropriately sized. | Generate and verify favicon, 192px, 512px, and maskable assets and references. | Addressed by later icon metadata and dimension checks |
+| TXN-001 | Payment, bill, selection, and re-registration state transitions need a complete state-machine review. | Continue staging tests for partial commits, retries, and concurrent requests across repaired flows. | Source review and regression coverage expanded; staging/runtime and concurrency tests pending |
 
 ## Working rules
 
@@ -648,3 +648,37 @@ Branch: `fix/registration-submission-notification-recovery`
 - Missing registration status column or an unconfirmed status write now returns a failure rather than falsely reporting a successful submission.
 - No Spreadsheet schema, production data, or Apps Script deployment changed.
 - Regression coverage is source-contract based. Apps Script staging/runtime and concurrent retry/failure-injection validation remain required before production rollout.
+## Repair batch 25 — repository-wide audit and regression alignment
+
+Audit report: `docs/audit-2026-11-08.md`
+
+Reviewed commit: `e7a52f4dbf12254432b9d3a8aedc3deaef992711`
+
+| ID | Finding | Change | Status |
+|---|---|---|---|
+| QA-001 | Three regression tests were pinned to outdated implementation details: pre-compression upload size, old recovery error wording, and a fixed historical service-worker cache version. | Updated the tests to assert the current processed upload payload, case-insensitive recovery message, and versioned production cache namespace without requiring one specific release number. | Fixed; all 64 repository regression tests pass on an LF checkout |
+| QA-002 | Audit history did not reflect later password migration, UI parity, icon validation, and transaction recovery work. | Reconciled the outstanding finding statuses above and documented remaining policy and staging/runtime work in the audit report. | Updated |
+
+### Scope and verification limits
+
+- Inspected frontend, Apps Script backend, bridge, service worker, workflow checks, and the production public home/login screens.
+- No runtime application code, production data, Script Properties, or deployment was changed.
+- Browser inspection covered one 664 px viewport; the logged-in role-specific screens were not reviewed.
+- Repository regression tests are static source checks. Apps Script staging, Google Sheets/Drive integration, concurrency, and failure-injection tests remain pending.
+
+
+## Repair batch 26 — surface UI action and refresh failures
+
+| ID | Finding | Change | Status |
+|---|---|---|---|
+| UI-ERR-001 | Mark-as-read notification failures were swallowed, leaving the user without feedback. | Show an actionable warning when the server returns failure and an error toast when the bridge request fails in both UI clients. | Implemented; covered by full regression suite (73/73 passed) |
+| UI-ERR-002 | Selection schedule and participant mutations could leave stale views after refresh errors; network failures did not always warn that a write might already have committed. | Use warning styling for partial bulk failures; make the selection renderer return its outcome; refresh the intended schedule/participant tab; and tell users to reload/check before retrying ambiguous operations. | Implemented consistently in both UI clients; covered by full regression suite (73/73 passed) |
+
+### Scope and verification limits
+
+- Backend functions, role checks, RPC names, and transaction behavior are unchanged.
+- The message distinguishes a failed display refresh from a failed save, so the user is not prompted to repeat a committed mutation blindly.
+- PWA `app.js`/service-worker cache versions and the Apps Script client bundle URL were bumped together so clients request updated assets.
+- Apps Script `Index.html` is repository source; production Apps Script still requires its documented manual synchronization/deployment step.
+- UI behavior is covered by `tests/ui-error-recovery.test.js`; all repository regression tests and the GitHub Actions workflow checks must pass before merge.
+- GitHub Pages has not been updated; the production browser view predates this local UI change.

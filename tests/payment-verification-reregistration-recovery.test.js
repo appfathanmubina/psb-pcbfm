@@ -23,7 +23,7 @@ assert.match(sync, /if\(!reg\)return fail_\(/,
   'Missing registration data must stop verification instead of silently succeeding');
 assert.match(sync, /if\(!moved\?\.success\)return moved\|\|fail_/,
   'A failed registration status transition must propagate to payment verification');
-assert.match(sync, /status belum tersimpan sebagai COMPLETED/,
+assert.match(sync, /status pendaftaran belum tersimpan sebagai COMPLETED/i,
   'A registration write that did not persist must be retryable');
 assert.match(sync, /if\(!confirmedRereg\|\|String\(confirmedRereg\.object\.status\|\|''\)\.toUpperCase\(\)!==targetStatus\)/,
   'Reregistration status must be confirmed after writing');
