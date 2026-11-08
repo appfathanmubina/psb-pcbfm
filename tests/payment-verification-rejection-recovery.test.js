@@ -41,6 +41,17 @@ assert.match(verify, /if\(currentBillStatus!==expectedBillStatus\)bills\.getRang
   'The linked bill must be repaired only to the state supported by other active payments');
 assert.match(verify, /if\(String\(br\.object\.status\|\|''\)\.toUpperCase\(\)==='CANCELLED'\)/,
   'A cancelled bill must block verification before any verification history is written');
+
+assert.match(verify, /notificationPayload=\{registrationId:String\(regFound\.registration\.registrationId\),userId:String\(regFound\.registration\.userId\|\|''\)/,
+  'A same-decision payment retry must rebuild the owner notification from the persisted registration');
+assert.doesNotMatch(verify, /if\(!wasAlreadyFinalized\)notificationPayload=/,
+  'An already-finalized payment must not skip notification recovery');
+assert.match(verify, /note:String\(confirmedHistory\.note\|\|''\)/,
+  'A retry must use the durable verification-history note rather than changed retry input');
+assert.match(verify, /createNotificationOnce_\(p\.userId,'Pembayaran '/,
+  'Payment owner notification recovery must be idempotent');
+assert.match(verify, /notifyUsersByRolesOnce_\(\['SUPERADMIN','ADMIN_PSB','VERIFIKATOR'\]/,
+  'Formulir verification queue notifications must be idempotent on retry');
 assert.ok(verify.indexOf("status||'').toUpperCase()==='CANCELLED'") < verify.indexOf('const verSheet='),
   'Cancelled-bill guard must run before verification history writes');
 
