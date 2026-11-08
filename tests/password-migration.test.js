@@ -52,8 +52,6 @@ assert.match(verify, /needsUpgrade: valid && iterations < PSB_PASSWORD_HASH_ITER
 assert.match(verify, /const legacy = sha256Hex_\(String\(password\) \+ salt\)/);
 assert.match(verify, /return \{ valid: valid, needsUpgrade: valid \}/,
   'Valid legacy SHA-256 accounts must be upgraded after successful login');
-assert.doesNotMatch(verify, /needsUpgrade: valid\s*\}/,
-  'A valid current or stronger PBKDF2 hash must not be marked for downgrade');
 
 const upgrade = section('upgradePasswordHashAfterLogin_');
 assert.match(upgrade, /hashPassword_\(String\(password\), salt\)/);
