@@ -3817,9 +3817,12 @@ function openReregistration(sessionToken, registrationId) {
     if(['PAYMENT_VERIFIED','COMPLETED'].includes(currentStatus) && !current)return fail_('Status pendaftaran sudah berlanjut, tetapi data Daftar Ulang tidak ditemukan. Perlu pemeriksaan administrator sebelum membuka ulang.');
     const reregistrationType=getActiveMasterItems_('MASTER_JENIS_PEMBAYARAN')
       .find(x=>/daftar\s*ulang/i.test(String(x.name||'')));
-    const reregistrationAmount=Number(reregistrationType?.amount);
-    if(!reregistrationType||!Number.isFinite(reregistrationAmount)||reregistrationAmount<=0)
-      return fail_('Nominal tagihan Daftar Ulang belum valid. Pastikan jenis pembayaran Daftar Ulang aktif dan nominalnya lebih besar dari Rp0 pada Master Data → Jenis Pembayaran.');
+    if(!reregistrationType)return fail_('Jenis pembayaran Daftar Ulang belum aktif pada Master Data → Jenis Pembayaran.');
+    const existingReregistrationBill=sheetRows_(ss.getSheetByName(PSB_SHEETS.BILLS))
+      .find(x=>String(x.registrationId)===id&&String(x.paymentTypeId)===String(reregistrationType.paymentTypeId)&&String(x.status||'').toUpperCase()!=='CANCELLED');
+    const reregistrationAmount=Number(reregistrationType.amount);
+    if(!existingReregistrationBill&&(!Number.isFinite(reregistrationAmount)||reregistrationAmount<=0))
+      return fail_('Nominal tagihan Daftar Ulang belum valid. Pastikan nominalnya lebih besar dari Rp0 pada Master Data → Jenis Pembayaran.');
     // Always run the idempotent helper, even when the reregistration row
     // already exists. This repairs a missing bill after an earlier partial
     // attempt instead of returning a misleading "already open" response.
@@ -3857,9 +3860,8 @@ function ensureReregistration_(registrationId, actorUserId, createBill) {
   if (createBill) {
     const paymentType = getActiveMasterItems_('MASTER_JENIS_PEMBAYARAN')
       .find(x => /daftar\s*ulang/i.test(String(x.name || '')));
-    const paymentAmount = Number(paymentType?.amount);
     const billSheet = ss.getSheetByName(PSB_SHEETS.BILLS);
-    if (!paymentType || !Number.isFinite(paymentAmount) || paymentAmount <= 0 || !billSheet) return null;
+    if (!paymentType || !billSheet) return null;
     const bill = ensureReregistrationBill_(found, actorUserId || 'SYSTEM');
     if (!bill) return null;
   }
@@ -3881,13 +3883,14 @@ function ensureReregistration_(registrationId, actorUserId, createBill) {
 function ensureReregistrationBill_(found, actorUserId) {
   const typeItems = getActiveMasterItems_('MASTER_JENIS_PEMBAYARAN');
   const type = typeItems.find(x => /daftar\s*ulang/i.test(String(x.name || '')));
-  const amount = Number(type?.amount);
-  if (!type || !Number.isFinite(amount) || amount <= 0) return null;
+  if (!type) return null;
   const billSheet = getDatabaseSpreadsheet_().getSheetByName(PSB_SHEETS.BILLS);
   if (!billSheet) return null;
   const rows = sheetRows_(billSheet);
   const existing = rows.find(x => String(x.registrationId) === String(found.registration.registrationId) && String(x.paymentTypeId) === String(type.paymentTypeId) && String(x.status || '').toUpperCase() !== 'CANCELLED');
   if (existing) return existing;
+  const amount = Number(type.amount);
+  if (!Number.isFinite(amount) || amount <= 0) return null;
   const headers = billSheet.getRange(1,1,1,billSheet.getLastColumn()).getValues()[0].map(String);
   const now = new Date();
   const due = new Date(now.getTime() + 7 * 86400000);
