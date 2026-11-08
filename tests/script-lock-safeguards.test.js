@@ -73,11 +73,11 @@ assert.match(functionSource('getPaymentPageData'), /ensureFormBillForRegistratio
   'Automatic bill creation from payment page must suppress notification inside the lock');
 assert.match(functionSource('getPaymentPageData'), /if\(autoBillResult\?\.success && autoBillResult\.created\)[\s\S]*?notifyRegistrationOwner_/,
   'Automatic bill notification must run after the lock callback completes');
-assert.match(functionSource('verifyPayment'), /syncReregistrationAfterPayment_\\(String\\(br\\.object\\.registrationId\\),actor\\.userId,true,true\\)/,
+assert.match(functionSource('verifyPayment'), /syncReregistrationAfterPayment_\(String\(br\.object\.registrationId\),actor\.userId,true,true\)/,
   'Payment verification must reuse its already-held ScriptLock and defer completion notification');
-assert.match(functionSource('syncReregistrationAfterPayment_'), /finally \\{ lock\\.releaseLock\\(\\); \\}[\\s\\S]*?createNotificationOnce_/,
+assert.match(functionSource('syncReregistrationAfterPayment_'), /finally \{ lock\.releaseLock\(\); \}[\s\S]*?createNotificationOnce_/,
   'Lock-safe re-registration wrapper must release ScriptLock before sending completion notification');
-assert.match(functionSource('syncReregistrationAfterPaymentLocked_'), /if\\(!deferNotification\\)[\\s\\S]*?createNotification_/,
+assert.match(functionSource('syncReregistrationAfterPaymentLocked_'), /if\(!deferNotification\)[\s\S]*?createNotification_/,
   'Lock-held synchronization implementation must retain its deferred-notification contract');
 
 console.log('ScriptLock notification fanout safeguards passed.');
