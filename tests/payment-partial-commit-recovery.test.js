@@ -38,8 +38,9 @@ const dashboard = section(
   '\nfunction findParticipantRegistration_',
   'Dashboard'
 );
-assert.match(dashboard, /latestPaymentStatus==='SUBMITTED'/,
-  'Dashboard payment summary must count persisted SUBMITTED payments as awaiting review');
+assert.match(dashboard, /reconcilePaymentLedger_\(periodBills,periodPayments\)/);
+assert.match(dashboard, /state\.status==='WAITING'/,
+  'Dashboard payment summary must count a persisted SUBMITTED payment as awaiting review even when bill status is PAID');
 assert.match(dashboard, /status\|\|''\)\.toUpperCase\(\)==='PAYMENT_REVIEW'\|\|String\(latestPaymentByBill/,
   'Dashboard verification queue must include a submitted payment even if its bill status is stale');
 
