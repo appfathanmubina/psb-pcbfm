@@ -40,6 +40,21 @@ const verify = backend.slice(verifyStart, verifyEnd);
 assert.ok(verify.indexOf('syncReregistrationAfterPayment_(') < verify.indexOf("sheet.getRange(found.rowNumber,paymentStatusIdx+1).setValue(status)"),
   'Payment must remain unfinalized until linked registration records synchronize');
 
+assert.match(backend, /function syncReregistrationAfterPayment_\(registrationId, actorUserId, deferNotification, lockAlreadyHeld\)/,
+  'Shared re-registration sync must expose a lock-aware wrapper');
+assert.match(backend, /function syncReregistrationAfterPaymentLocked_\(/,
+  'Payment and document flows must share the lock-held synchronization implementation');
+assert.match(verify, /syncReregistrationAfterPayment_\(String\(br\.object\.registrationId\),actor\.userId,true,true\)/,
+  'Payment verification must reuse its already-held ScriptLock without deadlocking');
+
+const documentVerifyStart = backend.indexOf('function verifyDocument(sessionToken, payload) {');
+const documentVerifyEnd = backend.indexOf('\nfunction finalizeVerification(sessionToken, payload)', documentVerifyStart);
+const documentVerify = backend.slice(documentVerifyStart, documentVerifyEnd);
+assert.match(documentVerify, /const syncResult=syncReregistrationAfterPayment_\(registrationId,actor\.userId\)/,
+  'Document verification must run re-registration synchronization through the lock-safe wrapper');
+assert.match(documentVerify, /if\(!syncResult\?\.success\)/,
+  'Document verification must report a committed document with pending synchronization instead of silently succeeding');
+
 const selectorStart = backend.indexOf('function findReregistrationBillPayment_(registrationId) {');
 const selectorEnd = backend.indexOf('\nfunction finalizeReregistration(', selectorStart);
 assert.ok(selectorStart >= 0 && selectorEnd > selectorStart,
