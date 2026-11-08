@@ -48,7 +48,7 @@ assert.match(page, /waves: sheetMapById_/,
 assert.match(page, /levels: sheetMapById_([^\n]+, \['name'\])/,
   'Level enrichment map must be preloaded with only its display name');
 assert.match(page, /years: sheetMapById_([^\n]+, \['name'\])/,
-  'Academic year enrichment map must project only its display name');
+assert.match(page, /years: sheetMapById_([^\n]+, \['name','isActive'\])/ ,
 assert.match(page, /waves: sheetMapById_([^\n]+, \['name'\])/,
   'Wave enrichment map must project only its display name');
 assert.match(page, /sheetRowsByFields_\(ss\.getSheetByName\(PSB_SHEETS\.SELECTION_SCHEDULE\)/,
