@@ -62,6 +62,8 @@ jobs:
         run: node tests/payment-submission-notification-recovery.test.js
       - name: Test manual bill idempotent creation and notification recovery
         run: node tests/manual-bill-idempotent-recovery.test.js
+      - name: Test bill append ambiguous-commit recovery
+        run: node tests/bill-append-commit-recovery.test.js
       - name: Test payment verification and rejection recovery safeguards
         run: node tests/payment-verification-rejection-recovery.test.js
       - name: Test event-keyed notification idempotency and transaction event identity
