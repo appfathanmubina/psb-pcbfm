@@ -23,13 +23,15 @@ const verify = section(
 const lockIndex = verify.indexOf('lock.waitLock(10000)');
 const lookupIndex = verify.indexOf("findRowById_(sheet,'documentId',documentId)");
 const replacedGuardIndex = verify.indexOf("String(found.object.status||'').toUpperCase()==='REPLACED'");
-const firstWriteIndex = verify.indexOf("sheet.getRange(found.rowNumber,statusIdx+1).setValue(status)");
+const firstWriteIndex = verify.indexOf("sheet.getRange(found.rowNumber,1,1,headers.length).setValues([verificationRow])");
 const readbackIndex = verify.indexOf("findRowById_(sheet,'documentId',documentId)", lookupIndex + 1);
 
 assert.ok(lockIndex >= 0, 'document verification must acquire ScriptLock');
 assert.ok(lookupIndex > lockIndex, 'document must be re-read after acquiring ScriptLock');
 assert.ok(replacedGuardIndex > lookupIndex, 'REPLACED status must be checked after fresh document lookup');
-assert.ok(firstWriteIndex > replacedGuardIndex, 'REPLACED guard must run before any document status write');
+assert.ok(firstWriteIndex > replacedGuardIndex, 'REPLACED guard must run before the atomic document status write');
+assert.doesNotMatch(verify, /sheet\\.getRange\\(found\\.rowNumber,[^\\n]*\\)\\.setValue\\(/, 'verification metadata must not be written through separate cell updates');
+assert.match(verify, /verificationRow\\[statusIdx\\]=status[\\s\\S]*?verificationRow\\[verifiedIdx\\]=[\\s\\S]*?verificationRow\\[byIdx\\]=[\\s\\S]*?verificationRow\\[noteIdx\\]=[\\s\\S]*?setValues\\(\\[verificationRow\\]\\)/, 'all verification fields must be committed in one row write');
 assert.match(verify, /Dokumen ini sudah digantikan oleh unggahan terbaru dan tidak dapat diverifikasi/,
   'replaced documents must return a clear non-retryable response');
 assert.match(verify, /requiredHeaders=\['documentId','registrationId','documentTypeId','status','verifiedAt','verifiedBy','revisionNote'\]/,
@@ -47,7 +49,7 @@ assert.match(verify, /confirmed\.object\.verifiedBy/,
 assert.match(verify, /confirmed\.object\.revisionNote/,
   'REVISION status must be confirmed against the persisted revision note');
 assert.match(verify, /createNotificationOnce_\([\s\S]*?DOCUMENT_VERIFICATION:/,
-  'revision notification retries must use a stable document-scoped event key');
+  'revision notification retries must use a stable document-and-revision-content event key');
 assert.doesNotMatch(verify, /notifyRegistrationOwner_\(/,
   'revision notification must not use the non-idempotent legacy notification helper');
 
