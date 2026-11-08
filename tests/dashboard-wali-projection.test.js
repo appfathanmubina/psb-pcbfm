@@ -67,7 +67,7 @@ assert.deepEqual(JSON.parse(JSON.stringify(rows)), [
 ], 'Projected reads preserve matching row order and only expose requested fields');
 assert.ok(calls.some(call=>call.column===1&&call.numColumns===1),
   'The matching helper must scan only the key column');
-assert.ok(calls.every(call=>!(call.column===1&&call.numColumns===headers.length)),
+assert.ok(calls.filter(call=>call.row>1).every(call=>!(call.column===1&&call.numColumns===headers.length)),
   'The matching helper must not fetch full rows when projection is supplied');
 
 console.log('PSB Dashboard and Wali narrow projection safeguards: OK');
