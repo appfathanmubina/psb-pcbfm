@@ -1216,10 +1216,10 @@ function createManualUser(sessionToken, payload) {
   const requestedRoles = Array.isArray(payload.roles) ? payload.roles : String(payload.role || '').split(',');
   const roles = Array.from(new Set(requestedRoles.map(x => String(x || '').trim().toUpperCase()).filter(Boolean)));
 
-  if (!name) return fail_('Nama lengkap wajib diisi.');
+  if (!name || name.length > 120) return fail_('Nama lengkap wajib diisi (maksimal 120 karakter).');
   if (!phone && !email) return fail_('No. HP atau Email wajib diisi minimal salah satu.');
-  if (phone && normalizePhone_(phone).length < 10) return fail_('No. HP tidak valid.');
-  if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return fail_('Format email tidak valid.');
+  if (phone && !/^62\d{8,13}$/.test(normalizePhone_(phone))) return fail_('No. HP tidak valid.');
+  if (email && (email.length > 254 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))) return fail_('Format email tidak valid.');
   if (!roles.length) return fail_('Pilih minimal satu role.');
   if (roles.some(r => PSB_ROLES.indexOf(r) < 0)) return fail_('Role akun tidak sesuai dengan role yang tersedia.');
   if (password.length < 6) return fail_('Password minimal 6 karakter.');
@@ -1234,11 +1234,14 @@ function createManualUser(sessionToken, payload) {
   try {
     const sheet = getDatabaseSpreadsheet_().getSheetByName('USERS');
     if (!sheet) return fail_('Database USERS belum tersedia. Jalankan setupPSBDatabase() terlebih dahulu.');
-    const rows = sheetRowsByFields_(sheet, ['phoneNormalized','emailNormalized']);
+    const rows = sheetRowsByFields_(sheet, ['phone','phoneNormalized','email','emailNormalized']);
     for (let i = 0; i < rows.length; i++) {
       const r = rows[i];
-      if (phoneNormalized && String(r.phoneNormalized || '').toLowerCase() === phoneNormalized.toLowerCase()) return fail_('No. HP sudah terdaftar.');
-      if (emailNormalized && String(r.emailNormalized || '').toLowerCase() === emailNormalized) return fail_('Email sudah terdaftar.');
+      // Legacy accounts may not yet have normalized identity columns populated.
+      const existingPhone=String(r.phoneNormalized||'').trim() || (r.phone?normalizePhone_(r.phone):'');
+      const existingEmail=String(r.emailNormalized||'').trim().toLowerCase() || String(r.email||'').trim().toLowerCase();
+      if (phoneNormalized && existingPhone.toLowerCase() === phoneNormalized.toLowerCase()) return fail_('No. HP sudah terdaftar.');
+      if (emailNormalized && existingEmail === emailNormalized) return fail_('Email sudah terdaftar.');
     }
 
     const now = new Date();
