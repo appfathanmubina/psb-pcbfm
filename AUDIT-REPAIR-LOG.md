@@ -612,3 +612,20 @@ Branch: `fix/manual-bill-idempotent-recovery`
 - No Spreadsheet schema change, production data change, or Apps Script deployment was made.
 - Regression coverage includes repeated creation, amount/due-date conflicts, persistence readback, non-blocking audit failure, and bill-scoped notification retry.
 - Apps Script staging/runtime and concurrent request validation remain required before production rollout.
+
+
+## Repair batch 23 — payment submission notification recovery
+
+Branch: `fix/payment-submission-notification-recovery`
+
+| ID | Finding | Change | Status |
+|---|---|---|---|
+| TXN-004 | A payment row could be durably saved while its staff/Wali notification failed. The catch path returned success without replaying notifications, and a retry was rejected as a duplicate. Recovery also referenced bill variables scoped inside the `try` block. | Add a persisted-payment notification dispatcher using the stable event key `PAYMENT_SUBMISSION:<paymentId>`; replay it on normal submission, partial-commit recovery, and an authorized duplicate retry. Duplicate retries return the existing payment without creating another Drive file or payment row. Move recovery references to function scope and release ScriptLock before notification delivery. | Implemented; regression test added; CI pending |
+
+### Scope and safety
+
+- Staff fan-out remains limited to SUPERADMIN, ADMIN_PSB, and KEUANGAN. The Wali receipt notification is sent only when the authenticated actor is WALI, preserving the prior role behavior.
+- Notification delivery is idempotent per recipient and payment event. A retry can repair recipients missed by a partial fan-out without duplicating already-created notifications.
+- Duplicate retry is allowed only after the caller passes the existing bill access check and the persisted payment matches the same bill and registration. No second Drive proof file or payment row is created.
+- No Spreadsheet schema, production data, or Apps Script deployment changed.
+- Regression coverage is source-contract based. Apps Script staging/runtime, Drive failure injection, and concurrent retry validation remain required before production rollout.
