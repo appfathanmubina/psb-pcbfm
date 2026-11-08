@@ -92,6 +92,8 @@ jobs:
         run: node tests/data-integrity-duplicate-coverage.test.js
       - name: Test authentication, login throttling, and session safeguards
         run: node tests/auth-session-security.test.js
+      - name: Test authentication and session concurrency recovery
+        run: node tests/session-concurrency-recovery.test.js
       - name: Test authorization and resource ownership safeguards
         run: node tests/authorization-ownership.test.js
       - name: Test direct Wali registration without email verification safeguards
