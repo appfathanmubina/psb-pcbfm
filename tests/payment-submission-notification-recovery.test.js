@@ -23,7 +23,7 @@ const submit = section(backend, 'function submitPayment(sessionToken,payload){',
 assert.match(submit, /let billId='';[\s\S]*?let bills=null;/,
   'Catch recovery must retain bill and sheet references outside the try block');
 assert.match(submit, /const existingPayment=existingRows\.find/);
-assert.match(submit, /String\(existingPayment\.registrationId\|\|'\)\)!==String\(br\.object\.registrationId/);
+assert.match(submit, /String\(existingPayment\.registrationId\|\|'\)!==String\(br\.object\.registrationId/);
 assert.match(submit, /lock\.releaseLock\(\);\s*lockAcquired=false;\s*try\s*\{\s*dispatchPaymentSubmissionNotifications_\(existingPaymentId,actor\.role\)/,
   'Duplicate retry must release the lock before recovering notification delivery');
 assert.match(submit, /dispatchPaymentSubmissionNotifications_\(paymentId,actor\.role\)/,
