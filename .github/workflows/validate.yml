@@ -86,6 +86,8 @@ jobs:
         run: node tests/wali-selection-result-privacy.test.js
       - name: Test registration payment and document status consistency
         run: node tests/registration-status-consistency.test.js
+      - name: Test registration submission notification recovery and idempotent retry
+        run: node tests/registration-submission-notification-recovery.test.js
       - name: Test idempotent registration persistence and partial-write recovery
         run: node tests/registration-idempotent-save.test.js
       - name: Test Drive private document safeguards
