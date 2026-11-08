@@ -62,6 +62,8 @@ jobs:
         run: node tests/payment-reregistration-transaction-recovery.test.js
       - name: Test selection transaction recovery safeguards
         run: node tests/selection-transaction-recovery.test.js
+      - name: Test re-registration opening transaction safeguards
+        run: node tests/reregistration-open-transaction.test.js
       - name: Test ScriptLock timeout and batch-write safeguards
         run: node tests/script-lock-safeguards.test.js
       - name: Test incident mutation ScriptLock and batch-write safeguards
