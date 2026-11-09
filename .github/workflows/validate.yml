@@ -118,6 +118,8 @@ jobs:
         run: node tests/auth-session-security.test.js
       - name: Test authentication and session concurrency recovery
         run: node tests/session-concurrency-recovery.test.js
+      - name: Test latest session token and logout confirmation safeguards
+        run: node tests/session-token-logout-confirmation.test.js
       - name: Test authorization and resource ownership safeguards
         run: node tests/authorization-ownership.test.js
       - name: Test direct Wali registration without email verification safeguards

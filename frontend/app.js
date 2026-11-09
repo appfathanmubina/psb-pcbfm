@@ -133,7 +133,8 @@ async function openLogin(){
   try{
     const result=await server('validateSession',token);
     if(state.sessionCheckId!==checkId)return;
-    if(String(state.token||'')!==token){clearTimeout(window.PSBSessionCheckNoticeTimer);$('sessionCheckNotice')?.remove();return;}
+    const latestToken=String(state.token||localStorage.getItem('psb_session')||'');
+    if(latestToken!==token){clearTimeout(window.PSBSessionCheckNoticeTimer);$('sessionCheckNotice')?.remove();return;}
     if(result?.success){sessionCheckNotice('Sesi aktif. Silakan lanjutkan masuk.','success');}
     else{
       state.token='';state.user=null;localStorage.removeItem('psb_session');sessionStorage.removeItem('psb_current_page');
@@ -2039,16 +2040,27 @@ function openChangePassword(){
 function closeModal(){$('modal')?.remove()}
 async function savePassword(){const a=$('oldPass').value,b=$('newPass').value,c=$('newPass2').value;if(b.length<6){$('modalMsg').innerHTML=showMessage('Password baru minimal 6 karakter.');return}if(b!==c){$('modalMsg').innerHTML=showMessage('Konfirmasi password baru tidak sama.');return}loading(true,'Menyimpan password...');try{const r=await server('changePassword',state.token,a,b);if(r.success){$('modalMsg').innerHTML=showMessage(r.message,'success');setTimeout(closeModal,700)}else $('modalMsg').innerHTML=showMessage(r.message)}catch(e){$('modalMsg').innerHTML=showMessage('Gagal menyimpan password.')}finally{loading(false)}}
 async function doLogout(){
-  const token=state.token;
-  // Tutup sesi di UI segera agar tidak ada dialog/status keluar yang tertinggal.
+  const token=String(state.token||localStorage.getItem('psb_session')||'');
+  // Logout lokal selalu dilakukan segera; pencabutan sesi server dilaporkan terpisah.
   state.token='';state.user=null;state.appInitialized=false;state.preloadRunning=false;state.preloadReady=false;state.cache={registration:null,documents:{},payments:{},pages:{}};state.prefetchPromises={};state.pageSnapshots={};state.registrationList=[];state.documentData=null;state.paymentData=null;
   localStorage.removeItem('psb_session');
   try{sessionStorage.clear();}catch(e){}
   loading(false);
   renderPublicHome();
-  showToast('Anda sudah keluar dari aplikasi.','success');
-  // Invalidasi sesi server tetap dijalankan di belakang layar.
-  if(token)server('logout',token).catch(()=>{});
+  showToast('Anda sudah keluar dari perangkat ini.','info');
+  if(!token)return;
+  try{
+    const result=await server('logout',token);
+    if(result?.success&&result.revoked===true){
+      showToast('Sesi server berhasil dicabut.','success');
+    }else if(result?.success&&result.alreadyInactive===true){
+      showToast('Anda sudah keluar dari perangkat ini. Sesi server sebelumnya sudah tidak aktif.','info');
+    }else{
+      showToast('Anda sudah keluar dari perangkat ini, tetapi pencabutan sesi server belum terkonfirmasi. Silakan coba masuk kembali atau ulangi logout saat koneksi stabil.','warning');
+    }
+  }catch(error){
+    showToast('Anda sudah keluar dari perangkat ini, tetapi server belum mengonfirmasi pencabutan sesi. Periksa koneksi dan ulangi logout saat tersedia.','warning');
+  }
 }
 function syncViewport(){
   const vv=window.visualViewport;
