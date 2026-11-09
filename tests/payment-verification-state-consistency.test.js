@@ -44,6 +44,10 @@ assert.ok(historyFlush > historyCatch && historyReadback > historyFlush,
   'Verification history must be flushed before reading back the possibly committed row');
 assert.match(verify, /if\(!confirmedHistory\)return fail_/,
   'Payment decision must not proceed unless its verification history is confirmed');
+assert.match(verify, /if\(verificationRows\.length>1\)return fail_/,
+  'Payment decision must stop when duplicate verification-history rows already exist, even if their statuses match');
+assert.ok(verify.indexOf('if(verificationRows.length>1)') < verify.indexOf('if(!verificationRows.length)'),
+  'Duplicate history must be rejected before attempting to append or reuse a history row');
 
 const registrationStart = backend.indexOf('function setRegistrationStatus_(');
 const registrationEnd = backend.indexOf('\n// =====================================================\n// STAGE 5', registrationStart);
