@@ -1,18 +1,16 @@
-// PSB PWA 32.44.0 — improve user-facing error and status notifications.
-const CACHE='psb-pwa-shell-v32-44-0';
+// PSB PWA 32.45.0 — improve user-facing error and status notifications.
+const CACHE='psb-pwa-shell-v32-45-0';
 const ASSETS=[
   './',
   './index.html',
-  './manifest.webmanifest?v=32.17.0',
+  './manifest.webmanifest?v=32.18.0',
   './styles.css?v=32.27.0',
   './api-bridge.js?v=32.19.0',
   './app.js?v=32.41.0',
   './assets/logo-fathanmubina.svg?v=32.7.0',
   './assets/logo-fathan-mubina.png?v=32.7.0',
   './icons/favicon-32.svg?v=32.7.0',
-  './icons/favicon-48.svg?v=32.7.0',
-  './icons/icon-512.svg?v=32.7.0',
-  './icons/icon-maskable-512.svg?v=32.7.0'
+  './icons/favicon-48.svg?v=32.7.0'
 ];
 self.addEventListener('install',event=>event.waitUntil(
   caches.open(CACHE)
