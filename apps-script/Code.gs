@@ -2651,6 +2651,11 @@ function getPaymentQueue(sessionToken, page, filters) {
   const paymentsForStatus=sheetRowsMatchingValuesByFields_(ss.getSheetByName(PSB_SHEETS.PAYMENTS),'billId',
     activeBillRefs.map(x=>String(x.billId||'')).filter(Boolean),['paymentId','billId','registrationId','amount','status','createdAt']);
   const paymentLedgerForQueue=reconcilePaymentLedger_(activeBillRefs,paymentsForStatus);
+  const verificationHistoryForQueue=sheetRowsMatchingValuesByFields_(
+    ss.getSheetByName(PSB_SHEETS.PAYMENT_VERIFICATIONS),'paymentId',
+    paymentsForStatus.map(x=>String(x.paymentId||'')).filter(Boolean),['paymentId','status']
+  );
+  const historyIssuesForQueue=paymentVerificationHistoryIssueMap_(paymentsForStatus,verificationHistoryForQueue);
   const paymentTypeNameById = Object.create(null);
   if (query) paymentTypes.forEach(x=>{paymentTypeNameById[String(x.paymentTypeId||'')]=String(x.name||'');});
 
@@ -2658,7 +2663,9 @@ function getPaymentQueue(sessionToken, page, filters) {
     const registration=query?registrationById[String(bill.registrationId||'')]||{}:{};
     const candidate=query?candidateById[String(registration.candidateId||'')]||{}:{};
     const ledgerState=paymentLedgerForQueue.byBill[String(bill.billId||'')]||{status:'UNPAID',requiresReview:false};
-    const queueStatus=ledgerState.status==='WAITING'?'WAITING':ledgerState.requiresReview?'RECONCILIATION_REQUIRED':ledgerState.status;
+    const billPayments=paymentsForStatus.filter(x=>String(x.billId||'')===String(bill.billId||''));
+    const historyRequiresReview=billPayments.some(x=>!!historyIssuesForQueue[String(x.paymentId||'')]);
+    const queueStatus=ledgerState.requiresReview||historyRequiresReview?'RECONCILIATION_REQUIRED':ledgerState.status==='WAITING'?'WAITING':ledgerState.status;
     const paymentTypeName=query?paymentTypeNameById[String(bill.paymentTypeId||'')]||String(bill.paymentTypeId||'Tagihan'):'';
     const searchValues=query?[
       candidate.fullName,candidate.name,registration.registrationNumber,
@@ -2732,7 +2739,9 @@ function getPaymentQueue(sessionToken, page, filters) {
     const paymentStatus=String(payment?.status||'').toUpperCase();
     const billStatus=String(bill.status||'').toUpperCase();
     const billLedger=reconcilePaymentLedger_([bill],billPayments).byBill[String(bill.billId||'')]||{status:'UNPAID',requiresReview:false};
-    const queueStatus=billLedger.status==='WAITING'?'WAITING':billLedger.requiresReview?'RECONCILIATION_REQUIRED':billLedger.status;
+    const historyRequiresReview=billPayments.some(x=>!!historyIssuesForQueue[String(x.paymentId||'')]);
+    const reconciliationRequired=!!billLedger.requiresReview||historyRequiresReview;
+    const queueStatus=reconciliationRequired?'RECONCILIATION_REQUIRED':billLedger.status==='WAITING'?'WAITING':billLedger.status;
     const paymentType=paymentTypesById[String(bill.paymentTypeId||'')]||{};
     return {
       billId:String(bill.billId||''),
@@ -2745,7 +2754,7 @@ function getPaymentQueue(sessionToken, page, filters) {
       paymentTypeName:String(paymentType.name||bill.paymentTypeId||'Tagihan'),
       amount:Number(bill.amount||0),
       dueDate:String(bill.dueDate||''),
-      billStatus,queueStatus,reconciliationRequired:!!billLedger.requiresReview,
+      billStatus,queueStatus,reconciliationRequired,
       paymentId:String(payment?.paymentId||''),
       paymentStatus,
       proofFileUrl:String(payment?.proofFileUrl||''),
@@ -3010,6 +3019,28 @@ function reconcilePaymentLedger_(bills,payments) {
   return result;
 }
 
+function paymentVerificationHistoryIssueMap_(payments, verificationRows) {
+  const historyByPayment=Object.create(null),issues=Object.create(null);
+  (verificationRows||[]).forEach(row=>{
+    const id=String(row.paymentId||'').trim();
+    if(!id)return;
+    if(!historyByPayment[id])historyByPayment[id]=[];
+    historyByPayment[id].push(row);
+  });
+  (payments||[]).forEach(payment=>{
+    const id=String(payment.paymentId||'').trim();
+    if(!id)return;
+    const status=String(payment.status||'').toUpperCase();
+    const history=historyByPayment[id]||[];
+    const finalDecision=['VERIFIED','REJECTED'].includes(status);
+    if(history.length>1 || (finalDecision &&
+      (history.length!==1 || String(history[0]?.status||'').toUpperCase()!==status))) {
+      issues[id]=true;
+    }
+  });
+  return issues;
+}
+
 function preferredPaymentForBill_(current,candidate) {
   if(!current)return candidate;
   return paymentStatusPriority_(candidate?.status)>paymentStatusPriority_(current?.status)?candidate:current;
@@ -3035,13 +3066,15 @@ function buildPaymentData_(registrationId, paymentTypes) {
   const paymentIds=payments.map(x=>String(x.paymentId||'')).filter(Boolean);
   const verifications=sheetRowsMatchingValues_(ss.getSheetByName(PSB_SHEETS.PAYMENT_VERIFICATIONS),'paymentId',paymentIds);
   const verificationByPayment={}; verifications.forEach(x=>{verificationByPayment[String(x.paymentId)]=x;});
+  const historyIssues=paymentVerificationHistoryIssueMap_(payments,verifications);
   const items=bills.map(b=>{
     const billPayments=payments.filter(x=>String(x.billId)===String(b.billId));
     const payment=paymentByBill[String(b.billId)]||null;
     const verification=payment?verificationByPayment[String(payment.paymentId)]:null;
     const state=paymentLedger.byBill[String(b.billId||'')]||{status:'UNPAID',requiresReview:false};
+    const historyRequiresReview=billPayments.some(x=>!!historyIssues[String(x.paymentId||'')]);
     const status=state.status;
-    return Object.assign({},b,{status:status==='WAITING'?'PAYMENT_REVIEW':status,reconciliationRequired:!!state.requiresReview,paymentTypeName:types[String(b.paymentTypeId)]?.name||b.paymentTypeId,payment:payment?Object.assign({},payment,{verificationNote:String(verification?.note||'')}):null});
+    return Object.assign({},b,{status:status==='WAITING'?'PAYMENT_REVIEW':status,reconciliationRequired:!!state.requiresReview||historyRequiresReview,paymentTypeName:types[String(b.paymentTypeId)]?.name||b.paymentTypeId,payment:payment?Object.assign({},payment,{verificationNote:String(verification?.note||'')}):null});
   });
   return {registrationId:String(registrationId),bills:items,payments};
 }
