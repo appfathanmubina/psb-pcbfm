@@ -29,6 +29,15 @@ assert.match(sync, /if\(!confirmedRereg\|\|String\(confirmedRereg\.object\.statu
   'Reregistration status must be confirmed after writing');
 assert.match(sync, /if\(!docsReady\)return \{success:true,completed:false/,
   'Payment-only completion must remain PAYMENT_VERIFIED while required documents are incomplete');
+
+assert.match(sync, /completionAlreadyCommitted=currentRegStatus==='COMPLETED'\|\|currentReregStatus==='COMPLETED'/,
+  'A previously completed registration or re-registration must never be downgraded by a later payment retry');
+assert.match(sync, /const shouldComplete=docsReady\|\|completionAlreadyCommitted/,
+  'A partial completion commit must repair the other durable record even if current document configuration changes');
+assert.match(sync, /completedIdx=headers\.indexOf\('completedAt'\)/,
+  'Automatic completion synchronization must persist the completion timestamp');
+assert.match(sync, /if\(shouldComplete&&!confirmedRereg\.object\.completedAt\)/,
+  'Automatic completion must verify its timestamp by reading the re-registration row back');
 assert.match(sync, /if\(!rrFound\)return fail_\(/,
   'A missing re-registration record must block payment finalization with an actionable error');
 assert.match(sync, /if\(!payment\|\|String\(payment\.status\|\|''\)\.toUpperCase\(\)!=='PAID'\)return fail_\(/,
