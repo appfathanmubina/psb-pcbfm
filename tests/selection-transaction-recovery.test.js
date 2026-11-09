@@ -68,9 +68,9 @@ assert.match(single, /catch\(notificationError\)/,
 
 assert.match(single, /alreadyAssigned=true/,
   'Retrying the same registration and schedule must return the persisted assignment as idempotent success');
-assert.match(single, /notifySelectionParticipantOwnerOnce_\\(registrationId,schedule\\.object,record\\.participantId\\)/,
+assert.match(single, /notifySelectionParticipantOwnerOnce_\(registrationId,schedule\.object,record\.participantId\)/,
   'Single assignment retries must recover the owner notification from the persisted participant identity');
-assert.match(single, /catch\\(appendError\\)[\\s\\S]*?findRowById_\\(sheet,'participantId',record\\.participantId\\)/,
+assert.match(single, /catch\(appendError\)[\s\S]*?findRowById_\(sheet,'participantId',record\.participantId\)/,
   'Single assignment must reconcile an ambiguous append result by reading back the participant row');
 
 const bulk = section(
@@ -88,20 +88,20 @@ assert.ok(bulk.indexOf('findRegistration_(registrationId)') > bulkLock &&
 assert.match(bulk, /finally\{lock\.releaseLock\(\)\}/,
   'Bulk participant generation must always release its lock');
 
-assert.match(bulk, /findRowById_\\(sheet,'participantId',record\\.participantId\\)/,
+assert.match(bulk, /findRowById_\(sheet,'participantId',record\.participantId\)/,
   'Bulk participant generation must confirm each appended participant by participantId');
-assert.match(bulk, /notificationRecovery\\.push\\(prior\\)/,
+assert.match(bulk, /notificationRecovery\.push\(prior\)/,
   'Bulk retry must recover notifications for participants already assigned to the same schedule');
-assert.match(bulk, /Array\\.from\\(new Set\\(/,
+assert.match(bulk, /Array\.from\(new Set\(/,
   'Duplicate registration IDs in one bulk request must be collapsed before writes');
-assert.match(bulk, /catch\\(appendError\\)[\\s\\S]*?const confirmed=findRowById_/,
+assert.match(bulk, /catch\(appendError\)[\s\S]*?const confirmed=findRowById_/,
   'Bulk append errors must be reconciled with a persisted-row readback before reporting failure');
 const notificationHelper = section(
   'function notifySelectionParticipantOwnerOnce_(',
-  '\\nfunction updateSelectionParticipantStatus(sessionToken,payload){',
+  '\nfunction updateSelectionParticipantStatus(sessionToken,payload){',
   'Selection notification recovery helper'
 );
-assert.match(notificationHelper, /createNotificationOnce_\\([\\s\\S]*?'SELECTION_SCHEDULE:'\\+String\\(participantId\\|\\|'\\)\\)/,
+assert.match(notificationHelper, /createNotificationOnce_\([\s\S]*?'SELECTION_SCHEDULE:'\+String\(participantId\|\|'\)\)/,
   'Selection schedule notifications must use a stable event key derived from participantId');
 
 const participantStatus = section(
