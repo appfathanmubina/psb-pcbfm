@@ -2509,6 +2509,9 @@ function appendBillRecordWithRecovery_(sheet, headers, record) {
     sheet.appendRow(headers.map(h=>record[h] == null ? '' : record[h]));
   } catch(writeError) {
     try {
+      // appendRow may have committed before its response failed. Flush pending
+      // Spreadsheet writes before deciding that the bill is absent.
+      SpreadsheetApp.flush();
       const recovered=findRowById_(sheet,'billId',billId);
       if(recovered) return recovered;
     } catch(recoveryError) {
