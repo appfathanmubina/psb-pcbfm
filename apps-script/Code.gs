@@ -3413,6 +3413,7 @@ function verifyPayment(sessionToken,payload){
     let verificationRows=sheetRowsMatchingValues_(verSheet,'paymentId',[paymentId]);
     const conflicting=verificationRows.find(x=>String(x.status||'').toUpperCase()!==status);
     if(conflicting)return fail_('Sudah ada catatan verifikasi dengan keputusan berbeda. Periksa riwayat pembayaran sebelum melanjutkan.');
+    if(verificationRows.length>1)return fail_('Ditemukan lebih dari satu riwayat verifikasi untuk pembayaran ini. Finalisasi dihentikan; minta SUPERADMIN memeriksa rekonsiliasi data terlebih dahulu.');
     if(!verificationRows.length){
       const rec={};vh.forEach(h=>rec[h]='');
       Object.assign(rec,{verificationId:generateId_('PVF'),paymentId,status,verifiedBy:actor.userId,verifiedAt:new Date(),note});
