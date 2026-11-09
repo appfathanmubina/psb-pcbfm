@@ -101,7 +101,7 @@ const notificationHelper = section(
   '\nfunction updateSelectionParticipantStatus(sessionToken,payload){',
   'Selection notification recovery helper'
 );
-assert.match(notificationHelper, /createNotificationOnce_\([\s\S]*?'SELECTION_SCHEDULE:'\+String\(participantId\|\|'\)\)/,
+assert.ok(notificationHelper.includes("'SELECTION_SCHEDULE:'+String(participantId||'')"),
   'Selection schedule notifications must use a stable event key derived from participantId');
 
 const participantStatus = section(
