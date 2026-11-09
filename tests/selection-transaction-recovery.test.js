@@ -185,4 +185,21 @@ assert.match(scoreSave, /catch\(writeError\)[\s\S]*?let confirmed=findRowById_/,
 assert.match(scoreSave, /finally \{ lock\.releaseLock\(\); \}/,
   'Score save must always release its ScriptLock');
 
+
+const resultSave = section(
+  'function saveSelectionResult(sessionToken,payload){',
+  '\\nfunction isRegistrationSelectionEligible_(registrationId){',
+  'Selection result persistence'
+);
+assert.match(resultSave, /try\\{\\s*upsertById_\\(sheet,'resultId',record\\.resultId,record\\)[\\s\\S]*?SpreadsheetApp\\.flush\\(\\)/,
+  'Selection result upsert must flush before readback');
+assert.match(resultSave, /catch\\(writeError\\)[\\s\\S]*?let confirmed=findRowById_\\(sheet,'resultId',record\\.resultId\\)/,
+  'Ambiguous selection result writes must be reconciled before returning failure');
+assert.match(resultSave, /if\\(!confirmed\\)[\\s\\S]*?String\\(x\\.registrationId\\)===registrationId/,
+  'Selection result recovery must fall back to its unique registration identity');
+assert.match(resultSave, /String\\(saved\\.status\\|\\|'\\)\\.toUpperCase\\(\\)!==status/,
+  'Selection result recovery must verify the persisted result status');
+assert.match(resultSave, /String\\(saved\\.note\\|\\|'\\)!==note/,
+  'Selection result recovery must verify the persisted result note');
+
 console.log('Selection transaction recovery safeguards: OK');
