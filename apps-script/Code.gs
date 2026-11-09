@@ -3984,7 +3984,8 @@ function saveSelectionResult(sessionToken,payload){
       if(recovered)confirmed={object:recovered};
     }
     const saved=confirmed?.object;
-    if(!saved || String(saved.registrationId)!==registrationId ||
+    if(!saved || String(saved.resultId)!==String(record.resultId) ||
+      String(saved.registrationId)!==registrationId ||
       String(saved.status||'').toUpperCase()!==status || String(saved.note||'')!==note){
       return fail_('Hasil seleksi belum dapat dikonfirmasi tersimpan. Silakan coba kembali.');
     }
