@@ -19,18 +19,6 @@
       "sizes": "256x256",
       "type": "image/png",
       "purpose": "any"
-    },
-    {
-      "src": "./icons/icon-512.svg?v=32.7.0",
-      "sizes": "any",
-      "type": "image/svg+xml",
-      "purpose": "any"
-    },
-    {
-      "src": "./icons/icon-maskable-512.svg?v=32.7.0",
-      "sizes": "any",
-      "type": "image/svg+xml",
-      "purpose": "maskable"
     }
   ],
   "related_applications": [
