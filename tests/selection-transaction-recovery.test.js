@@ -197,6 +197,8 @@ assert.match(resultSave, /catch\(writeError\)[\s\S]*?let confirmed=findRowById_\
   'Ambiguous selection result writes must be reconciled before returning failure');
 assert.match(resultSave, /if\(!confirmed\)[\s\S]*?String\(x\.registrationId\)===registrationId/,
   'Selection result recovery must fall back to its unique registration identity');
+assert.match(resultSave, /String\(saved\.resultId\)!==String\(record\.resultId\)/,
+  'Selection result recovery must reject a fallback row with a different resultId');
 assert.match(resultSave, /String\(saved\.status\|\|''\)\.toUpperCase\(\)!==status/,
   'Selection result recovery must verify the persisted result status');
 assert.match(resultSave, /String\(saved\.note\|\|''\)!==note/,
