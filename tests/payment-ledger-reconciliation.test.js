@@ -25,6 +25,25 @@ assert.equal(ledger.summary.paidBills,1);
 assert.equal(ledger.byBill.b1.status,'PAID');
 assert.equal(ledger.byBill.b1.requiresReview,false);
 
+const historyIssues = sandbox.paymentVerificationHistoryIssueMap_(
+  [
+    payment('history-duplicate','b1','r1',125000,'VERIFIED'),
+    payment('partial-finalize','b2','r2',200000,'SUBMITTED'),
+    payment('history-missing','b3','r3',300000,'REJECTED')
+  ],
+  [
+    {paymentId:'history-duplicate',status:'VERIFIED'},
+    {paymentId:'history-duplicate',status:'VERIFIED'},
+    {paymentId:'partial-finalize',status:'VERIFIED'}
+  ]
+);
+assert.equal(historyIssues['history-duplicate'],true,
+  'Duplicate same-decision history must require reconciliation');
+assert.equal(historyIssues['partial-finalize'],undefined,
+  'One history on a still-SUBMITTED payment may be a recoverable partial commit');
+assert.equal(historyIssues['history-missing'],true,
+  'A finalized payment without exactly one matching history must require reconciliation');
+
 ledger = sandbox.reconcilePaymentLedger_([bill('b2','r2',200000,'PAID')],[]);
 assert.equal(ledger.summary.paidAmount,0,'A PAID bill without a payment row must not count as received money');
 assert.equal(ledger.byBill.b2.status,'UNPAID');
@@ -108,6 +127,15 @@ assert.doesNotMatch(formGate,/String\(x\.status\|\|''\)\.toUpperCase\(\)==='PAID
 const verifyPayment=section(backend,'function verifyPayment(sessionToken,payload){','\nfunction getSelectionPageData', 'Payment verification');
 assert.match(verifyPayment,/paymentAmountMatchesBill_\(br\.object,found\.object\)/,
   'Finance must not approve a payment whose amount differs from the current bill');
+
+const paymentQueue=section(backend,'function getPaymentQueue(sessionToken, page, filters) {','\nfunction getPaymentsForRegistration','Payment queue');
+assert.match(paymentQueue,/paymentVerificationHistoryIssueMap_\(paymentsForStatus,verificationHistoryForQueue\)/,
+  'Finance queue must include verification-history anomalies');
+assert.match(paymentQueue,/historyRequiresReview\?\x27RECONCILIATION_REQUIRED\x27/,
+  'History anomalies must override normal paid/waiting queue states');
+const paymentData=section(backend,'function buildPaymentData_(registrationId, paymentTypes) {','\nfunction createBill','Wali payment data');
+assert.match(paymentData,/paymentVerificationHistoryIssueMap_\(payments,verifications\)/,
+  'Wali payment data must expose verification-history anomalies');
 
 const verifyDocument=section(backend,'function verifyDocument(sessionToken, payload) {','\nfunction finalizeVerification', 'Document verification');
 assert.match(verifyDocument,/isFormPaymentVerified_\(/,
