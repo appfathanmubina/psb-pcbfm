@@ -53,8 +53,8 @@ assert.match(login, /state\.processSilentDepth[\s\S]*?server\('finalizeLogin',\s
   'Best-effort login audit must not extend the initial dashboard loading popup');
 assert.match(app, /function renderLogin\(error='',identifier=''\)/,
   'Failed login should retain the entered identifier');
-assert.match(app, /value="\$\{esc\(identifier\)\}"/,
-  'Login identifier must be safely escaped when restored');
+assert.match(app, /value="\$\{esc\(identifier\|\|\(localStorage\.getItem\('psb_remember_me'\)==='true'\?localStorage\.getItem\('psb_remembered_identifier'\):''\)\|\|''\)\}"/,
+  'Login identifier must be safely escaped and restored only when Remember Me is enabled');
 
 assert.match(app, /function warmNavigationData\(\)/,
   'Lazy navigation prefetch remains available after the active page loads');
