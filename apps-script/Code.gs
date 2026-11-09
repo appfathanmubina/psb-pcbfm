@@ -3968,15 +3968,26 @@ function saveSelectionResult(sessionToken,payload){
     if((currentStatus==='VERIFIED' || currentStatus==='PAYMENT_VERIFIED') && !isRegistrationSelectionEligible_(registrationId))return fail_('Pendaftar belum memenuhi syarat mengikuti tes. Pastikan verifikasi pendaftaran dan Pembayaran Formulir sudah selesai.');
 
     const record=existing?Object.assign({},existing,{status,announcementDate:existing.announcementDate||'',note,updatedAt:now}):{resultId:generateId_('RES'),registrationId,status,announcementDate:'',note,createdAt:now,updatedAt:now};
-    upsertById_(sheet,'resultId',record.resultId,record);
 
-    // Confirm the result row is durable before advancing registration status.
-    // If the status update then fails, a retry finds the existing result and
-    // safely retries the transition rather than leaving an advanced status
-    // without its corresponding selection result.
-    const savedRows=sheetRows_(sheet);
-    const saved=savedRows.find(x=>String(x.resultId)===String(record.resultId) && String(x.registrationId)===registrationId);
-    if(!saved || String(saved.status||'').toUpperCase()!==status)return fail_('Hasil seleksi belum tersimpan. Silakan coba lagi.');
+    // A Sheets write can commit even when the Apps Script call returns an
+    // error. Reconcile the persisted row before returning a failure so the
+    // caller does not receive a false-negative for a committed result.
+    try{
+      upsertById_(sheet,'resultId',record.resultId,record);
+      SpreadsheetApp.flush();
+    }catch(writeError){
+      console.error('Selection result write returned an error; reconciling persisted state: '+writeError);
+    }
+    let confirmed=findRowById_(sheet,'resultId',record.resultId);
+    if(!confirmed){
+      const recovered=sheetRows_(sheet).find(x=>String(x.registrationId)===registrationId);
+      if(recovered)confirmed={object:recovered};
+    }
+    const saved=confirmed?.object;
+    if(!saved || String(saved.registrationId)!==registrationId ||
+      String(saved.status||'').toUpperCase()!==status || String(saved.note||'')!==note){
+      return fail_('Hasil seleksi belum dapat dikonfirmasi tersimpan. Silakan coba kembali.');
+    }
 
     if(currentStatus==='VERIFIED' || currentStatus==='PAYMENT_VERIFIED'){
       const moved=setRegistrationStatus_(found.registration,'SELECTION',actor.userId,'Pendaftaran masuk tahap penetapan hasil seleksi.');
