@@ -25,7 +25,7 @@
     root.style.setProperty('--app-viewport-height', (window.visualViewport?.height || window.innerHeight || root.clientHeight || 0) + 'px');
   }
 })();
-const state={token:localStorage.getItem('psb_session')||'',user:null,config:{},page:'home',appInitialized:false,initialData:null,preloadRunning:false,preloadReady:false,cache:{registration:null,documents:{},payments:{},pages:{}},pageSnapshots:{},paymentRegistrationId:'',paymentData:null,paymentTypes:[],masterKey:'MASTER_TAHUN_AJARAN',masterItems:[],masterDefinitions:{},masterCache:{},academicYearLifecycle:null,auditData:null,registrationList:[],registrationOptions:null,registrationDetail:null,documentRegistrationId:'',documentData:null,selectionData:null,selectionTab:'overview',selectionRegistrationId:'',detailLoadingLocks:{}};
+const state={authFlowId:0,token:localStorage.getItem('psb_session')||'',user:null,config:{},page:'home',appInitialized:false,initialData:null,preloadRunning:false,preloadReady:false,cache:{registration:null,documents:{},payments:{},pages:{}},pageSnapshots:{},paymentRegistrationId:'',paymentData:null,paymentTypes:[],masterKey:'MASTER_TAHUN_AJARAN',masterItems:[],masterDefinitions:{},masterCache:{},academicYearLifecycle:null,auditData:null,registrationList:[],registrationOptions:null,registrationDetail:null,documentRegistrationId:'',documentData:null,selectionData:null,selectionTab:'overview',selectionRegistrationId:'',detailLoadingLocks:{}};
 const $=id=>document.getElementById(id);
 function esc(v){return String(v??'').replace(/[&<>'"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c]));}
 function normalizeAssetUrl(raw){
@@ -415,6 +415,8 @@ function sessionCheckNotice(message,status='loading'){
   if(status!=='loading')window.PSBSessionCheckNoticeTimer=setTimeout(()=>notice.remove(),2600);
 }
 async function openLogin(){
+  // A new login screen supersedes any pending logout notification.
+  const authFlowId=state.authFlowId=Number(state.authFlowId||0)+1;
   renderLogin();
   $('app')?.querySelector('.login-wrap')?.classList.add('session-check-open');
   sessionCheckNotice('Mohon tunggu sebentar. Sedang cek sesi . . .','loading');
@@ -499,12 +501,13 @@ function rememberLoginCredentials(identifier,password){
 }
 async function submitLogin(e){
   e.preventDefault();
+  const authFlowId=state.authFlowId=Number(state.authFlowId||0)+1;
   const identifier=String($('identifier')?.value||'').trim();
   const password=String($('password')?.value||'');
   if(!identifier||!password)return;
   if($('rememberMe')?.checked!==true){localStorage.removeItem('psb_remember_me');localStorage.removeItem('psb_remembered_identifier');}
   const btn=$('loginBtn');btn.disabled=true;btn.textContent='Memeriksa...';loading(true,'Memeriksa akun...');
-  try{const r=await server('login',identifier,password);if(r.success){rememberLoginCredentials(identifier,password);state.token=r.sessionToken;state.user=r.user;state.appInitialized=false;state.preloadRunning=false;state.preloadReady=false;state.initialData=null;state.cache={registration:null,documents:{},payments:{},pages:{}};state.prefetchPromises={};state.pageSnapshots={};state.registrationList=[];state.documentData=null;state.paymentData=null;localStorage.setItem('psb_session',state.token);renderApp();loading(false);initializeAfterLogin();server('finalizeLogin',state.token).catch(()=>{});if(r.mustChangePassword)setTimeout(openChangePassword,200);}else renderLogin(r.message)}catch(err){renderLogin('Terjadi kesalahan koneksi aplikasi.')}finally{if(!state.appInitialized)loading(false)}
+  try{const r=await server('login',identifier,password);if(state.authFlowId!==authFlowId)return;if(r.success){rememberLoginCredentials(identifier,password);state.token=r.sessionToken;state.user=r.user;state.appInitialized=false;state.preloadRunning=false;state.preloadReady=false;state.initialData=null;state.cache={registration:null,documents:{},payments:{},pages:{}};state.prefetchPromises={};state.pageSnapshots={};state.registrationList=[];state.documentData=null;state.paymentData=null;localStorage.setItem('psb_session',state.token);renderApp();loading(false);initializeAfterLogin();server('finalizeLogin',state.token).catch(()=>{});if(r.mustChangePassword)setTimeout(openChangePassword,200);}else renderLogin(r.message)}catch(err){if(state.authFlowId!==authFlowId)return;renderLogin('Terjadi kesalahan koneksi aplikasi.')}finally{if(!state.appInitialized)loading(false)}
 }
 function buildRoleNav(){
   const wali=hasAnyRole(['WALI']);
@@ -1636,6 +1639,7 @@ function openChangePassword(){
 function closeModal(){$('modal')?.remove()}
 async function savePassword(){const a=$('oldPass').value,b=$('newPass').value,c=$('newPass2').value;if(b.length<6){$('modalMsg').innerHTML=showMessage('Password baru minimal 6 karakter.');return}if(b!==c){$('modalMsg').innerHTML=showMessage('Konfirmasi password baru tidak sama.');return}loading(true,'Menyimpan password...');try{const r=await server('changePassword',state.token,a,b);if(r.success){$('modalMsg').innerHTML=showMessage(r.message,'success');setTimeout(closeModal,700)}else $('modalMsg').innerHTML=showMessage(r.message)}catch(e){$('modalMsg').innerHTML=showMessage('Gagal menyimpan password.')}finally{loading(false)}}
 async function doLogout(){
+  const authFlowId=state.authFlowId=Number(state.authFlowId||0)+1;
   const token=String(state.token||localStorage.getItem('psb_session')||'');
   // Logout lokal selalu dilakukan segera; pencabutan sesi server dilaporkan terpisah.
   state.token='';state.user=null;state.appInitialized=false;state.preloadRunning=false;state.preloadReady=false;state.cache={registration:null,documents:{},payments:{},pages:{}};state.prefetchPromises={};state.pageSnapshots={};state.registrationList=[];state.documentData=null;state.paymentData=null;
@@ -1647,6 +1651,8 @@ async function doLogout(){
   if(!token)return;
   try{
     const result=await server('logout',token);
+    // Do not let an older logout RPC display a result after a newer auth flow starts.
+    if(state.authFlowId!==authFlowId||state.token||state.appInitialized)return;
     if(result?.success&&result.revoked===true){
       showToast('Sesi server berhasil dicabut.','success');
     }else if(result?.success&&result.alreadyInactive===true){
@@ -1655,6 +1661,7 @@ async function doLogout(){
       showToast('Anda sudah keluar dari perangkat ini, tetapi pencabutan sesi server belum terkonfirmasi. Silakan coba masuk kembali atau ulangi logout saat koneksi stabil.','warning');
     }
   }catch(error){
+    if(state.authFlowId!==authFlowId||state.token||state.appInitialized)return;
     showToast('Anda sudah keluar dari perangkat ini, tetapi server belum mengonfirmasi pencabutan sesi. Periksa koneksi dan ulangi logout saat tersedia.','warning');
   }
 }
