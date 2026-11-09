@@ -41,4 +41,8 @@ assert.match(pwa, /restoreRememberedLogin\(\);/,
   'PWA login screen must invoke credential restoration');
 assert.match(appsScript, /restoreRememberedLogin\(\);/,
   'Apps Script login screen must invoke credential restoration');
+for (const [label, source] of sources) {
+  assert.match(source, /onchange="if\(!this\.checked\)/,
+    label + ' unchecking Remember Me must immediately clear the remembered identity');
+}
 console.log('Remember Me and secure login autofill safeguards passed.');
