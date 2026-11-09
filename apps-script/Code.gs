@@ -899,6 +899,7 @@ function getSessionUser_(token, touch) {
   }
   if (!found) return fail_('Session tidak valid. Silakan login kembali.');
 
+  const idleMinutes = Number(getConfig_('SESSION_IDLE_MINUTES')) || PSB_AUTH.SESSION_IDLE_MINUTES;
   let row = found.row;
   if (String(row[6] || '').toUpperCase() !== 'ACTIVE') return fail_('Session sudah berakhir. Silakan login kembali.');
   let now = new Date();
@@ -919,7 +920,6 @@ function getSessionUser_(token, touch) {
     now = new Date();
     expiresAt = new Date(row[4]);
   }
-  const idleMinutes = Number(getConfig_('SESSION_IDLE_MINUTES')) || PSB_AUTH.SESSION_IDLE_MINUTES;
   let lastActivity = row[5] ? new Date(row[5]) : (row[3] ? new Date(row[3]) : null);
   if (!lastActivity || !Number.isFinite(lastActivity.getTime()) || lastActivity.getTime() > now.getTime() + 5 * 60000) {
     invalidateSession_(found, 'INVALID_ACTIVITY');
@@ -932,7 +932,12 @@ function getSessionUser_(token, touch) {
   }
   if ((now.getTime() - lastActivity.getTime()) > idleMinutes * 60000) {
     invalidateSession_(found, 'IDLE_TIMEOUT');
-    return fail_('Session berakhir karena tidak aktif. Silakan login kembali.');
+    const refreshed = rereadActiveSessionAfterStaleSnapshot_(sheet, found, tokenHash, idleMinutes);
+    if (!refreshed) return fail_('Session berakhir karena tidak aktif. Silakan login kembali.');
+    found.row = row = refreshed;
+    now = new Date();
+    expiresAt = new Date(row[4]);
+    lastActivity = row[5] ? new Date(row[5]) : new Date(row[3]);
   }
 
   // Baca data akun terbaru, tetapi gunakan indeks row-number agar tidak memindai
