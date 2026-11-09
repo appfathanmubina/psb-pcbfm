@@ -56,6 +56,21 @@ assert.match(invalidate, /PSB_SESSION_ROW_V1_/,
 const logout = fn('logout');
 assert.match(logout, /if\(!invalidateSession_\(result\.sessionRow, 'LOGOUT'\)\)/,
   'Logout must report a transient revocation failure instead of claiming success');
+assert.match(logout, /revoked:\s*true/,
+  'Logout must explicitly confirm successful server-side revocation');
+assert.match(logout, /alreadyInactive:\s*true/,
+  'Logout must distinguish an already inactive server session from a new revocation');
+
+const reread = fn('rereadActiveSessionAfterStaleSnapshot_');
+assert.match(reread, /getRange\(found\.rowNumber,\s*1,\s*1,\s*7\)/,
+  'A stale validation snapshot must trigger a fresh read of the session row');
+assert.match(reread, /constantTimeEqual_\(String\(latest\[2\]/,
+  'The fresh session row must still match the requested token hash');
+assert.match(reread, /latest\[6\].*ACTIVE/,
+  'A fresh active session must be allowed to continue validation');
+assert.match(touch, /rereadActiveSessionAfterStaleSnapshot_\(sheet, found, tokenHash, idleMinutes\)/,
+  'Validation must re-read a session after stale expiry/activity snapshots');
+
 
 for (const name of ['revokeOtherSessionsForUser_', 'cleanupPSBSessions_']) {
   assert.match(fn(name), /PSB_SESSION_ROW_V1_/,
