@@ -85,7 +85,7 @@ assert.ok(bulkLock >= 0 && bulkSchedule > bulkLock,
 assert.ok(bulk.indexOf('findRegistration_(registrationId)') > bulkLock &&
   bulk.indexOf('isRegistrationSelectionEligible_(registrationId)') > bulkLock,
   'Bulk participant generation must revalidate each registration under ScriptLock');
-assert.match(bulk, /finally\{lock\.releaseLock\(\)\}/,
+assert.match(bulk, /finally\{lock\.releaseLock\(\);?\}/,
   'Bulk participant generation must always release its lock');
 
 assert.match(bulk, /findRowById_\(sheet,'participantId',record\.participantId\)/,
