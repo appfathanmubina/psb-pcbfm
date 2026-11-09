@@ -3733,7 +3733,6 @@ function addSelectionParticipant(sessionToken,payload){
   let record,schedule,alreadyAssigned=false;
   try{
     const found=findRegistration_(registrationId);if(!found)return fail_('Pendaftaran tidak ditemukan.');
-    if(!isRegistrationSelectionEligible_(registrationId))return fail_('Pendaftar belum memenuhi syarat mengikuti tes. Pastikan verifikasi pendaftaran dan Pembayaran Formulir sudah selesai.');
     schedule=findRowById_(ss.getSheetByName(PSB_SHEETS.SELECTION_SCHEDULE),'scheduleId',scheduleId);
     if(!schedule)return fail_('Jadwal tes tidak ditemukan.');
     if(!schedule.object.isActive&&String(schedule.object.isActive).toUpperCase()!=='TRUE')return fail_('Jadwal tes tidak aktif.');
@@ -3742,6 +3741,7 @@ function addSelectionParticipant(sessionToken,payload){
       if(String(duplicate.scheduleId)===scheduleId){record=duplicate;alreadyAssigned=true;}
       else return fail_('Pendaftar sudah memiliki jadwal tes.');
     }else{
+      if(!isRegistrationSelectionEligible_(registrationId))return fail_('Pendaftar belum memenuhi syarat mengikuti tes. Pastikan verifikasi pendaftaran dan Pembayaran Formulir sudah selesai.');
       const headers=sheet.getRange(1,1,1,sheet.getLastColumn()).getValues()[0].map(String),now=new Date();
       record={};headers.forEach(h=>record[h]='');
       Object.assign(record,{participantId:generateId_('PTC'),registrationId,scheduleId,status:'SCHEDULED',createdAt:now,updatedAt:now});
