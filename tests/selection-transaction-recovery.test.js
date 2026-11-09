@@ -149,4 +149,40 @@ assert.match(statusHelper, /findRowById_\(sheet,'registrationId'/,
 assert.match(statusHelper, /catch\(auditError\)/,
   'Post-commit audit failure must not report a confirmed status transition as failed');
 
+const scheduleCreate = section(
+  'function createSelectionSchedule(sessionToken,payload){',
+  '\nfunction updateSelectionScheduleStatus(sessionToken,payload){',
+  'Selection schedule creation'
+);
+assert.match(scheduleCreate, /lock\.waitLock\(10000\)/,
+  'Schedule creation must serialize duplicate requests under ScriptLock');
+assert.ok(scheduleCreate.indexOf('matches()') > scheduleCreate.indexOf('lock.waitLock('),
+  'Schedule duplicate detection must run while holding ScriptLock');
+assert.match(scheduleCreate, /if\(prior\)return \{success:true,alreadyExists:true/,
+  'A retry for an already persisted schedule must return idempotent success');
+assert.match(scheduleCreate, /sheet\.appendRow\([\s\S]*?SpreadsheetApp\.flush\(\)[\s\S]*?findRowById_\(sheet,'scheduleId',record\.scheduleId\)/,
+  'New schedule creation must flush and confirm the persisted row by scheduleId');
+assert.match(scheduleCreate, /catch\(appendError\)[\s\S]*?matches\(\)/,
+  'Ambiguous schedule append must reconcile against the natural schedule identity');
+assert.match(scheduleCreate, /finally\{lock\.releaseLock\(\);\}/,
+  'Schedule creation must always release its ScriptLock');
+
+const scoreSave = section(
+  'function saveSelectionScore(sessionToken,payload){',
+  '\nfunction saveSelectionResult(sessionToken,payload){',
+  'Selection score persistence'
+);
+assert.match(scoreSave, /upsertById_\(sheet,'scoreId',record\.scoreId,record\)[\s\S]*?SpreadsheetApp\.flush\(\)/,
+  'Score upsert must flush before readback');
+assert.match(scoreSave, /findRowById_\(sheet,'scoreId',record\.scoreId\)/,
+  'Score upsert must confirm the persisted row by scoreId');
+assert.match(scoreSave, /Number\(saved\.score\)!==score/,
+  'Score confirmation must compare the persisted numeric score to the requested value');
+assert.match(scoreSave, /String\(saved\.note\|\|''\)!==note/,
+  'Score confirmation must compare the persisted note to the requested note');
+assert.match(scoreSave, /catch\(writeError\)[\s\S]*?let confirmed=findRowById_/,
+  'Ambiguous score write must be reconciled with a fresh read before reporting failure');
+assert.match(scoreSave, /finally \{ lock\.releaseLock\(\); \}/,
+  'Score save must always release its ScriptLock');
+
 console.log('Selection transaction recovery safeguards: OK');
