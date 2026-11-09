@@ -607,7 +607,7 @@ async function submitLogin(e){
     console.error('PSB login transport error:',err);
     renderLogin('Koneksi ke server gagal: '+String(err?.message||'Periksa koneksi internet dan deployment Apps Script.'),identifier);
   }finally{
-    if(!state.appInitialized)loading(false);
+    if(state.authFlowId===authFlowId&&!state.appInitialized)loading(false);
   }
 }
 function buildRoleNav(){
