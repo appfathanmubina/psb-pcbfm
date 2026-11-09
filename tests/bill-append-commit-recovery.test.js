@@ -55,6 +55,7 @@ const record = {
 
 appendMode = 'commit-then-throw';
 const recovered = persist(sheet, headers, record);
+assert.equal(flushCount, 1, 'Ambiguous append recovery must flush before reading back the possibly committed bill');
 assert.equal(rows.length, 1, 'An append that committed before throwing must not create a second bill');
 assert.equal(recovered.object.billId, record.billId, 'Recovery must return the committed bill by stable ID');
 assert.equal(recovered.object.status, 'UNPAID', 'Recovery must return the persisted bill state');
