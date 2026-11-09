@@ -4802,7 +4802,8 @@ function getProductionReadiness(sessionToken) {
   add('requiredConfig','Konfigurasi minimum',missingConfig.length?'ERROR':'OK',missingConfig.length?'Config belum ada: '+missingConfig.join(', '):'Konfigurasi minimum tersedia.',{category:'Configuration'});
   const errors=checks.filter(x=>x.status==='ERROR').length;
   const warnings=checks.filter(x=>x.status==='WARNING'||x.status==='CLOSED').length;
-  const result={success:true,checkedAt:new Date().toISOString(),activeYear,checks,summary:{total:checks.length,errors,warnings,ok:checks.length-errors-warnings},productionReady:errors===0};
+  const unresolvedTestData=checks.some(x=>x.key==='testData'&&x.status==='WARNING');
+  const result={success:true,checkedAt:new Date().toISOString(),activeYear,checks,summary:{total:checks.length,errors,warnings,ok:checks.length-errors-warnings},productionReady:errors===0&&!unresolvedTestData};
   writeAudit_(actor.userId,'PRODUCTION_READINESS','SYSTEM','', '', JSON.stringify({errors,warnings}), 'Pemeriksaan production readiness dijalankan');
   return result;
 }

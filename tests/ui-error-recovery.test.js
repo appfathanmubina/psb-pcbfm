@@ -41,6 +41,17 @@ assert.match(notification, /catch\(e\)\{showToast\(/,
   'A notification transport failure must be visible');
 
 for (const [label, client] of [['PWA', source], ['Apps Script UI', appsScriptSource]]) {
+  assert.match(client, /function friendlyErrorMessage\(/,
+    label + ' must translate transport failures into calm, actionable user copy');
+  assert.match(client, /Respons server belum diterima\. Periksa status data sebelum mengirim ulang\./,
+    label + ' must prevent blind retries after an ambiguous timeout');
+  assert.match(client, /class="psb-toast-host" id="psbToastHost"/,
+    label + ' must stack notifications in a dedicated host');
+  assert.match(client, /aria-live="\$\{safeType==='error'\?'assertive':'polite'\}"/,
+    label + ' notifications must announce errors accessibly');
+  assert.match(client, /setTimeout\(\(\)=>\$\(id\)\?\.remove\(\),safeType==='error'\?6500:4000\)/,
+    label + ' errors must stay available longer for users to read');
+
   const selectionRenderer = sectionFrom(
     client,
     'async function renderSelection(force=false){',
