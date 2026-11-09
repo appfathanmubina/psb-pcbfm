@@ -3695,12 +3695,47 @@ function createSelectionSchedule(sessionToken,payload){
   const name=clean_(payload.name), selectionDate=clean_(payload.selectionDate), location=clean_(payload.location);
   if(!tahunAjaranId||!name||!selectionDate) return fail_('Tahun ajaran, nama tes, dan tanggal tes wajib diisi.');
   const year=findMasterItemById_('MASTER_TAHUN_AJARAN','tahunAjaranId',tahunAjaranId); if(!year||!year.isActive)return fail_('Tahun ajaran tidak aktif atau tidak ditemukan.');
-  const sheet=getDatabaseSpreadsheet_().getSheetByName(PSB_SHEETS.SELECTION_SCHEDULE); if(!sheet)return fail_('Sheet jadwal seleksi belum tersedia.');
-  const headers=sheet.getRange(1,1,1,sheet.getLastColumn()).getValues()[0].map(String), now=new Date(), record={}; headers.forEach(h=>record[h]='');
-  Object.assign(record,{scheduleId:generateId_('SCH'),tahunAjaranId,name,selectionDate,location,isActive:true,createdAt:now,updatedAt:now});
-  sheet.appendRow(headers.map(h=>record[h]));
-  writeAudit_(actor.userId,'CREATE','SELECTION_SCHEDULE',record.scheduleId,'',JSON.stringify(record),'Jadwal tes dibuat');
-  return {success:true,message:'Jadwal tes berhasil dibuat.',schedule:rpcSafe_(record)};
+
+  const lock=LockService.getScriptLock();
+  try{lock.waitLock(10000);}catch(lockError){return fail_('Server sedang memproses permintaan lain. Silakan coba kembali beberapa saat lagi.');}
+  try{
+    const sheet=getDatabaseSpreadsheet_().getSheetByName(PSB_SHEETS.SELECTION_SCHEDULE);
+    if(!sheet)return fail_('Sheet jadwal seleksi belum tersedia.');
+    const normalize=value=>String(value||'').trim().replace(/\\s+/g,' ').toLowerCase();
+    const matches=()=>sheetRows_(sheet).find(row=>
+      String(row.tahunAjaranId||'')===tahunAjaranId &&
+      normalize(row.name)===normalize(name) &&
+      String(row.selectionDate||'').trim()===selectionDate &&
+      normalize(row.location)===normalize(location)
+    );
+    const prior=matches();
+    if(prior)return {success:true,alreadyExists:true,message:'Jadwal tes dengan data yang sama sudah tersedia.',schedule:rpcSafe_(prior)};
+
+    const headers=sheet.getRange(1,1,1,sheet.getLastColumn()).getValues()[0].map(String), now=new Date(), record={};
+    headers.forEach(h=>record[h]='');
+    Object.assign(record,{scheduleId:generateId_('SCH'),tahunAjaranId,name,selectionDate,location,isActive:true,createdAt:now,updatedAt:now});
+    try{
+      sheet.appendRow(headers.map(h=>record[h]));
+      SpreadsheetApp.flush();
+    }catch(appendError){
+      const recovered=findRowById_(sheet,'scheduleId',record.scheduleId)||matches();
+      if(recovered)return {success:true,alreadyExists:true,message:'Jadwal tes berhasil disimpan dan dipulihkan.',schedule:rpcSafe_(recovered.object||recovered)};
+      return fail_('Penyimpanan jadwal tes belum dapat dikonfirmasi. Silakan coba kembali.');
+    }
+    const confirmed=findRowById_(sheet,'scheduleId',record.scheduleId);
+    if(!confirmed){
+      const recovered=matches();
+      if(recovered)return {success:true,alreadyExists:true,message:'Jadwal tes berhasil disimpan dan dipulihkan.',schedule:rpcSafe_(recovered)};
+      return fail_('Jadwal tes belum berhasil dikonfirmasi tersimpan. Silakan coba kembali.');
+    }
+    const saved=confirmed.object;
+    if(String(saved.tahunAjaranId||'')!==tahunAjaranId || normalize(saved.name)!==normalize(name) ||
+      String(saved.selectionDate||'').trim()!==selectionDate || normalize(saved.location)!==normalize(location)){
+      return fail_('Data jadwal tes yang tersimpan tidak sesuai. Silakan periksa kembali.');
+    }
+    writeAudit_(actor.userId,'CREATE','SELECTION_SCHEDULE',record.scheduleId,'',JSON.stringify(saved),'Jadwal tes dibuat');
+    return {success:true,message:'Jadwal tes berhasil dibuat.',schedule:rpcSafe_(saved)};
+  }finally{lock.releaseLock();}
 }
 
 function updateSelectionScheduleStatus(sessionToken,payload){
@@ -3878,9 +3913,29 @@ function saveSelectionScore(sessionToken,payload){
     const existing=rows.find(x=>String(x.participantId)===participantId&&String(x.component).trim().toLowerCase()===component.toLowerCase());
     const now=new Date();
     const record=existing?Object.assign({},existing,{score,note,updatedAt:now}):{scoreId:generateId_('SCR'),participantId,component,score,note,createdAt:now,updatedAt:now};
-    upsertById_(sheet,'scoreId',record.scoreId,record);
-    writeAudit_(actor.userId,existing?'UPDATE':'CREATE','SELECTION_SCORE',record.scoreId,existing?JSON.stringify(existing):'',JSON.stringify(record),'Nilai seleksi disimpan');
-    return {success:true,message:'Nilai seleksi berhasil disimpan.',score:rpcSafe_(record)};
+    try{
+      upsertById_(sheet,'scoreId',record.scoreId,record);
+      SpreadsheetApp.flush();
+    }catch(writeError){
+      // The Sheets write may have committed even if the API response failed.
+      // Re-read below before deciding whether this request actually failed.
+    }
+    let confirmed=findRowById_(sheet,'scoreId',record.scoreId);
+    if(!confirmed){
+      const recovered=sheetRows_(sheet).find(x=>
+        String(x.participantId)===participantId &&
+        String(x.component||'').trim().toLowerCase()===component.toLowerCase()
+      );
+      if(recovered)confirmed={object:recovered};
+    }
+    const saved=confirmed?.object;
+    if(!saved || String(saved.participantId)!==participantId ||
+      String(saved.component||'').trim().toLowerCase()!==component.toLowerCase() ||
+      Number(saved.score)!==score || String(saved.note||'')!==note){
+      return fail_('Nilai seleksi belum dapat dikonfirmasi tersimpan. Silakan coba kembali.');
+    }
+    writeAudit_(actor.userId,existing?'UPDATE':'CREATE','SELECTION_SCORE',record.scoreId,existing?JSON.stringify(existing):'',JSON.stringify(saved),'Nilai seleksi disimpan');
+    return {success:true,message:'Nilai seleksi berhasil disimpan.',score:rpcSafe_(saved)};
   } finally { lock.releaseLock(); }
 }
 function saveSelectionResult(sessionToken,payload){
