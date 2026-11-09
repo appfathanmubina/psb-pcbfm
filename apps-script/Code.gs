@@ -524,10 +524,10 @@ function validateSession(sessionToken) {
 
 function logout(sessionToken) {
   const result = getSessionUser_(sessionToken, false);
-  if (!result.success) return { success: true };
+  if (!result.success) return { success: true, revoked: false, alreadyInactive: true, message: 'Sesi server sudah tidak aktif.' };
   if(!invalidateSession_(result.sessionRow, 'LOGOUT'))return fail_('Sesi belum berhasil diakhiri. Silakan coba kembali.');
   writeAudit_(result.user.userId, 'LOGOUT', 'AUTH', result.user.userId, '', '', 'Logout berhasil');
-  return { success: true };
+  return { success: true, revoked: true, alreadyInactive: false, message: 'Sesi server berhasil dicabut.' };
 }
 
 function changePassword(sessionToken, currentPassword, newPassword) {
@@ -833,6 +833,21 @@ function createSession_(userId) {
   return { token: token, expiresAt: expires.toISOString(), sessionId: sessionId };
 }
 
+function rereadActiveSessionAfterStaleSnapshot_(sheet, found, tokenHash, idleMinutes) {
+  if (!sheet || !found || !found.rowNumber || found.rowNumber > sheet.getLastRow()) return null;
+  const latest = sheet.getRange(found.rowNumber, 1, 1, 7).getValues()[0];
+  if (!constantTimeEqual_(String(latest[2] || ''), tokenHash) ||
+      String(latest[6] || '').toUpperCase() !== 'ACTIVE') return null;
+  const now = new Date();
+  const expiresAt = latest[4] ? new Date(latest[4]) : null;
+  const lastActivity = latest[5] ? new Date(latest[5]) : (latest[3] ? new Date(latest[3]) : null);
+  if (!expiresAt || !Number.isFinite(expiresAt.getTime()) || expiresAt <= now) return null;
+  if (!lastActivity || !Number.isFinite(lastActivity.getTime()) ||
+      lastActivity.getTime() > now.getTime() + 5 * 60000 ||
+      (now.getTime() - lastActivity.getTime()) > idleMinutes * 60000) return null;
+  return latest;
+}
+
 function getSessionUser_(token, touch) {
   token = String(token || '');
   // Token sesi yang diterbitkan createSession_ adalah dua UUID (72 karakter).
@@ -884,23 +899,36 @@ function getSessionUser_(token, touch) {
   }
   if (!found) return fail_('Session tidak valid. Silakan login kembali.');
 
-  const row = found.row;
+  let row = found.row;
   if (String(row[6] || '').toUpperCase() !== 'ACTIVE') return fail_('Session sudah berakhir. Silakan login kembali.');
-  const now = new Date();
-  const expiresAt = row[4] ? new Date(row[4]) : null;
+  let now = new Date();
+  let expiresAt = row[4] ? new Date(row[4]) : null;
   if (!expiresAt || !Number.isFinite(expiresAt.getTime())) {
     invalidateSession_(found, 'INVALID_EXPIRY');
-    return fail_('Session tidak valid. Silakan login kembali.');
+    const refreshed = rereadActiveSessionAfterStaleSnapshot_(sheet, found, tokenHash, idleMinutes);
+    if (!refreshed) return fail_('Session tidak valid. Silakan login kembali.');
+    found.row = row = refreshed;
+    now = new Date();
+    expiresAt = new Date(row[4]);
   }
   if (expiresAt <= now) {
     invalidateSession_(found, 'EXPIRED');
-    return fail_('Session sudah berakhir. Silakan login kembali.');
+    const refreshed = rereadActiveSessionAfterStaleSnapshot_(sheet, found, tokenHash, idleMinutes);
+    if (!refreshed) return fail_('Session sudah berakhir. Silakan login kembali.');
+    found.row = row = refreshed;
+    now = new Date();
+    expiresAt = new Date(row[4]);
   }
   const idleMinutes = Number(getConfig_('SESSION_IDLE_MINUTES')) || PSB_AUTH.SESSION_IDLE_MINUTES;
-  const lastActivity = row[5] ? new Date(row[5]) : (row[3] ? new Date(row[3]) : null);
+  let lastActivity = row[5] ? new Date(row[5]) : (row[3] ? new Date(row[3]) : null);
   if (!lastActivity || !Number.isFinite(lastActivity.getTime()) || lastActivity.getTime() > now.getTime() + 5 * 60000) {
     invalidateSession_(found, 'INVALID_ACTIVITY');
-    return fail_('Session tidak valid. Silakan login kembali.');
+    const refreshed = rereadActiveSessionAfterStaleSnapshot_(sheet, found, tokenHash, idleMinutes);
+    if (!refreshed) return fail_('Session tidak valid. Silakan login kembali.');
+    found.row = row = refreshed;
+    now = new Date();
+    expiresAt = new Date(row[4]);
+    lastActivity = row[5] ? new Date(row[5]) : new Date(row[3]);
   }
   if ((now.getTime() - lastActivity.getTime()) > idleMinutes * 60000) {
     invalidateSession_(found, 'IDLE_TIMEOUT');
@@ -909,10 +937,17 @@ function getSessionUser_(token, touch) {
 
   // Baca data akun terbaru, tetapi gunakan indeks row-number agar tidak memindai
   // seluruh USERS pada setiap pemanggilan API.
-  const user = findUserById_(String(row[1]), true);
+  let user = findUserById_(String(row[1]), true);
   if (!user || String(user.status).toUpperCase() !== 'ACTIVE') {
     invalidateSession_(found, 'ACCOUNT_INACTIVE');
-    return fail_('Akun tidak aktif.');
+    const refreshed = rereadActiveSessionAfterStaleSnapshot_(sheet, found, tokenHash, idleMinutes);
+    if (!refreshed) return fail_('Akun tidak aktif.');
+    found.row = row = refreshed;
+    user = findUserById_(String(row[1]), true);
+    if (!user || String(user.status).toUpperCase() !== 'ACTIVE') return fail_('Akun tidak aktif.');
+    now = new Date();
+    expiresAt = new Date(row[4]);
+    lastActivity = row[5] ? new Date(row[5]) : new Date(row[3]);
   }
 
   // Batasi penulisan lastActivity maksimal sekali per 2 menit per sesi.
