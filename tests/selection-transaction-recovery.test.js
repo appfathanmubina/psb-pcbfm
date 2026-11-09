@@ -178,7 +178,7 @@ assert.match(scoreSave, /findRowById_\(sheet,'scoreId',record\.scoreId\)/,
   'Score upsert must confirm the persisted row by scoreId');
 assert.match(scoreSave, /Number\(saved\.score\)!==score/,
   'Score confirmation must compare the persisted numeric score to the requested value');
-assert.match(scoreSave, /String\(saved\.note\|\|'\)!==note/,
+assert.match(scoreSave, /String\(saved\.note\|\|''\)!==note/,
   'Score confirmation must compare the persisted note to the requested note');
 assert.match(scoreSave, /catch\(writeError\)[\s\S]*?let confirmed=findRowById_/,
   'Ambiguous score write must be reconciled with a fresh read before reporting failure');
