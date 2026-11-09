@@ -34,6 +34,17 @@ assert.ok(duplicateGuard >= 0 && duplicateGuard < historyWrite,
 assert.ok(verify.includes(".find(x=>String(x.paymentId||'')!==paymentId&&String(x.status||'').toUpperCase()==='VERIFIED')"),
   'Duplicate guard must exclude the same payment ID so retries remain idempotent');
 
+const historyAppend = verify.indexOf('verSheet.appendRow(vh.map(h=>rec[h]))');
+const historyCatch = verify.indexOf('catch(historyWriteError)', historyAppend);
+const historyFlush = verify.indexOf('SpreadsheetApp.flush()', historyCatch);
+const historyReadback = verify.indexOf("sheetRowsMatchingValues_(verSheet,'paymentId',[paymentId])", historyFlush);
+assert.ok(historyAppend >= 0 && historyCatch > historyAppend,
+  'Ambiguous verification-history append errors must be caught for recovery');
+assert.ok(historyFlush > historyCatch && historyReadback > historyFlush,
+  'Verification history must be flushed before reading back the possibly committed row');
+assert.match(verify, /if\(!confirmedHistory\)return fail_/,
+  'Payment decision must not proceed unless its verification history is confirmed');
+
 const registrationStart = backend.indexOf('function setRegistrationStatus_(');
 const registrationEnd = backend.indexOf('\n// =====================================================\n// STAGE 5', registrationStart);
 const registration = backend.slice(registrationStart, registrationEnd);

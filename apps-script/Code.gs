@@ -3416,7 +3416,14 @@ function verifyPayment(sessionToken,payload){
     if(!verificationRows.length){
       const rec={};vh.forEach(h=>rec[h]='');
       Object.assign(rec,{verificationId:generateId_('PVF'),paymentId,status,verifiedBy:actor.userId,verifiedAt:new Date(),note});
-      verSheet.appendRow(vh.map(h=>rec[h]));
+      // appendRow can commit the history row and still throw before the
+      // caller receives a response. Recover by flushing and reading by paymentId.
+      try {
+        verSheet.appendRow(vh.map(h=>rec[h]));
+      } catch(historyWriteError) {
+        console.warn('Payment verification history append response failed; checking persisted row: '+historyWriteError);
+      }
+      SpreadsheetApp.flush();
       verificationRows=sheetRowsMatchingValues_(verSheet,'paymentId',[paymentId]);
     }
     const confirmedHistory=verificationRows.find(x=>String(x.status||'').toUpperCase()===status);
