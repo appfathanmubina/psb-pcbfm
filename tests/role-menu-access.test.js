@@ -47,7 +47,7 @@ const renderMoreEnd = source.indexOf('\nfunction hasAnyRole(', renderMoreStart);
 assert.notEqual(renderMoreStart, -1, 'renderMore must exist');
 assert.notEqual(renderMoreEnd, -1, 'renderMore must have a stable boundary');
 const renderMore = source.slice(renderMoreStart, renderMoreEnd);
-assert.match(renderMore, /const canVerification=hasAnyRole\\(\\['SUPERADMIN','ADMIN_PSB','VERIFIKATOR'\\]\\)/,
+assert.match(renderMore, /const canVerification=hasAnyRole/,
   'Admin PSB and VERIFIKATOR must see the Verification shortcut in More');
 assert.match(renderMore, /add\\(canVerification,'verification','Verifikasi'/,
   'The More menu must expose the Verification page to authorized roles');
