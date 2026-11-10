@@ -17,11 +17,18 @@ for (const [label, source] of [['PWA stylesheet', pwaCss], ['Apps Script stylesh
     label + ' must keep the loading spinner visible on purple');
 }
 
-assert.match(pwaIndex, /styles\.css\?v=32\.28\.0/,
+assert.match(pwaCss, /\.loading\s*\{\s*background\s*:\s*#800080\s*!important\s*;?\s*\}\s*$/i,
+  'PWA full-screen login/account checking overlay must stay purple after later CSS overrides');
+assert.match(appsScriptHtml, /\.loading\s*\{\s*background\s*:\s*#800080\s*!important\s*;?\s*\}<\/style>/i,
+  'Apps Script full-screen login/account checking overlay must stay purple after later CSS overrides');
+
+assert.match(pwaIndex, /styles\.css\?v=32\.29\.0/,
   'PWA HTML must request the refreshed stylesheet version');
-assert.match(serviceWorker, /psb-pwa-shell-v32-48-0/,
+assert.match(pwaIndex, /sw\.js\?v=32\.49\.0/,
+  'PWA HTML must request the refreshed service worker version');
+assert.match(serviceWorker, /psb-pwa-shell-v32-49-0/,
   'Service worker cache namespace must be refreshed with the stylesheet change');
-assert.match(serviceWorker, /styles\.css\?v=32\.28\.0/,
+assert.match(serviceWorker, /styles\.css\?v=32\.29\.0/,
   'Service worker precache must request the refreshed stylesheet version');
 
 console.log('Session check purple background safeguards: OK');
