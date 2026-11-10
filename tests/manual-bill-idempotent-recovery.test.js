@@ -58,6 +58,7 @@ const sandbox = {
   PSB_SHEETS: { BILLS: 'BILLS' },
   requireRole_: () => ({ userId: 'admin-1' }),
   assertOperationalMutation_: () => {},
+  invalidateOperationalReadCaches_: () => true,
   fail_: message => ({ success: false, message }),
   findRegistration_: registrationId => ({ registration: { registrationId, userId: 'wali-1' } }),
   findMasterItemById_: () => ({ isActive: true, name: 'Formulir' }),
