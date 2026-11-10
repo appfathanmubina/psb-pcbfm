@@ -2436,7 +2436,7 @@ function getRegistrationList(sessionToken, filters) {
     'registrationId', 'registrationNumber', 'candidateId', 'status', 'tahunAjaranId', 'updatedAt'
   ]);
   let selected = projected.filter(item =>
-    (!filters.status || String(item.status) === String(filters.status)) &&
+    (!filters.status || String(item.status || '').trim().toUpperCase() === String(filters.status).trim().toUpperCase()) &&
     (!filters.tahunAjaranId || String(item.tahunAjaranId) === String(filters.tahunAjaranId))
   );
   if (query) {

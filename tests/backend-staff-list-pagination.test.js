@@ -20,6 +20,8 @@ assert.match(registrations, /pageSize = Math\.min\(100, Math\.max\(1/,
   'Registration page size must be bounded');
 assert.match(registrations, /candidateId/,
   'Registration search must resolve candidate records');
+assert.match(registrations, /String\(item\.status \|\| ''\)\.trim\(\)\.toUpperCase\(\) === String\(filters\.status\)\.trim\(\)\.toUpperCase\(/,
+  'Registration status filters must be case-insensitive and whitespace-tolerant');
 assert.match(registrations, /candidate\.fullName, candidate\.name/,
   'Registration search must include candidate name');
 assert.match(registrations, /registrationNumber, item\.registrationId/,
@@ -53,6 +55,12 @@ assert.match(app, /async function loadVerificationQueue\(page\)/,
   'Verification UI must request server-side pages');
 assert.match(app, /pageSize:50,search:state\.applicantSearch,status:state\.applicantStatus/,
   'Applicant UI must send search and status filters to the backend');
+assert.match(app, /value="PAYMENT_VERIFIED">Pembayaran terverifikasi/, 'Applicant filter must include PAYMENT_VERIFIED');
+assert.match(app, /function clearApplicantSearch\(\)/, 'Applicant search must expose a clear action');
+assert.match(app, /Menampilkan \$\{items\.length\} dari \$\{meta\.total\} pendaftar/, 'Applicant count must show the filtered total');
+assert.match(app, /String\(x\.status\|\|''\)\.toUpperCase\(\)==='VERIFIED'/, 'Applicant status badge must normalize status values');
+assert.match(app, /pageSize:50,search:state\.verificationSearch,status:state\.verificationStatus/,
+  'Verification UI must send search and status filters to the backend');
 assert.match(app, /pageSize:50,search:state\.verificationSearch,status:state\.verificationStatus/,
   'Verification UI must send search and status filters to the backend');
 assert.ok(app.includes('Halaman ${meta.page}') && app.includes('Halaman ${page.page}'),
