@@ -70,6 +70,7 @@ const context = {
   PSB_INCIDENT_ROLES: ['SUPERADMIN','ADMIN_PSB'],
   PSB_SHEETS: Object.fromEntries(Object.keys(fixtures).map(k => [k, k])),
   CacheService: { getScriptCache: () => ({ get: () => null, put: () => {} }) },
+  getOperationalReadCacheRevision_: () => 'test-revision',
   sha256Hex_: value => String(value),
   requireRole_: (token, allowed) => {
     assert.deepEqual(Array.from(allowed), Object.keys(roles), 'Dashboard role allowlist remains unchanged');
