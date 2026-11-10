@@ -646,8 +646,8 @@ function buildMobileNav(){
   }
   if(all.length<=5)return all;
   const preferred={
-    SUPERADMIN:['home','applicants','reports','announcement'],
-    ADMIN_PSB:['home','applicants','reports','announcement']
+    SUPERADMIN:['home','applicants','verification','reports'],
+    ADMIN_PSB:['home','applicants','verification','reports']
   };
   const ids=preferred[role]||all.slice(0,4).map(x=>x[0]);
   const direct=ids.map(id=>all.find(x=>x[0]===id)).filter(Boolean);
@@ -1805,6 +1805,7 @@ function renderMore(){
     $('content').innerHTML=`<section class="hero"><h2>Lainnya</h2><p>Menu lanjutan sesuai tahapan penerimaan santri baru.</p></section><div class="wali-more-list">${items.map(([page,title,desc,icon])=>`<button type="button" class="status-card wali-more-item" onclick="goPage('${page}')"><span class="wali-more-icon">${ico(icon)}</span><span class="wali-more-copy"><b>${title}</b><span>${desc}</span></span><span class="wali-flow-open" aria-hidden="true">${ico('chevron-right')}</span></button>`).join('')}</div>`;
     return;
   }
+  const canVerification=hasAnyRole(['SUPERADMIN','ADMIN_PSB','VERIFIKATOR']);
   const canPayment=hasAnyRole(['SUPERADMIN','ADMIN_PSB','KEUANGAN']);
   const canSelection=hasAnyRole(['SUPERADMIN','ADMIN_PSB','SELEKSI','VERIFIKATOR']);
   const canAnnouncement=hasAnyRole(['SUPERADMIN','ADMIN_PSB','SELEKSI','VERIFIKATOR']);
@@ -1813,6 +1814,7 @@ function renderMore(){
   const isMaster=hasAnyRole(['SUPERADMIN','ADMIN_PSB']);
   const cards=[];
   const add=(condition,page,title,desc,mt='')=>{if(condition)cards.push(`<button class="status-card" style="width:100%;text-align:left;cursor:pointer${mt?`;margin-top:${mt}`:''}" onclick="goPage('${page}')"><div class="status-row"><div><b>${title}</b><div class="muted" style="font-size:11px;margin-top:4px">${desc}</div></div></div></button>`)};
+  add(canVerification,'verification','Verifikasi','Periksa data pendaftaran dan kelengkapan dokumen calon santri.');
   add(canPayment,'payments','Pembayaran','Kelola tagihan, bukti pembayaran, dan verifikasi pembayaran.');
   add(canSelection,'selection','Tes','Kelola jadwal tes, peserta, nilai, dan hasil seleksi.','10px');
   add(canAnnouncement,'announcement','Pengumuman','Kelola hasil seleksi dan publikasi pengumuman kepada wali.','10px');
