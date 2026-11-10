@@ -5370,6 +5370,17 @@ function getAdvancedReportingData(sessionToken, filters) {
   const paymentLedger=reconcilePaymentLedger_(scopedBills,scopedPayments);
   const verifiedPayments=paymentLedger.verifiedPayments;
   const paidBills=scopedBills.filter(b=>paymentLedger.byBill[String(b.billId||'')]?.status==='PAID');
+  // Conversion metrics must use the same clean-payment rule as the verification
+  // workflow. A PAID ledger with duplicate/mismatched history remains visible in
+  // finance totals, but cannot count as payment-verified until reconciled.
+  const eligiblePaidBills=scopedBills.filter(b=>{
+    const state=paymentLedger.byBill[String(b.billId||'')];
+    return state?.status==='PAID'&&!state.requiresReview;
+  });
+  const eligibleVerifiedPayments=verifiedPayments.filter(p=>{
+    const state=paymentLedger.byBill[String(p.billId||'')];
+    return state?.status==='PAID'&&!state.requiresReview;
+  });
   const passed=scopedResults.filter(r=>String(r.status||'').toUpperCase()==='PASSED');
   const announced=scopedResults.filter(r=>String(r.announcementDate||'').trim());
   const completed=scopedRereg.filter(r=>String(r.status||'').toUpperCase()==='COMPLETED');
@@ -5378,7 +5389,7 @@ function getAdvancedReportingData(sessionToken, filters) {
   const by=(arr,keyFn)=>{const m={};arr.forEach(x=>{const k=keyFn(x)||'-';m[k]=(m[k]||0)+1;});return Object.keys(m).map(k=>({label:k,count:m[k]})).sort((a,b)=>b.count-a.count || a.label.localeCompare(b.label,'id'));};
   const regMap={}; filtered.forEach(r=>regMap[String(r.registrationId)]=r);
   const paymentVerifiedRegistrationIds = Object.create(null);
-  paidBills.forEach(b=>{paymentVerifiedRegistrationIds[String(b.registrationId||'')]=true;});
+  eligiblePaidBills.forEach(b=>{paymentVerifiedRegistrationIds[String(b.registrationId||'')]=true;});
   const funnel={registrations:filtered.length,submitted:filtered.filter(r=>String(r.submittedAt||'').trim()).length,verified:filtered.filter(r=>['VERIFIED','PAYMENT_PENDING','PAYMENT_VERIFIED','SELECTION','PASSED','NOT_PASSED','REREGISTRATION','COMPLETED'].includes(String(r.status||''))).length,paymentVerified:filtered.filter(r=>!!paymentVerifiedRegistrationIds[String(r.registrationId)]).length,selection:scopedParticipants.length,announced:announced.length,passed:passed.length,reregistration:scopedRereg.length,completed:completed.length};
   const conversion={verificationRate:funnel.registrations?Math.round(funnel.verified/funnel.registrations*1000)/10:0,paymentRate:funnel.verified?Math.round(funnel.paymentVerified/funnel.verified*1000)/10:0,selectionRate:funnel.paymentVerified?Math.round(funnel.selection/funnel.paymentVerified*1000)/10:0,passRate:funnel.selection?Math.round(funnel.passed/funnel.selection*1000)/10:0,reregistrationCompletionRate:funnel.passed?Math.round(funnel.completed/funnel.passed*1000)/10:0};
   const trendMap={}; const monthKey=d=>{const x=new Date(d);return isNaN(x)?null:Utilities.formatDate(x,Session.getScriptTimeZone()||'Asia/Jakarta','yyyy-MM');};
@@ -5397,7 +5408,7 @@ function getAdvancedReportingData(sessionToken, filters) {
     paymentAmountByType[key] = (paymentAmountByType[key] || 0) + (Number(b.amount) || 0);
   });
   const byPaymentType=by(paidBills,b=>String(b.paymentTypeId||'-')).map(x=>Object.assign(x,{amount:paymentAmountByType[x.label]||0}));
-  const last30={registrations:filtered.filter(r=>new Date(r.createdAt||0)>=new Date(Date.now()-30*msPerDay)).length,payments:verifiedPayments.filter(p=>new Date(p.submittedAt||p.createdAt||0)>=new Date(Date.now()-30*msPerDay)).length,announcements:announced.filter(r=>new Date(r.announcementDate||0)>=new Date(Date.now()-30*msPerDay)).length};
+  const last30={registrations:filtered.filter(r=>new Date(r.createdAt||0)>=new Date(Date.now()-30*msPerDay)).length,payments:eligibleVerifiedPayments.filter(p=>new Date(p.submittedAt||p.createdAt||0)>=new Date(Date.now()-30*msPerDay)).length,announcements:announced.filter(r=>new Date(r.announcementDate||0)>=new Date(Date.now()-30*msPerDay)).length};
   writeAudit_(actor.userId,'ADVANCED_REPORT_VIEW','REPORTING','', '', JSON.stringify({yearId,gelombangId,jenjangId,gender,fromDate:filters.fromDate||'',toDate:filters.toDate||''}), 'Advanced Reporting & Analytics dijalankan');
   return {success:true,activeYear,filters:{tahunAjaranId:yearId,gelombangId,jenjangId,gender,status,fromDate:filters.fromDate||'',toDate:filters.toDate||''},funnel,conversion,trends,breakdowns:{jenjang:byJenjang.slice(0,20),kelompok:byKelompok.slice(0,20),gelombang:byGelombang.slice(0,20),status:byStatus.slice(0,20)},outcome,finance:{
     billAmount:paymentLedger.summary.billAmount,paidAmount:paymentAmount,pendingAmount:paymentLedger.summary.pendingAmount,rejectedAmount:paymentLedger.summary.rejectedAmount,
