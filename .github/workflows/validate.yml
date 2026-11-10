@@ -146,6 +146,8 @@ jobs:
         run: node tests/loading-login-performance.test.js
       - name: Test dashboard performance and final UI safeguards
         run: node tests/dashboard-performance.test.js
+      - name: Test dashboard task context and accessible actions
+        run: node tests/dashboard-task-context.test.js
       - name: Test dashboard role-scoped operational queue safeguards
         run: node tests/backend-dashboard-role-scope.test.js
       - name: Test Dashboard and Wali narrow data projections

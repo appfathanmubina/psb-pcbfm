@@ -682,7 +682,15 @@ function renderWaliHomeFlow(data){
 
 function dashboardTaskItems(items, emptyText){
   if(!items||!items.length)return `<div class="dashboard-task-empty">${esc(emptyText||'Tidak ada tugas saat ini.')}</div>`;
-  return items.map(x=>`<div class="dashboard-task-item"><div class="dashboard-task-copy"><div class="dashboard-task-name">${esc(x.candidateName||'-')}</div><div class="dashboard-task-meta">${esc(x.registrationNumber||x.statusLabel||x.label||'-')}${x.amount?` · ${formatRupiah(x.amount)}`:''}${x.resultStatus?` · ${esc(x.resultStatus)}`:''}</div></div><div class="dashboard-task-action"><button class="btn btn-secondary btn-sm" onclick="goPage('${esc(x.action||'applicants')}')">Buka</button></div></div>`).join('');
+  return items.map(x=>{
+    const reference=String(x.registrationNumber||'').trim();
+    const context=String(x.label||x.statusLabel||'').trim();
+    const status=String(x.statusLabel||'').trim();
+    const meta=[reference,context,status&&context!==status?status:'',x.amount?formatRupiah(x.amount):'',x.resultStatus?String(x.resultStatus):''].filter(Boolean).map(value=>esc(value)).join(' · ');
+    const name=String(x.candidateName||'-');
+    const action=String(x.action||'applicants');
+    return `<div class="dashboard-task-item"><div class="dashboard-task-copy"><div class="dashboard-task-name">${esc(name)}</div><div class="dashboard-task-meta">${meta||'-'}</div></div><div class="dashboard-task-action"><button class="btn btn-secondary btn-sm" aria-label="Buka ${esc(context||'detail')} untuk ${esc(name)}" onclick="goPage('${esc(action)}')">Buka</button></div></div>`;
+  }).join('');
 }
 function renderDashboardSchedule(data){
   const op=data.operational||{}, today=op.schedules?.today||[], tomorrow=op.schedules?.tomorrow||[];
