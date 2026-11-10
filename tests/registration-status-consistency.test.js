@@ -80,3 +80,18 @@ assert.match(code, /function getDocumentPageData[\s\S]*?const byType = Object\.c
   'Document page data must retain the newest-first document for each document type');
 
 console.log('Registration payment/document status consistency safeguards passed.');
+
+
+// Successful status-changing transactions must advance the server dashboard cache
+// generation, while the frontend clears page snapshots as well as page data caches.
+const dashboardCacheHelper = section('invalidateOperationalReadCaches_');
+assert.match(dashboardCacheHelper, /PSB_OPERATIONAL_READ_CACHE_REVISION_KEY_/);
+assert.match(section('getOperationalReadCacheRevision_'), /getProperty\(PSB_OPERATIONAL_READ_CACHE_REVISION_KEY_\)/);
+assert.match(section('getDashboardPageData'), /dashboardRevision/);
+assert.match(section('getDashboardPageData'), /if \(dashboardRevision\) try \{ dashboardCache\.put/);
+for (const name of ['createBill','submitPayment','verifyPayment','verifyDocument','finalizeVerification','uploadDocument','saveRegistration','submitRegistration','updateSelectionParticipantStatus','saveSelectionResult','openReregistration','finalizeReregistration']) {
+  assert.match(section(name), /invalidateOperationalReadCaches_\(\)/, name + ' must invalidate the dashboard cache after a committed mutation');
+}
+const frontend = fs.readFileSync('frontend/app.js', 'utf8');
+assert.match(frontend, /const success=result=>\{if\(MUTATING_SERVER_FUNCTIONS\.has\(fn\)&&result\?\.success\)\{invalidateCurrentPageData\(\);\}/,
+  'Successful mutations must clear page snapshots and all dependent client page-data caches');
