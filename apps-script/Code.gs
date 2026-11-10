@@ -4038,13 +4038,13 @@ function saveSelectionResult(sessionToken,payload){
       return fail_('Hasil seleksi belum dapat dikonfirmasi tersimpan. Silakan coba kembali.');
     }
 
+    invalidateOperationalReadCaches_();
     if(currentStatus==='VERIFIED' || currentStatus==='PAYMENT_VERIFIED'){
       const moved=setRegistrationStatus_(found.registration,'SELECTION',actor.userId,'Pendaftaran masuk tahap penetapan hasil seleksi.');
       if(!moved?.success)return moved;
     }
 
     writeAudit_(actor.userId,existing?'UPDATE':'CREATE','SELECTION_RESULT',record.resultId,existing?JSON.stringify(existing):'',JSON.stringify(saved),'Hasil seleksi disimpan');
-    invalidateOperationalReadCaches_();
     return {success:true,message:'Hasil seleksi berhasil disimpan.',result:rpcSafe_(saved)};
   }finally{try{lock.releaseLock();}catch(e){}}
 }
@@ -4698,13 +4698,14 @@ function finalizeReregistration(sessionToken, registrationId) {
       if(!moved?.success)return moved;
       const regCheck=findRegistration_(id);
       if(!regCheck||String(regCheck.registration.status||'').toUpperCase()!=='COMPLETED')return fail_('Status pendaftaran belum berhasil diperbarui. Silakan coba kembali.');
+      invalidateOperationalReadCaches_();
       writeAudit_(actor.userId,'REREGISTRATION','REREGISTRATION',String(rrFound.object.reregistrationId),'',JSON.stringify({status:'COMPLETED'}),'Daftar ulang diselesaikan');
     }
     const confirmedRereg=findRowById_(rrSheet,'registrationId',id), confirmedReg=findRegistration_(id);
     if(!confirmedRereg||String(confirmedRereg.object.status||'').toUpperCase()!=='COMPLETED'||!confirmedReg||String(confirmedReg.registration.status||'').toUpperCase()!=='COMPLETED')return fail_('Status penyelesaian Daftar Ulang belum konsisten. Silakan coba kembali.');
+    invalidateOperationalReadCaches_();
     notificationPayload={userId:String(confirmedReg.registration.userId||''),candidateName:String(confirmedReg.candidate?.fullName||'calon santri'),eventKey:'REREGISTRATION_COMPLETED:'+id};
   } finally { lock.releaseLock(); }
-  invalidateOperationalReadCaches_();
   if(notificationPayload?.userId){try{createNotificationOnce_(notificationPayload.userId,'Daftar Ulang Selesai','Proses daftar ulang untuk '+notificationPayload.candidateName+' telah selesai.','SUCCESS',notificationPayload.eventKey);}catch(notificationError){console.error('Reregistration completion notification failed: '+notificationError);}}
   return {success:true,message:wasAlreadyCompleted?'Daftar ulang sudah selesai.':'Daftar ulang berhasil diselesaikan.',status:'COMPLETED',alreadyCompleted:wasAlreadyCompleted};
 }
