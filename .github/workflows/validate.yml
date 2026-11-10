@@ -186,6 +186,7 @@ jobs:
         run: |
           node --check < frontend/sw.js
           node tests/pwa-cache-refresh.test.js
+          node tests/pwa-install-icon-safe-area.test.js
       - name: Validate shell scripts
         run: |
           while IFS= read -r file; do
