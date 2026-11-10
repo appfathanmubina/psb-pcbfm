@@ -59,7 +59,6 @@ assert.match(finalize, /x\.required===true\|\|String\(x\.required\)\.toUpperCase
   'Required document configuration must support boolean and string TRUE values');
 
 
-  
 // Dashboard verification tasks must use the same form-payment eligibility as the
 // dedicated verification queue, and duplicate historical uploads must not replace
 // the newest document in the verification checklist.
@@ -77,5 +76,8 @@ assert.match(verificationDetail, /!Object\.prototype\.hasOwnProperty\.call\(byTy
 const documentOptions = section('getDocumentOptions');
 assert.match(documentOptions, /!Object\.prototype\.hasOwnProperty\.call\(byType, typeId\)/,
   'Document options must retain the newest-first document for each document type');
+const documentPageData = section('getDocumentPageData');
+assert.match(documentPageData, /!Object\\.prototype\\.hasOwnProperty\\.call\\(byType, typeId\\)/,
+  'Document page data must retain the newest-first document for each document type');
 
 console.log('Registration payment/document status consistency safeguards passed.');
