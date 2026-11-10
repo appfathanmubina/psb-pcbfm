@@ -89,7 +89,7 @@ assert.match(dashboardCacheHelper, /PSB_OPERATIONAL_READ_CACHE_REVISION_KEY_/);
 assert.match(section('getOperationalReadCacheRevision_'), /getProperty\(PSB_OPERATIONAL_READ_CACHE_REVISION_KEY_\)/);
 assert.match(section('getDashboardPageData'), /dashboardRevision/);
 assert.match(section('getDashboardPageData'), /if \(dashboardRevision\) try \{ dashboardCache\.put/);
-for (const name of ['createBill','submitPayment','verifyPayment','verifyDocument','finalizeVerification','uploadDocument','saveRegistration','submitRegistration','updateSelectionParticipantStatus','saveSelectionResult','openReregistration','finalizeReregistration']) {
+for (const name of ['createBill','submitPayment','verifyPayment','verifyDocument','finalizeVerification','uploadDocument','saveRegistration','submitRegistration','createSelectionSchedule','updateSelectionScheduleStatus','addSelectionParticipant','addSelectionParticipantsBulk','updateSelectionParticipantStatus','saveSelectionScore','saveSelectionResult','publishAnnouncement','openReregistration','finalizeReregistration','saveMasterItem','deactivateMasterItem']) {
   assert.match(section(name), /invalidateOperationalReadCaches_\(\)/, name + ' must invalidate the dashboard cache after a committed mutation');
 }
 const frontend = fs.readFileSync('frontend/app.js', 'utf8');
