@@ -60,7 +60,7 @@ assert.match(app, /function clearApplicantSearch\(\)/, 'Applicant search must ex
 assert.match(app, /Menampilkan \$\{items\.length\} dari \$\{meta\.total\} pendaftar/, 'Applicant count must show the filtered total');
 assert.match(app, /String\(x\.status\|\|''\)\.toUpperCase\(\)==='VERIFIED'/, 'Applicant status badge must normalize status values');
 assert.match(app, /pageSize:50,search:state\.verificationSearch,status:state\.verificationStatus/,
-  'Applicant UI must send search and status filters to the backend');
+  'Verification UI must send search and status filters to the backend');
 assert.match(app, /pageSize:50,search:state\.verificationSearch,status:state\.verificationStatus/,
   'Verification UI must send search and status filters to the backend');
 assert.ok(app.includes('Halaman ${meta.page}') && app.includes('Halaman ${page.page}'),
