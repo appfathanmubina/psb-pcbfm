@@ -7,9 +7,9 @@ const pwaIndex = fs.readFileSync('frontend/index.html', 'utf8');
 const appsScriptHtml = fs.readFileSync('apps-script/Index.html', 'utf8');
 
 for (const [source, label] of [[pwaCss, 'PWA'], [appsScriptHtml, 'Apps Script']]) {
-  assert.match(source, /html,body\\s*\\{[^}]*overscroll-behavior-y\\s*:\\s*none\\s*;/s,
+  assert.match(source, /html,body\s*\{[^}]*overscroll-behavior-y\s*:\s*none\s*;/s,
     label + ' root scrolling must suppress browser pull-to-refresh');
-  assert.match(source, /body\\s*\\{[^}]*overflow-y\\s*:\\s*auto/s,
+  assert.match(source, /body\s*\{[^}]*overflow-y\s*:\s*auto/s,
     label + ' must retain normal vertical page scrolling');
 }
 assert.match(pwaIndex, /styles\\.css\\?v=32\\.30\\.0/,
