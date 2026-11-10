@@ -26,8 +26,8 @@ assert.match(upload, /finally\s*\{\s*if\s*\(lockAcquired\)\s*\{\s*try\s*\{\s*loc
   'upload must release the ScriptLock only when acquired');
 assert.match(upload, /if\s*\(uploadedFile\)\s*\{\s*try\s*\{\s*uploadedFile\.setTrashed\(true\)/,
   'uncommitted Drive files must be cleaned up after a failed upload');
-assert.match(upload, /if\s*\(documentRowWritten\)\s*\{\s*return\s*\{/,
-  'a committed document must not be reported as a failed upload and retried as a duplicate');
+assert.match(upload, /if\s*\(documentRowWritten\)\s*\{\s*(?:invalidateOperationalReadCaches_\(\);\s*)?return\s*\{/,
+  'a committed document must invalidate stale read caches and must not be reported as a failed upload or retried as a duplicate');
 assert.match(upload, /PSB_DOCUMENT_UPLOAD_FAILED stage=/,
   'upload errors must log a safe processing stage for diagnosis');
 assert.match(upload, /Server sedang memproses permintaan lain/,
