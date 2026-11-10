@@ -58,4 +58,24 @@ const finalize = section('finalizeVerification');
 assert.match(finalize, /x\.required===true\|\|String\(x\.required\)\.toUpperCase\(\)==='TRUE'/,
   'Required document configuration must support boolean and string TRUE values');
 
+
+  
+// Dashboard verification tasks must use the same form-payment eligibility as the
+// dedicated verification queue, and duplicate historical uploads must not replace
+// the newest document in the verification checklist.
+const dashboard = section('getDashboardPageData');
+assert.match(dashboard, /getFormPaymentVerifiedRegistrationIds_\(\)/,
+  'Dashboard verification tasks must use the canonical verified form-payment set');
+assert.match(dashboard, /verifiedFormPaymentIds\.has\(String\(r\.registrationId\|\|''\)\)/,
+  'Dashboard must exclude registrations whose form payment is not verified');
+assert.match(dashboard, /\['SUBMITTED','UNDER_REVIEW','REVISION'\]/,
+  'Dashboard initial verification queue must match actionable registration statuses');
+
+const verificationDetail = section('getVerificationDetail');
+assert.match(verificationDetail, /!Object\.prototype\.hasOwnProperty\.call\(byType, typeId\)/,
+  'Verification detail must retain the newest-first document for each document type');
+const documentOptions = section('getDocumentOptions');
+assert.match(documentOptions, /!Object\.prototype\.hasOwnProperty\.call\(byType, typeId\)/,
+  'Document options must retain the newest-first document for each document type');
+
 console.log('Registration payment/document status consistency safeguards passed.');
