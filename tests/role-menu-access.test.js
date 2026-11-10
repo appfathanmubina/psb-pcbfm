@@ -26,12 +26,31 @@ assert.ok(ids(menuFor('ADMIN_PSB')).includes('audit'));
 assert.ok(!ids(menuFor('ADMIN_PSB')).includes('userManagement'));
 assert.ok(ids(menuFor('SUPERADMIN')).includes('userManagement'));
 
+const mobileStart = source.indexOf('function buildMobileNav(){');
+const mobileEnd = source.indexOf('\\nfunction navButtonsHtml(', mobileStart);
+assert.notEqual(mobileStart, -1, 'buildMobileNav must exist');
+assert.ok(mobileEnd > mobileStart, 'buildMobileNav boundary exists');
+const mobileNav = source.slice(mobileStart, mobileEnd);
+function mobileIds(...roles) {
+  const context = { buildRoleNav: () => menuFor(...roles), hasAnyRole: allowed => allowed.some(role => roles.includes(role)) };
+  return Array.from(vm.runInNewContext(mobileNav + '\\nbuildMobileNav();', context), item => String(item[0]));
+}
+for (const role of ['ADMIN_PSB','SUPERADMIN']) {
+  const ids = mobileIds(role);
+  assert.ok(ids.includes('verification'), role + ' must have direct mobile access to Verification');
+  assert.ok(ids.includes('more'), role + ' must retain the More menu for secondary modules');
+  assert.ok(!ids.includes('announcement'), role + ' announcement remains available through More to preserve five-item mobile navigation');
+}
 
 const renderMoreStart = source.indexOf('function renderMore(){');
 const renderMoreEnd = source.indexOf('\nfunction hasAnyRole(', renderMoreStart);
 assert.notEqual(renderMoreStart, -1, 'renderMore must exist');
 assert.notEqual(renderMoreEnd, -1, 'renderMore must have a stable boundary');
 const renderMore = source.slice(renderMoreStart, renderMoreEnd);
+assert.match(renderMore, /const canVerification=hasAnyRole\\(\\['SUPERADMIN','ADMIN_PSB','VERIFIKATOR'\\]\\)/,
+  'Admin PSB and VERIFIKATOR must see the Verification shortcut in More');
+assert.match(renderMore, /add\\(canVerification,'verification','Verifikasi'/,
+  'The More menu must expose the Verification page to authorized roles');
 assert.match(renderMore, /const canSelection=hasAnyRole\(\['SUPERADMIN','ADMIN_PSB','SELEKSI','VERIFIKATOR'\]\)/,
   'VERIFIKATOR can view selection and must see it in the More menu');
 assert.match(renderMore, /const canAnnouncement=hasAnyRole\(\['SUPERADMIN','ADMIN_PSB','SELEKSI','VERIFIKATOR'\]\)/,
