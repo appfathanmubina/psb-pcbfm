@@ -165,7 +165,7 @@ async function refreshPublicConfig(){
 }
 const MUTATING_SERVER_FUNCTIONS=new Set(['registerWali','changePassword','saveRegistration','submitRegistration','uploadDocument','verifyDocument','finalizeVerification','submitPayment','verifyPayment','createBill','createSelectionSchedule','updateSelectionScheduleStatus','addSelectionParticipant','addSelectionParticipantsBulk','updateSelectionParticipantStatus','saveSelectionScore','saveSelectionResult','publishAnnouncement','markNotificationRead','markAllNotificationsRead','finalizeReregistration','openReregistration','saveMasterItem','deactivateMasterItem','setActiveAcademicYear','createManualUser','adminResetUserPassword','runSecurityMaintenance','sendCommunication']);
 function invalidatePageSnapshots(){state.pageSnapshots={};}
-function server(fn,...args){return new Promise((resolve,reject)=>{const tracked=!!state.appInitialized&&!(Number(state.processSilentDepth||0)>0);if(tracked)processBegin(processLabelFor(fn));let settled=false;const finish=(result,error)=>{if(settled)return;settled=true;if(tracked)processEnd(result,error);};const success=result=>{if(MUTATING_SERVER_FUNCTIONS.has(fn)&&result?.success){invalidateCurrentPageData();}finish(result,null);resolve(result);};const failure=error=>{finish(null,error);reject(error);};try{if(window.PSBBridge&&typeof window.PSBBridge.call==='function'){Promise.resolve(window.PSBBridge.call(fn,args)).then(success).catch(failure);return;}if(window.google?.script?.run){window.google.script.run.withSuccessHandler(success).withFailureHandler(failure)[fn](...args);return;}failure(new Error('PSBBridge belum tersedia. Jalankan melalui Apps Script atau konfigurasi API bridge.'));}catch(e){failure(e);}});}
+function server(fn,...args){return new Promise((resolve,reject)=>{const tracked=!!state.appInitialized&&!(Number(state.processSilentDepth||0)>0);if(tracked)processBegin(processLabelFor(fn));let settled=false;const finish=(result,error)=>{if(settled)return;settled=true;if(tracked)processEnd(result,error);};const success=result=>{if(MUTATING_SERVER_FUNCTIONS.has(fn)&&result?.success){invalidatePageDataCache();}if(MUTATING_SERVER_FUNCTIONS.has(fn)&&result?.success){invalidateOperationalPageSnapshots();}finish(result,null);resolve(result);};const failure=error=>{finish(null,error);reject(error);};try{if(window.PSBBridge&&typeof window.PSBBridge.call==='function'){Promise.resolve(window.PSBBridge.call(fn,args)).then(success).catch(failure);return;}if(window.google?.script?.run){window.google.script.run.withSuccessHandler(success).withFailureHandler(failure)[fn](...args);return;}failure(new Error('PSBBridge belum tersedia. Jalankan melalui Apps Script atau konfigurasi API bridge.'));}catch(e){failure(e);}});}
 const SNAPSHOT_PAGES=new Set(['home','profile','master','registration','applicants','documents','notifications','announcement','verification','verificationStatus','payments','selection','reregistration','reports','audit','userManagement','more']);
 function pageSnapshotKey(page){let key=String(page||'');if(page==='documents')key+=':'+String(state.documentRegistrationId||'');if(page==='payments')key+=':'+String(state.paymentRegistrationId||'');if(page==='selection')key+=':'+String(state.selectionRegistrationId||'');if(page==='master')key+=':'+String(state.masterKey||'');return key;}
 function savePageSnapshot(page){if(!SNAPSHOT_PAGES.has(page)||!$('content')?.innerHTML)return;state.pageSnapshots[pageSnapshotKey(page)]={html:$('content').innerHTML,ts:Date.now()};}
@@ -173,6 +173,22 @@ function restorePageSnapshot(page){if(!SNAPSHOT_PAGES.has(page))return false;con
 function pageDataCached(page,ttl=180000){const x=state.cache.pages?.[page];if(!x||Date.now()-x.ts>ttl){if(x)delete state.cache.pages[page];return null;}return x.data;}
 function setPageDataCache(page,data){state.cache.pages[page]={data:data,ts:Date.now()};return data;}
 function invalidatePageDataCache(){if(state.cache.pages)state.cache.pages={};}
+function invalidateOperationalPageSnapshots(){
+  const affectedPages=new Set(['home','registration','applicants','documents','verification','verificationStatus','payments','selection','reregistration','reports','announcement','notifications','audit']);
+  Object.keys(state.pageSnapshots||{}).forEach(key=>{
+    if(affectedPages.has(String(key).split(':')[0]))delete state.pageSnapshots[key];
+  });
+  state.cache.registration=null;
+  state.cache.documents={};
+  state.cache.payments={};
+  state.registrationList=[];
+  state.documentData=null;
+  state.paymentData=null;
+  state.selectionData=null;
+  state.reportData=null;
+  state.registrationDetail=null;
+  state.prefetchPromises={};
+}
 function invalidateCurrentPageData(){
   invalidatePageSnapshots();
   invalidatePageDataCache();
