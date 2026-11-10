@@ -92,6 +92,9 @@ assert.match(section('getDashboardPageData'), /if \(dashboardRevision\) try \{ d
 for (const name of ['createBill','submitPayment','verifyPayment','verifyDocument','finalizeVerification','uploadDocument','saveRegistration','submitRegistration','createSelectionSchedule','updateSelectionScheduleStatus','addSelectionParticipant','addSelectionParticipantsBulk','updateSelectionParticipantStatus','saveSelectionResult','publishAnnouncement','openReregistration','finalizeReregistration','saveMasterItem','deactivateMasterItem']) {
   assert.match(section(name), /invalidateOperationalReadCaches_\(\)/, name + ' must invalidate the dashboard cache after a committed mutation');
 }
+const uploadMutation = section('uploadDocument');
+assert.ok(uploadMutation.indexOf('invalidateOperationalReadCaches_()') < uploadMutation.indexOf("return { success:true, message:'Dokumen berhasil diunggah.'"),
+  'Normal document upload success must invalidate the dashboard cache before returning');
 const frontend = fs.readFileSync('frontend/app.js', 'utf8');
 assert.match(frontend, /const success=result=>\{if\(MUTATING_SERVER_FUNCTIONS\.has\(fn\)&&result\?\.success\)\{invalidatePageDataCache\(\);\}if\(MUTATING_SERVER_FUNCTIONS\.has\(fn\)&&result\?\.success\)\{invalidateOperationalPageSnapshots\(\);\}/,
   'Successful mutations must clear data caches and invalidate status-dependent snapshots');
