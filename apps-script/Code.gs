@@ -6028,6 +6028,7 @@ function uploadDocument(sessionToken, payload) {
 
     stage = 'WRITE_AUDIT';
     writeAudit_(actor.userId, 'UPLOAD', 'DOCUMENT', documentId, oldDocuments.length ? JSON.stringify(oldDocuments.map(x => x.object)) : '', JSON.stringify({documentId:documentId,registrationId:registrationId,documentTypeId:documentTypeId,fileId:fileId,fileName:storedFileName,mimeType:mimeType,fileSize:actualSize,status:'PENDING'}), 'Dokumen diunggah ke Google Drive');
+    invalidateOperationalReadCaches_();
 
     return { success:true, message:'Dokumen berhasil diunggah.', document:savedDocument };
   } catch (e) {
