@@ -48,6 +48,6 @@ assert.ok(manifest.icons.some(icon => icon.type === 'image/png' && icon.purpose 
 assert.ok(manifest.icons.some(icon => icon.type === 'image/svg+xml' && icon.purpose === 'any'), 'manifest must retain a scalable standard icon');
 assert.ok(manifest.icons.some(icon => icon.type === 'image/svg+xml' && icon.purpose === 'maskable'), 'manifest must retain a maskable icon');
 assert.match(sw, /const CACHE='psb-pwa-shell-v[0-9-]+'/, 'service worker cache namespace must be versioned');
-assert.match(sw, /manifest\.webmanifest\?v=32\.18\.0/, 'service worker must precache the current manifest');
+assert.match(sw, /manifest\.webmanifest\?v=32\.19\.0/, 'service worker must precache the current manifest');
 assert.match(sw, /icon-maskable-512\.svg/, 'service worker must continue precaching the maskable icon');
 console.log('PWA mobile installation experience safeguards: OK');
