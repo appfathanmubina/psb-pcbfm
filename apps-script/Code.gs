@@ -4893,7 +4893,14 @@ function getDashboardPageData(sessionToken) {
   const candidateNameByReg = {};
   periodRegs.forEach(r => { candidateNameByReg[String(r.registrationId)] = String(candidateMap[String(r.candidateId)]?.fullName || '-'); });
   const makeTask = (r, type, label, action, extra) => ({registrationId:r.registrationId,registrationNumber:r.registrationNumber||'',candidateName:candidateNameByReg[String(r.registrationId)]||'-',status:String(r.status||''),statusLabel:statusLabel_(String(r.status||'')),type,label,action,updatedAt:r.updatedAt||r.createdAt||'',...extra});
-  const verificationItems = canVerification ? periodRegs.filter(r=>['SUBMITTED','UNDER_REVIEW','REVISION'].indexOf(String(r.status||'').toUpperCase())>=0).sort((a,b)=>new Date(a.updatedAt||a.createdAt||0)-new Date(b.updatedAt||b.createdAt||0)) : [];
+  // Match the verification page's eligibility rule: actionable registration statuses
+  // must also have a reconciled, verified form payment. REREGISTRATION is kept
+  // out of the initial-registration queue, as on getVerificationQueue().
+  const verifiedFormPaymentIds = canVerification ? getFormPaymentVerifiedRegistrationIds_() : new Set();
+  const verificationItems = canVerification ? periodRegs.filter(r=>
+    ['SUBMITTED','UNDER_REVIEW','REVISION'].indexOf(String(r.status||'').toUpperCase())>=0 &&
+    verifiedFormPaymentIds.has(String(r.registrationId||''))
+  ).sort((a,b)=>new Date(a.updatedAt||a.createdAt||0)-new Date(b.updatedAt||b.createdAt||0)) : [];
   const paymentItems = canPayments ? periodBills.filter(b=>{
     const state=paymentLedger.byBill[String(b.billId||'')];
     return state?.status==='WAITING'||state?.requiresReview;
@@ -5445,8 +5452,13 @@ function getVerificationDetail(sessionToken, registrationId) {
   const registrationStatus = String(found.registration.status || '').toUpperCase();
   if (['SUBMITTED','UNDER_REVIEW','REVISION'].indexOf(registrationStatus) >= 0 && !isFormPaymentVerified_(registrationId)) return fail_('Detail verifikasi tersedia setelah pembayaran formulir dikonfirmasi oleh bagian Keuangan.');
   const types = getActiveMasterItems_('MASTER_DOKUMEN');
-  const byType = {};
-  documents.forEach(d => { byType[String(d.documentTypeId)] = d; });
+  const byType = Object.create(null);
+  // getCurrentDocuments_ is newest-first; keep the first row per type so
+  // historical duplicate uploads cannot overwrite the active/latest document.
+  documents.forEach(d => {
+    const typeId = String(d.documentTypeId || '');
+    if (typeId && !Object.prototype.hasOwnProperty.call(byType, typeId)) byType[typeId] = d;
+  });
   const checklist = types.map(t => Object.assign({}, t, {
     document:byType[String(t.documentTypeId)] || null,
     uploaded:!!byType[String(t.documentTypeId)]
@@ -5649,8 +5661,13 @@ function getDocumentOptions(sessionToken, registrationId) {
   const paymentRequired = hasRoleDirect_(actor, ['WALI']) && !hasRoleDirect_(actor, ['SUPERADMIN','ADMIN_PSB','VERIFIKATOR']) && !isFormPaymentVerified_(String(registrationId));
   const types = getActiveMasterItems_('MASTER_DOKUMEN');
   const documents = getCurrentDocuments_(String(registrationId));
-  const byType = {};
-  documents.forEach(d => { byType[String(d.documentTypeId)] = d; });
+  const byType = Object.create(null);
+  // getCurrentDocuments_ is newest-first; keep the first row per type so
+  // historical duplicate uploads cannot overwrite the active/latest document.
+  documents.forEach(d => {
+    const typeId = String(d.documentTypeId || '');
+    if (typeId && !Object.prototype.hasOwnProperty.call(byType, typeId)) byType[typeId] = d;
+  });
   const checklist = types.map(t => Object.assign({}, t, {
     document: byType[String(t.documentTypeId)] || null,
     uploaded: !!byType[String(t.documentTypeId)]
@@ -5754,8 +5771,13 @@ function getDocumentPageData(sessionToken, registrationId) {
 
   const types = getActiveMasterItems_('MASTER_DOKUMEN');
   const documents = getCurrentDocuments_(selected);
-  const byType = {};
-  documents.forEach(d => { byType[String(d.documentTypeId)] = d; });
+  const byType = Object.create(null);
+  // getCurrentDocuments_ is newest-first; keep the first row per type so
+  // historical duplicate uploads cannot overwrite the active/latest document.
+  documents.forEach(d => {
+    const typeId = String(d.documentTypeId || '');
+    if (typeId && !Object.prototype.hasOwnProperty.call(byType, typeId)) byType[typeId] = d;
+  });
   const checklist = types.map(t => Object.assign({}, t, {
     document: byType[String(t.documentTypeId)] || null,
     uploaded: !!byType[String(t.documentTypeId)]
