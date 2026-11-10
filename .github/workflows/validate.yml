@@ -72,6 +72,8 @@ jobs:
         run: node tests/payment-verification-state-consistency.test.js
       - name: Test payment ledger reconciliation and full registration workflow
         run: node tests/payment-ledger-reconciliation.test.js
+      - name: Test advanced reporting payment eligibility and reconciliation metrics
+        run: node tests/advanced-report-payment-eligibility.test.js
       - name: Test event-keyed notification idempotency and transaction event identity
         run: node tests/notification-event-idempotency.test.js
       - name: Test UI mutation and refresh failure feedback
