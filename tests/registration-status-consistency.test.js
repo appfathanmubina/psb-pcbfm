@@ -93,5 +93,10 @@ for (const name of ['createBill','submitPayment','verifyPayment','verifyDocument
   assert.match(section(name), /invalidateOperationalReadCaches_\(\)/, name + ' must invalidate the dashboard cache after a committed mutation');
 }
 const frontend = fs.readFileSync('frontend/app.js', 'utf8');
-assert.match(frontend, /const success=result=>\{if\(MUTATING_SERVER_FUNCTIONS\.has\(fn\)&&result\?\.success\)\{invalidateCurrentPageData\(\);\}/,
-  'Successful mutations must clear page snapshots and all dependent client page-data caches');
+assert.match(frontend, /const success=result=>\{if\(MUTATING_SERVER_FUNCTIONS\.has\(fn\)&&result\?\.success\)\{invalidatePageDataCache\(\);\}if\(MUTATING_SERVER_FUNCTIONS\.has\(fn\)&&result\?\.success\)\{invalidateOperationalPageSnapshots\(\);\}/,
+  'Successful mutations must clear data caches and invalidate status-dependent snapshots');
+const snapshotInvalidation = frontend.slice(frontend.indexOf('function invalidateOperationalPageSnapshots()'), frontend.indexOf('function invalidateCurrentPageData()'));
+assert.match(snapshotInvalidation, /new Set\(\['home','registration','applicants','documents','verification','verificationStatus','payments','selection','reregistration','reports','announcement','notifications','audit'\]\)/,
+  'Only pages affected by operational status changes should have their snapshots invalidated');
+assert.match(snapshotInvalidation, /state\.cache\.registration=null[\s\S]*?state\.cache\.documents=\{\}[\s\S]*?state\.cache\.payments=\{\}/,
+  'Registration, document, and payment entity caches must be cleared after a successful mutation');
