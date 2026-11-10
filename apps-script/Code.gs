@@ -2100,6 +2100,7 @@ function saveMasterItem(sessionToken, masterKey, payload) {
       setConfigValue_('ACTIVE_YEAR', String(rowObject.name || ''));
     }
     invalidateActiveMasterItems_(key);
+    invalidateOperationalReadCaches_();
     writeAudit_(actor.userId, action, 'MASTER_DATA', recordId, oldObj ? JSON.stringify(oldObj) : '', JSON.stringify(rowObject), def.title + ' ' + (id ? 'diperbarui' : 'dibuat'));
     return { success:true, message:def.title + ' berhasil ' + (id ? 'diperbarui.' : 'ditambahkan.'), item: masterObjectFromRow_(headers, row, rowNumber) };
   } finally {
@@ -2125,6 +2126,7 @@ function deactivateMasterItem(sessionToken, masterKey, id) {
   sheet.getRange(existing.rowNumber, activeIndex + 1).setValue(false);
   sheet.getRange(existing.rowNumber, headers.indexOf('updatedAt') + 1).setValue(new Date());
   invalidateActiveMasterItems_(String(masterKey || ''));
+  invalidateOperationalReadCaches_();
   writeAudit_(actor.userId, 'DEACTIVATE', 'MASTER_DATA', String(id), JSON.stringify(existing.object), JSON.stringify(Object.assign({}, existing.object, {isActive:false})), def.title + ' dinonaktifkan');
   return { success:true, message:def.title + ' dinonaktifkan.' };
 }
@@ -3767,13 +3769,13 @@ function createSelectionSchedule(sessionToken,payload){
       SpreadsheetApp.flush();
     }catch(appendError){
       const recovered=findRowById_(sheet,'scheduleId',record.scheduleId)||matches();
-      if(recovered)return {success:true,alreadyExists:true,message:'Jadwal tes berhasil disimpan dan dipulihkan.',schedule:rpcSafe_(recovered.object||recovered)};
+      if(recovered){invalidateOperationalReadCaches_();return {success:true,alreadyExists:true,message:'Jadwal tes berhasil disimpan dan dipulihkan.',schedule:rpcSafe_(recovered.object||recovered)};}
       return fail_('Penyimpanan jadwal tes belum dapat dikonfirmasi. Silakan coba kembali.');
     }
     const confirmed=findRowById_(sheet,'scheduleId',record.scheduleId);
     if(!confirmed){
       const recovered=matches();
-      if(recovered)return {success:true,alreadyExists:true,message:'Jadwal tes berhasil disimpan dan dipulihkan.',schedule:rpcSafe_(recovered)};
+      if(recovered){invalidateOperationalReadCaches_();return {success:true,alreadyExists:true,message:'Jadwal tes berhasil disimpan dan dipulihkan.',schedule:rpcSafe_(recovered)};}
       return fail_('Jadwal tes belum berhasil dikonfirmasi tersimpan. Silakan coba kembali.');
     }
     const saved=confirmed.object;
@@ -3781,6 +3783,7 @@ function createSelectionSchedule(sessionToken,payload){
       String(saved.selectionDate||'').trim()!==selectionDate || normalize(saved.location)!==normalize(location)){
       return fail_('Data jadwal tes yang tersimpan tidak sesuai. Silakan periksa kembali.');
     }
+    invalidateOperationalReadCaches_();
     writeAudit_(actor.userId,'CREATE','SELECTION_SCHEDULE',record.scheduleId,'',JSON.stringify(saved),'Jadwal tes dibuat');
     return {success:true,message:'Jadwal tes berhasil dibuat.',schedule:rpcSafe_(saved)};
   }finally{lock.releaseLock();}
@@ -3800,6 +3803,7 @@ function updateSelectionScheduleStatus(sessionToken,payload){
     if(up>=0)sheet.getRange(found.rowNumber,up+1).setValue(now);
     const confirmed=findRowById_(sheet,'scheduleId',scheduleId);
     if(!confirmed || String(confirmed.object.isActive).toUpperCase()!==String(isActive).toUpperCase())return fail_('Status jadwal tes belum berhasil disimpan. Silakan coba kembali.');
+    invalidateOperationalReadCaches_();
     writeAudit_(actor.userId,'UPDATE','SELECTION_SCHEDULE',scheduleId,JSON.stringify({isActive:found.object.isActive}),JSON.stringify({isActive}),'Status jadwal tes diperbarui');
     return {success:true,message:isActive?'Jadwal diaktifkan.':'Jadwal dinonaktifkan.'};
   }finally{lock.releaseLock();}
@@ -3836,6 +3840,7 @@ function addSelectionParticipant(sessionToken,payload){
       record=confirmed.object;
     }
   }finally{lock.releaseLock();}
+  if(!alreadyAssigned) invalidateOperationalReadCaches_();
   if(!alreadyAssigned){
     try{writeAudit_(actor.userId,'CREATE','SELECTION_PARTICIPANT',record.participantId,'',JSON.stringify(record),'Peserta tes ditambahkan');}
     catch(auditError){console.error('Selection participant audit failed: '+auditError);}
@@ -3897,6 +3902,7 @@ function addSelectionParticipantsBulk(sessionToken,payload){
       catch(auditError){console.error('Bulk selection participant audit failed: '+auditError);}
     });
     result={success:true,message:`Generate selesai: ${added.length} peserta ditambahkan, ${skipped.length} dilewati, ${failed.length} gagal.`,addedCount:added.length,skippedCount:skipped.length,failedCount:failed.length,added:rpcSafe_(added),skipped:rpcSafe_(skipped),failed:rpcSafe_(failed)};
+    if(added.length) invalidateOperationalReadCaches_();
   }finally{lock.releaseLock();}
   const notifyRecords=added.concat(notificationRecovery),seenParticipants={};
   notifyRecords.forEach(record=>{
@@ -4198,6 +4204,7 @@ function publishAnnouncement(sessionToken,payload) {
       response={success:true,message:'Pengumuman berhasil dipublikasikan.',announcementDate:rpcSafe_(confirmedAnnouncement.object.announcementDate),result:rpcSafe_(Object.assign({},previous,{announcementDate:confirmedAnnouncement.object.announcementDate}))};
     }
   }finally{lock.releaseLock();}
+  if(response?.success) invalidateOperationalReadCaches_();
   // Fanout notification is deliberately outside the lock; state is committed.
   if(notificationPayload?.userId){
     const p=notificationPayload;
