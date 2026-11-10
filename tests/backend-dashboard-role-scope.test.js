@@ -43,8 +43,14 @@ const fixtures = {
   ],
   CANDIDATES: [{ candidateId: 'c1', fullName: 'Calon Satu' }, { candidateId: 'c2', fullName: 'Calon Dua' }],
   USERS: [{ status: 'ACTIVE' }],
-  BILLS: [{ billId: 'b1', registrationId: 'r1', status: 'PAYMENT_REVIEW', amount: 100, updatedAt: '2026-11-03' }],
-  PAYMENTS: [{ paymentId: 'p1', billId: 'b1', registrationId: 'r1', amount: 100, status: 'SUBMITTED', createdAt: '2026-11-03' }],
+  BILLS: [
+    { billId: 'b1', registrationId: 'r1', status: 'PAID', amount: 100, updatedAt: '2026-11-03' },
+    { billId: 'b2', registrationId: 'r2', status: 'PAYMENT_REVIEW', amount: 200, updatedAt: '2026-11-04' }
+  ],
+  PAYMENTS: [
+    { paymentId: 'p1', billId: 'b1', registrationId: 'r1', amount: 100, status: 'VERIFIED', createdAt: '2026-11-03' },
+    { paymentId: 'p2', billId: 'b2', registrationId: 'r2', amount: 200, status: 'SUBMITTED', createdAt: '2026-11-04' }
+  ],
   SELECTION_PARTICIPANTS: [{ participantId: 'p1', registrationId: 'r2', status: 'SCHEDULED', scheduleId: 's1' }],
   SELECTION_RESULTS: [{ resultId: 'z1', registrationId: 'r2', status: 'PASSED' }],
   REREGISTRATIONS: [{ reregistrationId: 'rr1', registrationId: 'r2', status: 'PENDING' }],
@@ -69,6 +75,9 @@ const context = {
     assert.deepEqual(Array.from(allowed), Object.keys(roles), 'Dashboard role allowlist remains unchanged');
     return { role: token };
   },
+  // The role-scope fixture marks r1 as a reconciled form-payment success;
+  // the dedicated registration-status tests exercise the real ledger helper.
+  getFormPaymentVerifiedRegistrationIds_: () => new Set(['r1']),
   getDatabaseSpreadsheet_: () => ({ getSheetByName: name => name }),
   getConfig_: () => '2027/2028',
   sheetRows_: name => fixtures[name] || [],
