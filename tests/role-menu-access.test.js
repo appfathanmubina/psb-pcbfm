@@ -27,13 +27,13 @@ assert.ok(!ids(menuFor('ADMIN_PSB')).includes('userManagement'));
 assert.ok(ids(menuFor('SUPERADMIN')).includes('userManagement'));
 
 const mobileStart = source.indexOf('function buildMobileNav(){');
-const mobileEnd = source.indexOf('\\nfunction navButtonsHtml(', mobileStart);
+const mobileEnd = source.indexOf('\nfunction navButtonsHtml(', mobileStart);
 assert.notEqual(mobileStart, -1, 'buildMobileNav must exist');
 assert.ok(mobileEnd > mobileStart, 'buildMobileNav boundary exists');
 const mobileNav = source.slice(mobileStart, mobileEnd);
 function mobileIds(...roles) {
   const context = { buildRoleNav: () => menuFor(...roles), hasAnyRole: allowed => allowed.some(role => roles.includes(role)) };
-  return Array.from(vm.runInNewContext(mobileNav + '\\nbuildMobileNav();', context), item => String(item[0]));
+  return Array.from(vm.runInNewContext(mobileNav + '\nbuildMobileNav();', context), item => String(item[0]));
 }
 for (const role of ['ADMIN_PSB','SUPERADMIN']) {
   const ids = mobileIds(role);
@@ -49,7 +49,7 @@ assert.notEqual(renderMoreEnd, -1, 'renderMore must have a stable boundary');
 const renderMore = source.slice(renderMoreStart, renderMoreEnd);
 assert.match(renderMore, /const canVerification=hasAnyRole/,
   'Admin PSB and VERIFIKATOR must see the Verification shortcut in More');
-assert.match(renderMore, /add\\(canVerification,'verification','Verifikasi'/,
+assert.match(renderMore, /add\(canVerification,'verification','Verifikasi'/,
   'The More menu must expose the Verification page to authorized roles');
 assert.match(renderMore, /const canSelection=hasAnyRole\(\['SUPERADMIN','ADMIN_PSB','SELEKSI','VERIFIKATOR'\]\)/,
   'VERIFIKATOR can view selection and must see it in the More menu');
