@@ -3114,6 +3114,7 @@ function createBill(sessionToken,payload){
     }
     return {success:true,message:'Tagihan berhasil dibuat.',bill:JSON.parse(JSON.stringify(confirmed.object))};
   });
+  if(result?.success) invalidateOperationalReadCaches_();
   if(result?.success && /formulir/i.test(String(type.name||''))){
     try{
       const owner=found.registration.userId;
@@ -3334,6 +3335,7 @@ function submitPayment(sessionToken,payload){
     const billHeaders=bills.getRange(1,1,1,bills.getLastColumn()).getValues()[0].map(String);
     const billStatusIdx=billHeaders.indexOf('status');
     if(billStatusIdx>=0)bills.getRange(latestBill.rowNumber,billStatusIdx+1).setValue('PAYMENT_REVIEW');
+    invalidateOperationalReadCaches_();
 
     lock.releaseLock();
     lockAcquired=false;
@@ -3513,6 +3515,7 @@ function verifyPayment(sessionToken,payload){
     sheet.getRange(found.rowNumber,paymentUpdatedIdx+1).setValue(new Date());
     const verified=findRowById_(sheet,'paymentId',paymentId);
     if(!verified||String(verified.object.status||'').toUpperCase()!==status)return fail_('Status pembayaran belum berhasil disimpan. Silakan coba kembali.');
+    invalidateOperationalReadCaches_();
     if(!wasAlreadyFinalized)writeAudit_(actor.userId,'PAYMENT_VERIFY','PAYMENT',paymentId,'',JSON.stringify({status,note}),'Pembayaran diverifikasi');
     const paymentType=findMasterItemById_('MASTER_JENIS_PEMBAYARAN','paymentTypeId',String(br.object.paymentTypeId||''));
     notificationPayload={registrationId:String(regFound.registration.registrationId),userId:String(regFound.registration.userId||''),candidateName:String(regFound.candidate?.fullName||'Calon santri'),paymentLabel:String(paymentType?.name||'pembayaran'),status,note:String(confirmedHistory.note||''),reregistrationNotification,paymentCreatedAt:found.object.createdAt,eventKey:'PAYMENT_VERIFICATION:'+paymentId+':'+status};
@@ -3935,6 +3938,7 @@ function updateSelectionParticipantStatus(sessionToken,payload){
     } catch(auditError) {
       console.error('Selection participant status audit failed: '+auditError);
     }
+    invalidateOperationalReadCaches_();
     return {success:true,message:'Status peserta diperbarui.'};
   } finally { lock.releaseLock(); }
 }
@@ -4040,6 +4044,7 @@ function saveSelectionResult(sessionToken,payload){
     }
 
     writeAudit_(actor.userId,existing?'UPDATE':'CREATE','SELECTION_RESULT',record.resultId,existing?JSON.stringify(existing):'',JSON.stringify(saved),'Hasil seleksi disimpan');
+    invalidateOperationalReadCaches_();
     return {success:true,message:'Hasil seleksi berhasil disimpan.',result:rpcSafe_(saved)};
   }finally{try{lock.releaseLock();}catch(e){}}
 }
@@ -4569,6 +4574,7 @@ function openReregistration(sessionToken, registrationId) {
     }
     notificationPayload={userId:String(regNow.registration.userId||''),candidateName:String(regNow.candidate?.fullName||'calon santri'),registrationNumber:String(regNow.registration.registrationNumber||''),eventKey:'REREGISTRATION_OPENED:'+id+':'+String(result.object.announcementDate)};
     response={success:true,message:current?'Daftar ulang sudah terbuka dan tagihan telah dipastikan tersedia.':'Daftar ulang berhasil dibuka.',reregistration:rr,alreadyOpen:!!current};
+    invalidateOperationalReadCaches_();
   } finally { lock.releaseLock(); }
   if(notificationPayload?.userId){try{createNotificationOnce_(notificationPayload.userId,'Daftar Ulang Dibuka','Tahap Daftar Ulang untuk '+notificationPayload.candidateName+(notificationPayload.registrationNumber?' ('+notificationPayload.registrationNumber+')':'')+' sudah dibuka. Silakan lengkapi dokumen dan pembayaran daftar ulang.','SUCCESS',notificationPayload.eventKey);}catch(notificationError){console.error('Reregistration opened notification failed: '+notificationError);}}
   return response;
@@ -4698,6 +4704,7 @@ function finalizeReregistration(sessionToken, registrationId) {
     if(!confirmedRereg||String(confirmedRereg.object.status||'').toUpperCase()!=='COMPLETED'||!confirmedReg||String(confirmedReg.registration.status||'').toUpperCase()!=='COMPLETED')return fail_('Status penyelesaian Daftar Ulang belum konsisten. Silakan coba kembali.');
     notificationPayload={userId:String(confirmedReg.registration.userId||''),candidateName:String(confirmedReg.candidate?.fullName||'calon santri'),eventKey:'REREGISTRATION_COMPLETED:'+id};
   } finally { lock.releaseLock(); }
+  invalidateOperationalReadCaches_();
   if(notificationPayload?.userId){try{createNotificationOnce_(notificationPayload.userId,'Daftar Ulang Selesai','Proses daftar ulang untuk '+notificationPayload.candidateName+' telah selesai.','SUCCESS',notificationPayload.eventKey);}catch(notificationError){console.error('Reregistration completion notification failed: '+notificationError);}}
   return {success:true,message:wasAlreadyCompleted?'Daftar ulang sudah selesai.':'Daftar ulang berhasil diselesaikan.',status:'COMPLETED',alreadyCompleted:wasAlreadyCompleted};
 }
@@ -4796,6 +4803,24 @@ const PSB_INCIDENT_ROLES = ['SUPERADMIN','ADMIN_PSB'];
 const PSB_INCIDENT_STATUSES = ['OPEN','INVESTIGATING','RESOLVED','CLOSED'];
 const PSB_INCIDENT_PRIORITIES = ['LOW','MEDIUM','HIGH','CRITICAL'];
 
+// Cache generation is a lightweight invalidation boundary for dashboard snapshots.
+// Read models for Pendaftar, Verifikasi, and Laporan are fetched fresh; their client
+// snapshots are invalidated by the frontend after every successful mutation.
+const PSB_OPERATIONAL_READ_CACHE_REVISION_KEY_ = 'PSB_OPERATIONAL_READ_CACHE_REV_V1';
+function invalidateOperationalReadCaches_() {
+  try {
+    PropertiesService.getScriptProperties().setProperty(PSB_OPERATIONAL_READ_CACHE_REVISION_KEY_, Utilities.getUuid());
+    return true;
+  } catch (cacheError) {
+    console.error('PSB_OPERATIONAL_READ_CACHE_INVALIDATION_FAILED: ' + String(cacheError && cacheError.stack || cacheError));
+    return false;
+  }
+}
+function getOperationalReadCacheRevision_() {
+  try { return String(PropertiesService.getScriptProperties().getProperty(PSB_OPERATIONAL_READ_CACHE_REVISION_KEY_) || '0'); }
+  catch (cacheError) { return ''; }
+}
+
 function getDashboardPageData(sessionToken) {
   const actor = requireRole_(sessionToken, PSB_DASHBOARD_ROLES);
   const role = String(actor.role||'').split(',').map(x=>x.trim().toUpperCase());
@@ -4807,8 +4832,9 @@ function getDashboardPageData(sessionToken) {
   const canMonitoring = role.some(r=>PSB_MONITORING_ROLES.indexOf(r)>=0);
   const dashboardCache = CacheService.getScriptCache();
   const actorRoles = String(actor.role || '').split(',').map(r=>r.trim().toUpperCase()).filter(Boolean).sort().join(',');
-  const dashboardKey = 'PSB_DASHBOARD_V5_' + String(getConfig_('ACTIVE_YEAR') || '2027/2028').replace(/[^A-Za-z0-9_-]/g, '_') + '_' + sha256Hex_(actorRoles).substring(0, 16);
-  const dashboardCached = dashboardCache.get(dashboardKey);
+  const dashboardRevision = getOperationalReadCacheRevision_();
+  const dashboardKey = 'PSB_DASHBOARD_V5_' + String(getConfig_('ACTIVE_YEAR') || '2027/2028').replace(/[^A-Za-z0-9_-]/g, '_') + '_' + sha256Hex_(actorRoles).substring(0, 16) + '_' + (dashboardRevision || Utilities.getUuid());
+  const dashboardCached = dashboardRevision ? dashboardCache.get(dashboardKey) : null;
   if (dashboardCached) {
     try { return JSON.parse(dashboardCached); } catch (e) {}
   }
@@ -4943,7 +4969,7 @@ function getDashboardPageData(sessionToken) {
     permissions:{canReport:role.some(r=>PSB_REPORT_ROLES.indexOf(r)>=0),canVerification,canPayments,canSelection,canAnnouncement,canReregistration,canMonitoring,canIncident:role.some(r=>PSB_INCIDENT_ROLES.indexOf(r)>=0)},
     generatedAt:new Date().toISOString()
   };
-  try { dashboardCache.put(dashboardKey, JSON.stringify(response), 30); } catch (e) {}
+  if (dashboardRevision) try { dashboardCache.put(dashboardKey, JSON.stringify(response), 30); } catch (e) {}
   return response;
 }
 
@@ -5537,6 +5563,7 @@ function verifyDocument(sessionToken, payload) {
           String(confirmed.object.verifiedBy||'')==='' &&
           String(confirmed.object.revisionNote||'')===note);
     if(!verificationFieldsMatch) return fail_('Perubahan verifikasi dokumen belum berhasil dikonfirmasi tersimpan. Silakan muat ulang dan periksa status sebelum mencoba kembali.');
+    invalidateOperationalReadCaches_();
     try {
       writeAudit_(actor.userId,status==='VERIFIED'?'VERIFY':'REVISION','DOCUMENT',documentId,JSON.stringify(found.object),JSON.stringify({status:status,note:note}),status==='VERIFIED'?'Dokumen diverifikasi':'Dokumen perlu diperbaiki');
     } catch(auditError) {
@@ -5599,6 +5626,7 @@ function finalizeVerification(sessionToken, payload) {
     }
   } finally { lock.releaseLock(); }
   if(result?.success){
+    invalidateOperationalReadCaches_();
     try {
       createNotificationOnce_(notificationUserId,decision==='VERIFIED'?'Pendaftaran Terverifikasi':'Pendaftaran Perlu Perbaikan',decision==='VERIFIED'?'Pendaftaran '+notificationCandidateName+' dan dokumen wajib telah terverifikasi. Silakan menunggu informasi jadwal tes dan seleksi.':'Pendaftaran '+notificationCandidateName+' dikembalikan untuk perbaikan.'+(note?' Catatan: '+note:''),decision==='VERIFIED'?'SUCCESS':'WARNING',notificationEventKey);
     } catch(notificationError) {
@@ -6033,6 +6061,7 @@ function uploadDocument(sessionToken, payload) {
     // Once the document row exists, do not tell the user to retry the upload:
     // that could create a duplicate file. Report the committed upload as success.
     if (documentRowWritten) {
+      invalidateOperationalReadCaches_();
       return {
         success:true,
         message:(stage === 'REPLACE_OLD_DOCUMENTS' || stage === 'RECONCILE_COMMITTED_DOCUMENT') && oldDocumentRowNumbers.length && !replacementStatusesVerified
@@ -6256,6 +6285,7 @@ function saveRegistration(sessionToken, payload) {
     // men-serialize response. Gejalanya persis: data masuk database tetapi
     // Wali mendapat popup "proses gagal". Ubah seluruh response menjadi
     // plain JSON sebelum dikirim ke frontend.
+    invalidateOperationalReadCaches_();
     const response = {
       success:true,
       message:existing ? 'Draft pendaftaran berhasil diperbarui.' : 'Draft pendaftaran berhasil dibuat.',
@@ -6345,6 +6375,7 @@ function submitRegistration(sessionToken, registrationId) {
       shouldRecoverNotification=true;
     }
   } finally { lock.releaseLock(); }
+  if(response?.success) invalidateOperationalReadCaches_();
   if(shouldRecoverNotification){
     try{dispatchRegistrationSubmissionNotifications_(registrationId);}
     catch(notificationError){console.error('Registration submission notification recovery failed: '+String(notificationError&&notificationError.stack||notificationError));}
