@@ -1,0 +1,18 @@
+'use strict';
+const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const manifest = JSON.parse(fs.readFileSync('frontend/manifest.webmanifest', 'utf8'));
+const maskable = fs.readFileSync('frontend/icons/icon-maskable-512.svg', 'utf8');
+const html = fs.readFileSync('frontend/index.html', 'utf8');
+const sw = fs.readFileSync('frontend/sw.js', 'utf8');
+const icon = manifest.icons.find(item => item.purpose === 'maskable');
+assert.ok(icon, 'Manifest must provide a dedicated maskable icon');
+assert.equal(icon.src, './icons/icon-maskable-512.svg?v=32.8.0', 'Manifest must reference the refreshed maskable asset');
+assert.match(maskable, /<rect width="512" height="512" fill="#800080"\/>/, 'Maskable icon must retain the full purple background');
+assert.match(maskable, /<image x="76" y="76" width="360" height="360"/, 'Logo must sit inside a safe inset instead of touching the maskable edges');
+assert.match(html, /manifest\.webmanifest\?v=32\.19\.0/, 'HTML must request the refreshed manifest');
+assert.match(html, /sw\.js\?v=32\.50\.0/, 'HTML must request the refreshed service worker');
+assert.match(sw, /manifest\.webmanifest\?v=32\.19\.0/, 'Service worker must precache the refreshed manifest');
+assert.match(sw, /icon-maskable-512\.svg\?v=32\.8\.0/, 'Service worker must precache the refreshed maskable icon');
+assert.match(sw, /psb-pwa-shell-v32-50-0/, 'Service worker cache namespace must be bumped');
+console.log('PWA install icon safe-area safeguards: OK');
