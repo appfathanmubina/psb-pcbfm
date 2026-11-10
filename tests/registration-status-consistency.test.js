@@ -76,8 +76,7 @@ assert.match(verificationDetail, /!Object\.prototype\.hasOwnProperty\.call\(byTy
 const documentOptions = section('getDocumentOptions');
 assert.match(documentOptions, /!Object\.prototype\.hasOwnProperty\.call\(byType, typeId\)/,
   'Document options must retain the newest-first document for each document type');
-const documentPageData = section('getDocumentPageData');
-assert.match(documentPageData, /!Object\\.prototype\\.hasOwnProperty\\.call\\(byType, typeId\\)/,
+assert.match(code, /function getDocumentPageData[\s\S]*?const byType = Object\.create\(null\);[\s\S]*?!Object\.prototype\.hasOwnProperty\.call\(byType, typeId\)/,
   'Document page data must retain the newest-first document for each document type');
 
 console.log('Registration payment/document status consistency safeguards passed.');
