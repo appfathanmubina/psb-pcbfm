@@ -3382,6 +3382,7 @@ function submitPayment(sessionToken,payload){
       } finally {
         if(lockAcquired){try{lock.releaseLock();lockAcquired=false;}catch(releaseError){}}
       }
+      invalidateOperationalReadCaches_();
       try {
         dispatchPaymentSubmissionNotifications_(savedPayment?.paymentId,actor.role);
       } catch(notificationError) {
