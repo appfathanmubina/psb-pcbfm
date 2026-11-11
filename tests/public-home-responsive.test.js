@@ -25,7 +25,7 @@ assert.match(bundle, /onsubmit="submitLogin\(event\)"/, 'Apps Script bundle must
 assert.match(appsScriptHtml, /\.public-login-panel[\s\S]*?display:\s*block/, 'Apps Script HTML must include desktop login styles');
 assert.match(html, /styles\.css\?v=32\.36\.0/, 'HTML must request the refreshed stylesheet');
 assert.match(html, /app\.js\?v=32\.46\.0/, 'HTML must request the refreshed frontend script');
-assert.match(sw, /const CACHE=['"]psb-pwa-shell-v32-56-0['"]/, 'PWA shell cache must be refreshed');
+assert.match(sw, /const CACHE=['"]psb-pwa-shell-v32-57-0['"]/, 'PWA shell cache must be refreshed');
 assert.match(sw, /styles\.css\?v=32\.36\.0/);
 assert.match(sw, /app\.js\?v=32\.46\.0/);
 
