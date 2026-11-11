@@ -1542,23 +1542,53 @@ async function renderApplicants(force=false){
   if(!hasAnyRole(['SUPERADMIN','ADMIN_PSB','VERIFIKATOR'])){renderMore();return;}
   state.applicantSearch=state.applicantSearch||'';
   state.applicantStatus=state.applicantStatus||'';
-  $('content').innerHTML=`<section class="hero"><h2>Pendaftar</h2><p>Daftar pendaftaran yang masuk ke sistem.</p></section><div id="applicantPanel"><div class="empty-state">Memuat pendaftar...</div></div>`;
+  state.applicantPageMeta=state.applicantPageMeta||{page:1,pageCount:1,total:0,pageSize:50};
+  state.applicantLoadError='';
+  const filters={page:1,pageSize:50,search:state.applicantSearch,status:state.applicantStatus};
+  const useCache=!force&&!state.applicantSearch&&!state.applicantStatus;
+  const cached=useCache?pageDataCached('applicants'):null;
+  if(cached?.success){
+    state.applicantList=cached.registrations||[];
+    state.applicantPageMeta={page:Number(cached.page||1),pageCount:Number(cached.pageCount||1),total:Number(cached.total||0),pageSize:Number(cached.pageSize||50)};
+    state.applicantHasLoaded=true;
+    state.applicantLoading=false;
+  }else state.applicantLoading=true;
+  $('content').innerHTML=`<section class="hero"><h2>Pendaftar</h2><p>Daftar pendaftaran yang masuk ke sistem.</p></section><div id="applicantPanel" aria-live="polite"></div>`;
+  renderApplicantTable();
+  if(cached?.success)return;
+  const requestId=state.applicantRequestId=Number(state.applicantRequestId||0)+1;
   try{
-    const filters={page:1,pageSize:50,search:state.applicantSearch,status:state.applicantStatus};
-    const useCache=!force&&!state.applicantSearch&&!state.applicantStatus;
     const r=useCache?(pageDataCached('applicants')||await warmPageData('applicants',()=>server('getRegistrationList',state.token,filters))):await server('getRegistrationList',state.token,filters);
-    if(!r?.success){$('applicantPanel').innerHTML=showMessage(r.message);return;}
+    if(requestId!==state.applicantRequestId)return;
+    if(!r?.success)throw new Error(r?.message||'Daftar pendaftar tidak dapat dimuat.');
     state.applicantList=r.registrations||[];
     state.applicantPageMeta={page:Number(r.page||1),pageCount:Number(r.pageCount||1),total:Number(r.total||0),pageSize:Number(r.pageSize||50)};
+    state.applicantHasLoaded=true;
+    state.applicantLoading=false;
+    state.applicantLoadError='';
     renderApplicantTable();
-  }catch(e){$('applicantPanel').innerHTML=showMessage('Gagal memuat pendaftar.');}
+  }catch(e){
+    if(requestId!==state.applicantRequestId)return;
+    state.applicantLoading=false;
+    state.applicantLoadError='Gagal memuat pendaftar. Periksa koneksi, lalu coba lagi.';
+    renderApplicantTable();
+  }
+}
+function renderApplicantSkeletonTable(){
+  const headings=['No.','Calon Santri','Jenjang / Gelombang','Pembayaran','Dokumen','Status','Aksi'];
+  const rows=Array.from({length:6},()=>'<tr class="applicant-skeleton-row"><td><span class="applicant-skeleton-block short"></span></td><td><span class="applicant-skeleton-block wide"></span><span class="applicant-skeleton-block medium"></span></td><td><span class="applicant-skeleton-block medium"></span><span class="applicant-skeleton-block short"></span></td><td><span class="applicant-skeleton-block medium"></span></td><td><span class="applicant-skeleton-block medium"></span></td><td><span class="applicant-skeleton-block short"></span></td><td><span class="applicant-skeleton-block action"></span></td></tr>').join('');
+  return '<div class="staff-table-scroll applicant-skeleton-table" role="status" aria-label="Memuat daftar pendaftar"><table class="staff-data-table"><thead><tr>'+headings.map(x=>'<th scope="col">'+x+'</th>').join('')+'</tr></thead><tbody>'+rows+'</tbody></table></div>';
 }
 function renderApplicantTable(){
   const el=$('applicantPanel');if(!el)return;
   const meta=state.applicantPageMeta||{page:1,pageCount:1,total:(state.applicantList||[]).length,pageSize:50};
-  el.innerHTML=`<div class="staff-list-toolbar"><div class="search-box"><span class="search-icon">${ico('search')}</span><input id="applicantSearch" class="search-input" placeholder="Cari nama atau nomor pendaftaran..." autocomplete="off" value="${esc(state.applicantSearch||'')}" onkeydown="if(event.key==='Enter')loadApplicantPage(1)"><button type="button" class="btn btn-secondary staff-table-action" onclick="loadApplicantPage(1)">Cari</button><button type="button" class="search-clear" id="applicantSearchClear" onclick="clearApplicantSearch()" aria-label="Hapus pencarian">×</button></div><div class="filter-box professional-filter"><span class="filter-label">Status</span><select id="applicantStatus" class="select-field compact professional-select" onchange="loadApplicantPage(1)"><option value="">Semua status</option><option value="DRAFT">Draft</option><option value="SUBMITTED">Pendaftaran dikirim</option><option value="UNDER_REVIEW">Sedang diverifikasi</option><option value="REVISION">Perlu perbaikan</option><option value="VERIFIED">Terverifikasi</option><option value="PAYMENT_VERIFIED">Pembayaran terverifikasi</option><option value="SELECTION">Seleksi</option><option value="PASSED">Lulus</option><option value="NOT_PASSED">Tidak lulus</option><option value="REREGISTRATION">Daftar ulang</option><option value="COMPLETED">Selesai</option></select></div><div class="staff-result-count" id="applicantCount"></div></div><div id="applicantTable"></div><div class="staff-pagination"><button class="btn btn-secondary staff-table-action" onclick="loadApplicantPage(${Math.max(1,meta.page-1)})" ${meta.page<=1?'disabled':''}>Sebelumnya</button><span>Halaman ${meta.page} dari ${meta.pageCount} · ${meta.total} pendaftar</span><button class="btn btn-secondary staff-table-action" onclick="loadApplicantPage(${Math.min(meta.pageCount,meta.page+1)})" ${meta.page>=meta.pageCount?'disabled':''}>Berikutnya</button></div>`;
+  const loaded=state.applicantHasLoaded===true,loading=state.applicantLoading===true;
+  const countLabel=loaded?'Menampilkan '+(state.applicantList||[]).length+' dari '+meta.total+' pendaftar':'Menyiapkan daftar pendaftar...';
+  const pageLabel=!loaded?'Menyiapkan pagination...':loading?'Memuat halaman '+Number(state.applicantPendingPage||meta.page)+' · menampilkan data sebelumnya':'Halaman '+meta.page+' dari '+meta.pageCount+' · '+meta.total+' pendaftar';
+  const tableContent=!loaded&&loading?renderApplicantSkeletonTable():!loaded&&state.applicantLoadError?'<div class="empty-state applicant-load-error">'+esc(state.applicantLoadError)+' <button class="btn btn-secondary staff-table-action" type="button" onclick="loadApplicantPage(1)">Coba lagi</button></div>':'<div id="applicantTable"></div>';
+  el.innerHTML=`<div class="applicant-load-state ${loading?'is-active':''}" id="applicantLoadState" role="status" aria-live="polite" ${loading?'aria-busy="true"':''}>${loading?'<span class="applicant-load-spinner" aria-hidden="true"></span><span>Memuat data pendaftar...</span>':''}</div><div class="staff-list-toolbar"><div class="search-box"><span class="search-icon">${ico('search')}</span><input id="applicantSearch" class="search-input" placeholder="Cari nama atau nomor pendaftaran..." autocomplete="off" value="${esc(state.applicantSearch||'')}" onkeydown="if(event.key==='Enter')loadApplicantPage(1)" ${loading&&!loaded?'disabled':''}><button type="button" class="btn btn-secondary staff-table-action" onclick="loadApplicantPage(1)" ${loading&&!loaded?'disabled':''}>Cari</button><button type="button" class="search-clear" id="applicantSearchClear" onclick="clearApplicantSearch()" aria-label="Hapus pencarian">×</button></div><div class="filter-box professional-filter"><span class="filter-label">Status</span><select id="applicantStatus" class="select-field compact professional-select" onchange="loadApplicantPage(1)" ${loading&&!loaded?'disabled':''}><option value="">Semua status</option><option value="DRAFT">Draft</option><option value="SUBMITTED">Pendaftaran dikirim</option><option value="UNDER_REVIEW">Sedang diverifikasi</option><option value="REVISION">Perlu perbaikan</option><option value="VERIFIED">Terverifikasi</option><option value="PAYMENT_VERIFIED">Pembayaran terverifikasi</option><option value="SELECTION">Seleksi</option><option value="PASSED">Lulus</option><option value="NOT_PASSED">Tidak lulus</option><option value="REREGISTRATION">Daftar ulang</option><option value="COMPLETED">Selesai</option></select></div><div class="staff-result-count" id="applicantCount">${countLabel}</div></div>${tableContent}<div class="staff-pagination"><button class="btn btn-secondary staff-table-action" onclick="loadApplicantPage(${Math.max(1,meta.page-1)})" ${loading||meta.page<=1?'disabled':''}>Sebelumnya</button><span>${pageLabel}</span><button class="btn btn-secondary staff-table-action" onclick="loadApplicantPage(${Math.min(meta.pageCount,meta.page+1)})" ${loading||meta.page>=meta.pageCount?'disabled':''}>Berikutnya</button></div>`;
   const status=$('applicantStatus');if(status)status.value=state.applicantStatus||'';
-  filterApplicantTable();
+  if(loaded)filterApplicantTable();
 }
 function filterApplicantTable(){
   const items=state.applicantList||[];
@@ -1579,15 +1609,28 @@ async function loadApplicantPage(page){
   const search=String($('applicantSearch')?.value??state.applicantSearch??'').trim();
   const status=String($('applicantStatus')?.value??state.applicantStatus??'');
   state.applicantSearch=search;state.applicantStatus=status;
-  loading(true,'Memuat daftar pendaftar...');
+  const requestId=state.applicantRequestId=Number(state.applicantRequestId||0)+1;
+  state.applicantPendingPage=Math.max(1,Number(page)||1);
+  state.applicantLoading=true;
+  state.applicantLoadError='';
+  renderApplicantTable();
   try{
-    const r=await server('getRegistrationList',state.token,{page:page||1,pageSize:50,search,status});
-    if(!r?.success){showToast(r?.message||'Gagal memuat pendaftar.','error');return;}
+    const r=await server('getRegistrationList',state.token,{page:state.applicantPendingPage,pageSize:50,search,status});
+    if(requestId!==state.applicantRequestId)return;
+    if(!r?.success)throw new Error(r?.message||'Daftar pendaftar tidak dapat dimuat.');
     state.applicantList=r.registrations||[];
     state.applicantPageMeta={page:Number(r.page||1),pageCount:Number(r.pageCount||1),total:Number(r.total||0),pageSize:Number(r.pageSize||50)};
+    state.applicantHasLoaded=true;
+    state.applicantLoading=false;
+    state.applicantLoadError='';
     renderApplicantTable();
-  }catch(e){showToast('Gagal memuat pendaftar.','error');}
-  finally{loading(false);}
+  }catch(e){
+    if(requestId!==state.applicantRequestId)return;
+    state.applicantLoading=false;
+    state.applicantLoadError='Gagal memuat pendaftar. Data sebelumnya tetap ditampilkan. Silakan coba lagi.';
+    renderApplicantTable();
+    showToast('Gagal memuat daftar pendaftar. Data sebelumnya tetap ditampilkan.','error');
+  }
 }
 async function renderDocuments(registrationId,force=false){
   if(!hasAnyRole(['WALI','SUPERADMIN','ADMIN_PSB','VERIFIKATOR'])){renderMore();return;}
