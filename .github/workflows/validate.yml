@@ -92,6 +92,8 @@ jobs:
         run: node tests/session-maintenance-batch-write.test.js
       - name: Test session restore and one-load-per-session menu navigation
         run: node tests/session-navigation-cache.test.js
+      - name: Test mobile pull-to-refresh prevention without disabling scrolling
+        run: node tests/mobile-pull-to-refresh.test.js
       - name: Test Remember Me and secure login autofill
         run: node tests/login-remember-me.test.js
       - name: Test Wali workflow navigation and notification badge safeguards
