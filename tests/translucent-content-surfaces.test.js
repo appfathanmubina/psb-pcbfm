@@ -17,7 +17,7 @@ assert.ok(appsBlock.startsWith(marker), 'Apps Script HTML must include the final
 assert.equal(pwaBlock, appsBlock, 'PWA and Apps Script translucent-surface rules must remain byte-for-byte identical');
 
 const contentSurfaces = [
-  '.card', '.status-card', '.progress-card', '.public-card', '.public-info',
+  '.card', '.status-card', '.progress-card', '.public-card', '.public-info', '.psb-process-card',
   '.form-section', '.registration-item', '.doc-item', '.master-item',
   '.notification-card', '.announcement-card', '.selection-card',
   '.analytics-card', '.report-summary', '.report-table-wrap', '.doc-stat',
