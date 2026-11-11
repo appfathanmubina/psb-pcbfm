@@ -12,6 +12,8 @@ assert.match(css, /@media\s*\(min-width:\s*900px\)/, 'Desktop rules must be isol
 assert.match(css, /\.public-shell\s*\{[^}]*display:\s*grid;[^}]*grid-template-columns:\s*minmax\(0,1\.6fr\)\s+minmax\(340px,\.82fr\)/s, 'Desktop landing page must use two columns');
 assert.match(css, /\.public-main\s*\{[^}]*grid-area:\s*main;\s*display:\s*grid/s, 'Public content must remain grouped in the left column');
 assert.match(css, /\.public-login-panel\s*\{[^}]*display:\s*block/s, 'Inline login must be visible on desktop');
+assert.match(css, /\/\* Full-width desktop public landing page; mobile sizing remains untouched\. \*\/[\s\S]*?@media \(min-width: 900px\) \{[\s\S]*?\.public-shell \{\s*width: 100%;\s*max-width: none;/, 'Desktop public shell must use the full available viewport width');
+assert.match(appsScriptHtml, /\/\* Full-width desktop public landing page; mobile sizing remains untouched\. \*\/[\s\S]*?@media \(min-width: 900px\) \{[\s\S]*?\.public-shell \{\s*width: 100%;\s*max-width: none;/, 'Apps Script desktop public shell must use the full available viewport width');
 assert.match(css, /\.public-login-panel\s*\{\s*display:\s*none\s*\}/, 'Inline login must remain hidden outside desktop rules');
 assert.match(css, /\.public-main\s*\{\s*display:\s*contents\s*\}/, 'Mobile content flow must preserve its current document order');
 assert.match(css, /@media\s*\(min-width:\s*900px\)\s*and\s*\(max-width:\s*1100px\)/, 'Narrow laptop layout must be covered');
