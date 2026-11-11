@@ -14,5 +14,5 @@ assert.match(html, /manifest\.webmanifest\?v=32\.19\.0/, 'HTML must request the 
 assert.match(html, /sw\.js\?v=32\.53\.0/, 'HTML must request the refreshed service worker');
 assert.match(sw, /manifest\.webmanifest\?v=32\.19\.0/, 'Service worker must precache the refreshed manifest');
 assert.match(sw, /icon-maskable-512\.svg\?v=32\.8\.0/, 'Service worker must precache the refreshed maskable icon');
-assert.match(sw, /psb-pwa-shell-v32-52-0/, 'Service worker cache namespace must be bumped');
+assert.match(sw, /psb-pwa-shell-v32-53-0/, 'Service worker cache namespace must be bumped');
 console.log('PWA install icon safe-area safeguards: OK');
