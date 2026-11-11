@@ -31,10 +31,14 @@ assert.match(sw, /app\.js\?v=32\.46\.0/);
 
 assert.match(app, /function publicSocialMarkup\(/, 'PWA public social links must have a reusable markup helper');
 assert.match(bundle, /function publicSocialMarkup\(/, 'Apps Script bundle must include public social links markup');
-assert.ok(app.includes('</main>\n    ${publicInlineLoginMarkup()}\n    ${publicSocialMarkup()}'), 'PWA social links must render after login and outside main content');
-assert.ok(bundle.includes('</main>\n    ${publicInlineLoginMarkup()}\n    ${publicSocialMarkup()}'), 'Apps Script social links must render after login and outside main content');
-assert.match(css, /\.public-social\s*\{\s*grid-column:\s*2;\s*grid-row:\s*auto;/, 'Desktop social links must occupy the right column below login');
-assert.match(appsScriptHtml, /\.public-social\s*\{\s*grid-column:\s*2;\s*grid-row:\s*auto;/, 'Apps Script desktop social links must occupy the right column below login');
-assert.match(appsScriptHtml, /psb-fm-apps-script\.js\?v=20261111-4/, 'Apps Script must request the refreshed social placement bundle');
+assert.ok(app.includes('</main>\n    ${publicInlineLoginMarkup()}'), 'PWA login column must follow the public content');
+assert.ok(bundle.includes('</main>\n    ${publicInlineLoginMarkup()}'), 'Apps Script login column must follow the public content');
+assert.match(app, /<div class="public-login-column"><aside class="public-login-panel"[\s\S]*?<\/aside>\$\{publicSocialMarkup\(\)\}<\/div>/, 'PWA social links must be nested in the login column after the login panel');
+assert.match(bundle, /<div class="public-login-column"><aside class="public-login-panel"[\s\S]*?<\/aside>\$\{publicSocialMarkup\(\)\}<\/div>/, 'Apps Script social links must be nested in the login column after the login panel');
+assert.match(css, /\.public-login-column\s*\{\s*grid-area:\s*login;/, 'Desktop login and social group must occupy the right column');
+assert.match(css, /\.public-login-column\s*\{\s*display:\s*contents\s*\}/, 'Mobile login/social group must preserve document flow');
+assert.match(css, /\.public-social\s*\{\s*grid-column:\s*auto;/, 'Social links must stay inside the login column, not be independently placed');
+assert.match(appsScriptHtml, /\.public-login-column\s*\{\s*grid-area:\s*login;/, 'Apps Script login/social group must occupy the right column');
+assert.match(appsScriptHtml, /psb-fm-apps-script\.js\?v=20261111-5/, 'Apps Script must request the corrected social placement bundle');
 
 console.log('PSB desktop inline login, social placement, and mobile layout safeguards: OK');
