@@ -7,6 +7,7 @@ const app = fs.readFileSync('frontend/app.js', 'utf8');
 const bundle = fs.readFileSync('frontend/psb-fm-apps-script.js', 'utf8');
 const appsScriptHtml = fs.readFileSync('apps-script/Index.html', 'utf8');
 const sw = fs.readFileSync('frontend/sw.js', 'utf8');
+const appsScriptStyle = (appsScriptHtml.match(/<style>([\\s\\S]*?)<\\/style>/) || [])[1] || '';
 
 assert.match(css, /@media\s*\(min-width:\s*900px\)/, 'Desktop rules must be isolated to wide viewports');
 assert.match(css, /\.public-shell\s*\{[^}]*display:\s*grid;[^}]*grid-template-columns:\s*minmax\(0,1\.6fr\)\s+minmax\(340px,\.82fr\)/s, 'Desktop landing page must use two columns');
@@ -24,10 +25,10 @@ assert.match(bundle, /function publicInlineLoginMarkup\(/, 'Apps Script bundle m
 assert.match(bundle, /onsubmit="submitLogin\(event\)"/, 'Apps Script bundle must reuse the same authentication handler');
 assert.match(appsScriptHtml, /\.public-login-panel[\s\S]*?display:\s*block/, 'Apps Script HTML must include desktop login styles');
 assert.match(html, /styles\.css\?v=32\.37\.0/, 'HTML must request the refreshed stylesheet');
-assert.match(html, /app\.js\?v=32\.46\.0/, 'HTML must request the refreshed frontend script');
-assert.match(sw, /const CACHE=['"]psb-pwa-shell-v32-57-0['"]/, 'PWA shell cache must be refreshed');
+assert.match(html, /app\.js\?v=32\.47\.0/, 'HTML must request the refreshed frontend script');
+assert.match(sw, /const CACHE=['"]psb-pwa-shell-v32-58-0['"]/, 'PWA shell cache must be refreshed');
 assert.match(sw, /styles\.css\?v=32\.37\.0/);
-assert.match(sw, /app\.js\?v=32\.46\.0/);
+assert.match(sw, /app\.js\?v=32\.47\.0/);
 
 assert.match(app, /function publicSocialMarkup\(/, 'PWA public social links must have a reusable markup helper');
 assert.match(bundle, /function publicSocialMarkup\(/, 'Apps Script bundle must include public social links markup');
@@ -40,5 +41,7 @@ assert.match(css, /\.public-login-column\s*\{\s*display:\s*contents\s*\}/, 'Mobi
 assert.match(css, /\.public-social\s*\{\s*grid-column:\s*auto;/, 'Social links must stay inside the login column, not be independently placed');
 assert.match(appsScriptHtml, /\.public-login-column\s*\{\s*grid-area:\s*login;/, 'Apps Script login/social group must occupy the right column');
 assert.match(appsScriptHtml, /psb-fm-apps-script\.js\?v=20261111-5/, 'Apps Script must request the corrected social placement bundle');
+const socialLayoutRule = /\/\* Keep login and social links in one right-column group[\s\S]*?^\}/m;
+assert.equal(css.match(socialLayoutRule)?.[0], appsScriptStyle.match(socialLayoutRule)?.[0], 'PWA and Apps Script social-column layout rules must stay identical');
 
 console.log('PSB desktop inline login, social placement, and mobile layout safeguards: OK');
