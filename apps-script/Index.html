@@ -792,14 +792,20 @@ input:focus,select:focus,textarea:focus{background:#fff!important;box-shadow:0 0
   }
 }
  
-/* Desktop social links sit beneath the inline login; mobile document flow remains unchanged. */
+/* Keep login and social links in one right-column group on desktop; preserve mobile flow. */
+.public-login-column{display:contents}
 @media (min-width: 900px) {
-  .public-social {
-    grid-column: 2;
-    grid-row: auto;
-    align-self: start;
-    margin-top: 0;
+  .public-login-column{
+    grid-area:login;
+    display:grid;
+    align-content:start;
+    gap:14px;
+    min-width:0;
+    position:sticky;
+    top:24px;
   }
+  .public-login-panel{position:static}
+  .public-social{grid-column:auto;grid-row:auto;align-self:stretch;margin-top:0}
 }
 
 
@@ -879,6 +885,6 @@ input:focus,select:focus,textarea:focus{background:#fff!important;box-shadow:0 0
 <div id="bootProgress" class="boot-progress hidden"><span class="mini-spin"></span><span class="boot-copy" id="bootProgressText">Menyiapkan aplikasi...</span></div>
 <div id="loading" class="loading hidden"><div class="loading-box splash-box"><div class="splash-logo-wrap"><div class="splash-logo" id="splashLogo"></div></div><b id="loadingText">Memuat aplikasi...</b><div class="muted splash-subtitle">Menyiapkan PSB Fathan Mubina</div><div class="splash-progress"><span></span></div></div></div>
 
-<script src="https://appfathanmubina.github.io/psb-pcbfm/psb-fm-apps-script.js?v=20261111-4"></script>
+<script src="https://appfathanmubina.github.io/psb-pcbfm/psb-fm-apps-script.js?v=20261111-5"></script>
 </body>
 </html>
