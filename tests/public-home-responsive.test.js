@@ -34,7 +34,7 @@ assert.match(bundle, /function publicSocialMarkup\(/, 'Apps Script bundle must i
 assert.ok(app.includes('</main>\n    ${publicInlineLoginMarkup()}\n    ${publicSocialMarkup()}'), 'PWA social links must render after login and outside main content');
 assert.ok(bundle.includes('</main>\n    ${publicInlineLoginMarkup()}\n    ${publicSocialMarkup()}'), 'Apps Script social links must render after login and outside main content');
 assert.match(css, /\.public-social\s*\{\s*grid-column:\s*2;\s*grid-row:\s*auto;/, 'Desktop social links must occupy the right column below login');
-assert.match(appsScriptHtml, /\\.public-social\\s*\\{\\s*grid-column:\\s*2;\\s*grid-row:\\s*auto;/, 'Apps Script desktop social links must occupy the right column below login');
+assert.match(appsScriptHtml, /\.public-social\s*\{\s*grid-column:\s*2;\s*grid-row:\s*auto;/, 'Apps Script desktop social links must occupy the right column below login');
 assert.match(appsScriptHtml, /psb-fm-apps-script\.js\?v=20261111-4/, 'Apps Script must request the refreshed social placement bundle');
 
 console.log('PSB desktop inline login, social placement, and mobile layout safeguards: OK');
