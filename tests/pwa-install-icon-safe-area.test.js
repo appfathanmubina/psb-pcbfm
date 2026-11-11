@@ -11,7 +11,7 @@ assert.equal(icon.src, './icons/icon-maskable-512.svg?v=32.8.0', 'Manifest must 
 assert.match(maskable, /<rect width="512" height="512" fill="#800080"\/>/, 'Maskable icon must retain the full purple background');
 assert.match(maskable, /<image x="76" y="76" width="360" height="360"/, 'Logo must sit inside a safe inset instead of touching the maskable edges');
 assert.match(html, /manifest\.webmanifest\?v=32\.19\.0/, 'HTML must request the refreshed manifest');
-assert.match(html, /sw\.js\?v=32\.51\.0/, 'HTML must request the refreshed service worker');
+assert.match(html, /sw\.js\?v=32\.52\.0/, 'HTML must request the refreshed service worker');
 assert.match(sw, /manifest\.webmanifest\?v=32\.19\.0/, 'Service worker must precache the refreshed manifest');
 assert.match(sw, /icon-maskable-512\.svg\?v=32\.8\.0/, 'Service worker must precache the refreshed maskable icon');
 assert.match(sw, /psb-pwa-shell-v32-51-0/, 'Service worker cache namespace must be bumped');
