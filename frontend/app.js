@@ -329,27 +329,26 @@ async function boot(){
   }
   refreshPublicConfig().catch(()=>{});
 }
-function whatsappGroupButtonMarkup(placement='dashboard'){
-  const descriptions={
-    public:'Bergabung untuk mendapatkan informasi dan pendampingan seputar PSB Fathan Mubina.',
-    dashboard:'Akses grup informasi dan komunikasi PSB Fathan Mubina.',
-    profile:'Tetap terhubung dengan informasi dan komunitas PSB Fathan Mubina.'
-  };
-  const description=descriptions[placement]||descriptions.dashboard;
-  return `<a class="whatsapp-group-link whatsapp-group-link--${placement}" href="https://chat.whatsapp.com/LxzCITtPdz47vI4lVOfqHs?s=cl&amp;p=a&amp;iam=2" target="_blank" rel="noopener noreferrer" aria-label="Gabung Grup WhatsApp PSB Fathan Mubina">
+function whatsappGroupButtonMarkup(){
+  return `<a id="whatsappGroupFab" class="whatsapp-group-link whatsapp-group-fab" href="https://chat.whatsapp.com/LxzCITtPdz47vI4lVOfqHs?s=cl&amp;p=a&amp;iam=2" target="_blank" rel="noopener noreferrer" aria-label="Gabung Grup WhatsApp PSB Fathan Mubina">
     <span class="whatsapp-group-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M20.2 11.7a8.2 8.2 0 0 1-12.1 7.2L3 20l1.2-4.9A8.2 8.2 0 1 1 20.2 11.7Z" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><path d="M8.1 7.8c.2-.5.5-.5.8-.5h.5c.2 0 .4.1.5.4l.7 1.7c.1.2.1.4-.1.6l-.5.6c-.2.2-.2.4-.1.6.5.9 1.2 1.6 2.1 2.1.2.1.4.1.6-.1l.7-.8c.2-.2.4-.2.6-.1l1.6.8c.2.1.3.3.3.5 0 .5-.2 1-.6 1.3-.4.4-1 .6-1.6.5-1.1-.2-2.4-.9-3.5-1.9-1.2-1.1-2-2.4-2.2-3.5-.1-.8.1-1.6.3-2.2Z" fill="currentColor"/></svg></span>
-    <span class="whatsapp-group-copy"><strong>Gabung Grup WhatsApp</strong><small>${description}</small></span>
-    <span class="whatsapp-group-arrow" aria-hidden="true">↗</span>
+    <span class="whatsapp-group-copy"><strong>Grup</strong></span>
   </a>`;
+}
+function syncWhatsAppGroupFab(visible){
+  const current=document.getElementById('whatsappGroupFab');
+  if(!visible){current?.remove();return;}
+  if(current)return;
+  document.body.insertAdjacentHTML('beforeend',whatsappGroupButtonMarkup());
 }
 
 function renderPublicHome(message=''){
+  syncWhatsAppGroupFab(true);
   const year=esc(state.config.ACTIVE_YEAR||'2027/2028');
   $('app').innerHTML=`<div class="public-wrap"><div class="public-shell">
     <header class="public-top"><div class="logo">${appLogoMarkup()}</div><div class="public-brand"><h1>PSB Fathan Mubina</h1><p>Pendaftaran Santri Baru · ${year}</p></div><button class="public-login" onclick="openLogin()">Masuk</button></header>
     ${message?showMessage(message,'info'):''}
     <section class="public-hero"><h2>PCB FATHAN MUBINA</h2><p>Portal Pendaftaran Santri Baru (PSB) Pesantren Ciawi Bogor Fathan Mubina. Langkah Awal Perjalanan Impian menjadi santri berilmu, berakhlaq dan berprestasi</p></section>
-    ${whatsappGroupButtonMarkup('public')}
 
     <section class="public-gallery" aria-label="Galeri Fathan Mubina">
       <div class="public-gallery-head"><div class="public-section-title">Galeri Fathan Mubina</div><span class="public-gallery-count" id="galleryCount">Memuat...</span></div>
@@ -522,9 +521,11 @@ function openRegistrationEntry(){
   renderLogin('Silakan masuk terlebih dahulu untuk membuka Pendaftaran.');
 }
 function renderPublicInfo(title,desc){
+  syncWhatsAppGroupFab(false);
   $('app').innerHTML=`<div class="public-wrap"><div class="public-shell"><header class="public-top"><div class="logo">${appLogoMarkup()}</div><div class="public-brand"><h1>PSB Fathan Mubina</h1><p>${esc(state.config.ACTIVE_YEAR||'2027/2028')}</p></div><button class="public-login" onclick="openLogin()">Masuk</button></header><section class="hero"><h2>${esc(title)}</h2><p>${esc(desc)}</p></section><button class="btn btn-secondary" onclick="renderPublicHome()">Kembali ke Beranda</button></div></div>`;
 }
 function renderLogin(error='',identifier=''){
+  syncWhatsAppGroupFab(false);
   $('app').innerHTML=`<div class="login-wrap"><div class="login-card">
     <div class="logo login-logo center">${appLogoMarkup()}</div><div class="center"><h1 class="login-title">PSB Fathan Mubina</h1><div class="login-sub">Pendaftaran Santri Baru · ${esc(state.config.ACTIVE_YEAR||'2027/2028')}</div></div>
     ${error?showMessage(error):''}<form id="loginForm" autocomplete="on" onsubmit="submitLogin(event)">
@@ -748,6 +749,7 @@ async function goPage(page,options={}){
   }
   if(state.page&&!forceReload&&!state.reloadingData)savePageSnapshot(state.page);
   state.page=page;
+  syncWhatsAppGroupFab(page==='home'||page==='profile');
   try{sessionStorage.setItem('psb_current_page',page);}catch(e){}
   document.querySelectorAll('.nav-btn,.side-btn').forEach(x=>x.classList.remove('active'));
   const mobileNavPage=hasAnyRole(['WALI'])?(page==='verificationStatus'?'home':['selection','reregistration'].includes(page)?'announcement':page):page;
@@ -780,11 +782,11 @@ async function renderHome(){
   const wali=hasAnyRole(['WALI']);
   const admin=hasAnyRole(['SUPERADMIN','ADMIN_PSB','VERIFIKATOR']);
   if(!wali){
-    $('content').innerHTML=`<section class="hero"><div style="display:flex;gap:10px;align-items:flex-start;justify-content:space-between;flex-wrap:wrap"><div><h2>Dashboard</h2><p>Ringkasan operasional PSB periode ${esc(state.config.ACTIVE_YEAR||'2027/2028')}.</p></div></div></section>${whatsappGroupButtonMarkup('dashboard')}<div id="dashboardPanel">${progressivePanelMarkup('dashboardPanel','Memuat ringkasan terbaru...')}</div>`;
+    $('content').innerHTML=`<section class="hero"><div style="display:flex;gap:10px;align-items:flex-start;justify-content:space-between;flex-wrap:wrap"><div><h2>Dashboard</h2><p>Ringkasan operasional PSB periode ${esc(state.config.ACTIVE_YEAR||'2027/2028')}.</p></div></div></section><div id="dashboardPanel">${progressivePanelMarkup('dashboardPanel','Memuat ringkasan terbaru...')}</div>`;
     try{const r=await server('getDashboardPageData',state.token);if(!r.success){$('dashboardPanel').innerHTML=showMessage(r.message||'Dashboard belum dapat dimuat.');return;}state.cache.pages.dashboard={data:r,ts:Date.now()};renderAdminDashboard(r);scheduleWarmNavigationData();}catch(e){$('dashboardPanel').innerHTML=showMessage('Gagal memuat dashboard. Silakan coba kembali.');}
     return;
   }
-  const maintenanceBanner=String(state.config.MAINTENANCE_MODE||'').toUpperCase()==='TRUE'?`<div class="status-card" style="margin-bottom:12px"><div class="status-row"><div><b>Sistem dalam pemeliharaan</b><div class="muted" style="font-size:10px;margin-top:3px">Akses informasi tetap tersedia, tetapi tindakan perubahan data sementara dinonaktifkan.</div></div><span class="pill warning">Maintenance</span></div></div>`:''; $('content').innerHTML=`<section class="hero"><h2>Selamat datang, ${esc(state.user.name)}</h2><p>Pantau tahapan setiap pendaftaran anak dan lanjutkan langkah yang masih harus dilakukan.</p></section>${maintenanceBanner}${whatsappGroupButtonMarkup('dashboard')}<div id="waliHomeFlow">${progressivePanelMarkup('waliHomeFlow','Memuat alur pendaftaran...')}</div>`;
+  const maintenanceBanner=String(state.config.MAINTENANCE_MODE||'').toUpperCase()==='TRUE'?`<div class="status-card" style="margin-bottom:12px"><div class="status-row"><div><b>Sistem dalam pemeliharaan</b><div class="muted" style="font-size:10px;margin-top:3px">Akses informasi tetap tersedia, tetapi tindakan perubahan data sementara dinonaktifkan.</div></div><span class="pill warning">Maintenance</span></div></div>`:''; $('content').innerHTML=`<section class="hero"><h2>Selamat datang, ${esc(state.user.name)}</h2><p>Pantau tahapan setiap pendaftaran anak dan lanjutkan langkah yang masih harus dilakukan.</p></section>${maintenanceBanner}<div id="waliHomeFlow">${progressivePanelMarkup('waliHomeFlow','Memuat alur pendaftaran...')}</div>`;
   try{
     const r=await server('getWaliHomeData',state.token);
     if(!r.success){$('waliHomeFlow').innerHTML=showMessage(r.message||'Alur pendaftaran belum dapat dimuat.');return}
@@ -1772,9 +1774,9 @@ async function submitDocumentUpload(type){
 function openDocumentsForRegistration(id){state.documentRegistrationId=id;goPage('documents');}
 
 function renderProfile(){
+ syncWhatsAppGroupFab(true);
  const superadmin=hasAnyRole(['SUPERADMIN']);
  $('content').innerHTML=`<div class="status-card"><div style="display:flex;gap:12px;align-items:center"><div class="logo" style="flex:none">${esc((state.user.name||'U').charAt(0).toUpperCase())}</div><div><h2 style="font-size:18px;margin:0">${esc(state.user.name)}</h2><div class="muted" style="font-size:12px">${esc(state.user.role)}</div></div></div></div>
- ${whatsappGroupButtonMarkup('profile')}
  <div class="status-card"><div class="field"><label>No. HP</label><div class="muted">${esc(state.user.phone||'-')}</div></div><div class="field"><label>Email</label><div class="muted">${esc(state.user.email||'-')}</div></div>${superadmin?`<div style="margin-top:18px;padding-top:16px;border-top:1px solid var(--line)"><div class="status-row"><div><b>Manajemen Akun Pengguna</b><div class="muted" style="font-size:11px;margin-top:4px">Buat akun manual dan tentukan role sesuai struktur: SUPERADMIN, ADMIN_PSB, VERIFIKATOR, SELEKSI, KEUANGAN, atau WALI.</div></div><span class="pill">SUPERADMIN</span></div><button class="btn btn-primary profile-action" style="margin-top:12px" onclick="openManualUserModal()"><span class="profile-action-icon">${ico('user')}</span><span class="profile-action-label">Buat Akun Pengguna</span></button></div>`:''}<div style="display:grid;gap:10px;margin-top:18px"><button class="btn btn-secondary profile-action" onclick="openChangePassword()"><span class="profile-action-icon">${ico('settings')}</span><span class="profile-action-label">Ganti Password</span></button><button class="btn btn-danger profile-action" onclick="confirmLogout()"><span class="profile-action-icon">${ico('logout')}</span><span class="profile-action-label">Keluar dari Akun</span></button></div></div>`;
 }
 function openManualUserModal(){
