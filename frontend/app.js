@@ -101,6 +101,16 @@ function hydrateSplashLogo(){
   splashLogo.innerHTML='<img class="app-logo-img splash-app-logo" src="'+src+'" alt="PSB Fathan Mubina" loading="eager" fetchpriority="high" decoding="async" onerror="this.style.display=\'none\';this.nextElementSibling.style.display=\'grid\'"><span class="app-logo-fallback" aria-hidden="true"></span>';
 }
 
+
+// Shared progressive-loading shell for data-heavy pages. A refresh keeps the last
+// successful panel visible; first load gets lightweight placeholders immediately.
+function progressivePanelMarkup(id,fallbackText='Memuat data...'){
+  const panel=$(id),current=String(panel?.innerHTML||'').trim();
+  const placeholder=!current||/(?:Memuat (?:ringkasan|data|daftar|antrean|informasi|notifikasi|dokumen|master|pengguna|reporting|hasil|alur)|Memuat\.\.\.|Memuat data|Memuat informasi|Memuat notifikasi)/i.test(current)||current.includes('progressive-panel-skeleton');
+  if(!placeholder)return '<div class="progressive-panel-refresh" role="status" aria-live="polite"><span class="applicant-load-spinner" aria-hidden="true"></span> Memperbarui data…</div>'+current;
+  return '<div class="progressive-panel-skeleton" role="status" aria-label="'+esc(fallbackText)+'"><div class="progressive-skeleton-kpis"><i></i><i></i><i></i></div><div class="progressive-skeleton-line wide"></div><div class="progressive-skeleton-line"></div><div class="progressive-skeleton-table"><i></i><i></i><i></i><i></i></div></div><span class="sr-only">'+esc(fallbackText)+'</span>';
+}
+
 function processLabelFor(fn){const labels={validateSession:'Memeriksa sesi akun',login:'Memeriksa akun',registerWali:'Membuat akun Wali',getDashboardPageData:'Memuat Dashboard',getWaliHomeData:'Memuat beranda',getMyRegistrations:'Memuat daftar pendaftaran',getRegistrationFormOptions:'Menyiapkan formulir',getRegistrationDetail:'Memuat detail pendaftaran',saveRegistration:'Menyimpan data pendaftaran',submitRegistration:'Mengirim pendaftaran',getDocumentPageData:'Memuat daftar dokumen',getDocumentOptions:'Memuat dokumen pendaftaran',uploadDocument:'Mengunggah dokumen',submitPayment:'Mengirim bukti pembayaran',getPaymentPageData:'Memuat tagihan pembayaran',finalizeVerification:'Menyimpan hasil verifikasi',verifyDocument:'Memverifikasi dokumen',getVerificationQueue:'Memuat antrean verifikasi'};return labels[fn]||(/^get|^load/i.test(fn)?'Memuat data aplikasi':'Memproses permintaan');}
 function processPopupEnsure(){let root=$('psbProcessPopup');if(root)return root;document.body.insertAdjacentHTML('beforeend',`<div class="psb-process-backdrop" id="psbProcessPopup" role="status" aria-live="polite" aria-atomic="true"><div class="psb-process-card"><div class="psb-process-head"><span class="psb-process-spinner" id="psbProcessIcon"></span><div class="psb-process-copy"><b id="psbProcessTitle">Memproses...</b><span id="psbProcessDetail">Menyiapkan permintaan ke server.</span></div><strong id="psbProcessPercent">15%</strong></div><div class="psb-process-track"><span id="psbProcessBar" style="width:15%"></span></div></div></div>`);return $('psbProcessPopup');}
 function processPopupUpdate(percent,title,detail,done){const root=processPopupEnsure(),bar=$('psbProcessBar'),pct=$('psbProcessPercent'),heading=$('psbProcessTitle'),copy=$('psbProcessDetail');root.classList.toggle('is-done',done===true);root.classList.toggle('is-error',done==='error');if(bar)bar.style.width=Math.max(0,Math.min(100,Number(percent)||0))+'%';if(pct)pct.textContent=Math.max(0,Math.min(100,Number(percent)||0))+'%';if(heading)heading.textContent=title||'Memproses...';if(copy)copy.textContent=detail||'';}
@@ -755,11 +765,11 @@ async function renderHome(){
   const wali=hasAnyRole(['WALI']);
   const admin=hasAnyRole(['SUPERADMIN','ADMIN_PSB','VERIFIKATOR']);
   if(!wali){
-    $('content').innerHTML=`<section class="hero"><div style="display:flex;gap:10px;align-items:flex-start;justify-content:space-between;flex-wrap:wrap"><div><h2>Dashboard</h2><p>Ringkasan operasional PSB periode ${esc(state.config.ACTIVE_YEAR||'2027/2028')}.</p></div></div></section><div id="dashboardPanel"><div class="empty-state">Memuat ringkasan terbaru...</div></div>`;
+    $('content').innerHTML=`<section class="hero"><div style="display:flex;gap:10px;align-items:flex-start;justify-content:space-between;flex-wrap:wrap"><div><h2>Dashboard</h2><p>Ringkasan operasional PSB periode ${esc(state.config.ACTIVE_YEAR||'2027/2028')}.</p></div></div></section><div id="dashboardPanel">${progressivePanelMarkup('dashboardPanel','Memuat ringkasan terbaru...')}</div>`;
     try{const r=await server('getDashboardPageData',state.token);if(!r.success){$('dashboardPanel').innerHTML=showMessage(r.message||'Dashboard belum dapat dimuat.');return;}state.cache.pages.dashboard={data:r,ts:Date.now()};renderAdminDashboard(r);scheduleWarmNavigationData();}catch(e){$('dashboardPanel').innerHTML=showMessage('Gagal memuat dashboard. Silakan coba kembali.');}
     return;
   }
-  const maintenanceBanner=String(state.config.MAINTENANCE_MODE||'').toUpperCase()==='TRUE'?`<div class="status-card" style="margin-bottom:12px"><div class="status-row"><div><b>Sistem dalam pemeliharaan</b><div class="muted" style="font-size:10px;margin-top:3px">Akses informasi tetap tersedia, tetapi tindakan perubahan data sementara dinonaktifkan.</div></div><span class="pill warning">Maintenance</span></div></div>`:''; $('content').innerHTML=`<section class="hero"><h2>Selamat datang, ${esc(state.user.name)}</h2><p>Pantau tahapan setiap pendaftaran anak dan lanjutkan langkah yang masih harus dilakukan.</p></section>${maintenanceBanner}<div id="waliHomeFlow"><div class="empty-state">Memuat alur pendaftaran...</div></div>`;
+  const maintenanceBanner=String(state.config.MAINTENANCE_MODE||'').toUpperCase()==='TRUE'?`<div class="status-card" style="margin-bottom:12px"><div class="status-row"><div><b>Sistem dalam pemeliharaan</b><div class="muted" style="font-size:10px;margin-top:3px">Akses informasi tetap tersedia, tetapi tindakan perubahan data sementara dinonaktifkan.</div></div><span class="pill warning">Maintenance</span></div></div>`:''; $('content').innerHTML=`<section class="hero"><h2>Selamat datang, ${esc(state.user.name)}</h2><p>Pantau tahapan setiap pendaftaran anak dan lanjutkan langkah yang masih harus dilakukan.</p></section>${maintenanceBanner}<div id="waliHomeFlow">${progressivePanelMarkup('waliHomeFlow','Memuat alur pendaftaran...')}</div>`;
   try{
     const r=await server('getWaliHomeData',state.token);
     if(!r.success){$('waliHomeFlow').innerHTML=showMessage(r.message||'Alur pendaftaran belum dapat dimuat.');return}
@@ -920,7 +930,7 @@ async function createProductionBackupUI(){
 
 async function renderReports(force=false){
   if(!hasAnyRole(['SUPERADMIN','ADMIN_PSB','VERIFIKATOR','SELEKSI','KEUANGAN'])){renderMore();return;}
-  $('content').innerHTML=`<section class="hero"><h2>Laporan</h2><p>Ringkasan pendaftar, pembayaran, seleksi, dan Daftar Ulang. Data dapat difilter dan diunduh sebagai CSV.</p></section><section class="dashboard-section"><div class="report-filter-grid"><div class="field"><label>Tahun Ajaran</label><select id="reportYear" class="select-field professional-select"><option value="">Menyiapkan pilihan...</option></select></div><div class="field"><label>Gelombang</label><select id="reportGelombang" class="select-field professional-select"><option value="">Semua gelombang</option></select></div><div class="field"><label>Jenjang</label><select id="reportJenjang" class="select-field professional-select"><option value="">Semua jenjang</option></select></div><div class="field"><label>Jenis Kelamin</label><select id="reportGender" class="select-field professional-select"><option value="">Semua jenis kelamin</option></select></div><div class="field"><label>Status</label><select id="reportStatus" class="select-field professional-select"><option value="">Semua status</option></select></div><div class="field"><label>Dari tanggal</label><input id="reportFromDate" type="date" class="select-field"></div><div class="field"><label>Sampai tanggal</label><input id="reportToDate" type="date" class="select-field"></div></div><div class="report-actions"><button class="btn btn-primary" onclick="loadReports()">Terapkan Filter</button><button class="btn btn-secondary" onclick="exportReportCsv()">Export CSV</button><button class="btn btn-secondary" onclick="loadAdvancedReports()">Analisis Lanjutan</button></div></section><div id="reportPanel"><div class="empty-state">Memuat reporting...</div></div><div id="advancedReportPanel" style="margin-top:14px"><div class="empty-state">Analisis Lanjutan dimuat saat tombol dibuka.</div></div>`;
+  $('content').innerHTML=`<section class="hero"><h2>Laporan</h2><p>Ringkasan pendaftar, pembayaran, seleksi, dan Daftar Ulang. Data dapat difilter dan diunduh sebagai CSV.</p></section><section class="dashboard-section"><div class="report-filter-grid"><div class="field"><label>Tahun Ajaran</label><select id="reportYear" class="select-field professional-select"><option value="">Menyiapkan pilihan...</option></select></div><div class="field"><label>Gelombang</label><select id="reportGelombang" class="select-field professional-select"><option value="">Semua gelombang</option></select></div><div class="field"><label>Jenjang</label><select id="reportJenjang" class="select-field professional-select"><option value="">Semua jenjang</option></select></div><div class="field"><label>Jenis Kelamin</label><select id="reportGender" class="select-field professional-select"><option value="">Semua jenis kelamin</option></select></div><div class="field"><label>Status</label><select id="reportStatus" class="select-field professional-select"><option value="">Semua status</option></select></div><div class="field"><label>Dari tanggal</label><input id="reportFromDate" type="date" class="select-field"></div><div class="field"><label>Sampai tanggal</label><input id="reportToDate" type="date" class="select-field"></div></div><div class="report-actions"><button class="btn btn-primary" onclick="loadReports()">Terapkan Filter</button><button class="btn btn-secondary" onclick="exportReportCsv()">Export CSV</button><button class="btn btn-secondary" onclick="loadAdvancedReports()">Analisis Lanjutan</button></div></section><div id="reportPanel">${progressivePanelMarkup('reportPanel','Memuat reporting...')}</div><div id="advancedReportPanel" style="margin-top:14px"><div class="empty-state">Analisis Lanjutan dimuat saat tombol dibuka.</div></div>`;
   await loadReports(force);
 }
 async function loadReports(force=false){
@@ -1011,7 +1021,7 @@ function exportReportCsv(){
 
 async function renderAudit(force=false){
   if(!hasAnyRole(['SUPERADMIN','ADMIN_PSB'])){renderMore();return;}
-  $('content').innerHTML=`<section class="hero"><h2>Audit</h2><p>Jejak aktivitas penting aplikasi. Data ditampilkan dari AUDIT_LOG dan dapat difilter.</p></section><section class="dashboard-section"><div class="report-filter-grid"><div class="field"><label>Pencarian</label><input id="auditSearch" class="select-field" placeholder="User, aksi, modul, record, deskripsi..."></div><div class="field"><label>Aksi</label><select id="auditAction" class="select-field"><option value="">Semua aksi</option></select></div><div class="field"><label>Modul</label><select id="auditModule" class="select-field"><option value="">Semua modul</option></select></div><div class="field"><label>Dari tanggal</label><input id="auditFrom" type="date" class="select-field"></div><div class="field"><label>Sampai tanggal</label><input id="auditTo" type="date" class="select-field"></div></div><div class="report-actions"><button class="btn btn-primary" onclick="loadAudit(1)">Terapkan Filter</button><button class="btn btn-secondary" onclick="exportAuditCsv()">Export CSV</button>${hasAnyRole(['SUPERADMIN'])?'<button class="btn btn-secondary" onclick="runSecurityMaintenanceUI()">Maintenance Security</button>':''}</div></section><div id="auditPanel"><div class="empty-state">Memuat audit...</div></div>`;
+  $('content').innerHTML=`<section class="hero"><h2>Audit</h2><p>Jejak aktivitas penting aplikasi. Data ditampilkan dari AUDIT_LOG dan dapat difilter.</p></section><section class="dashboard-section"><div class="report-filter-grid"><div class="field"><label>Pencarian</label><input id="auditSearch" class="select-field" placeholder="User, aksi, modul, record, deskripsi..."></div><div class="field"><label>Aksi</label><select id="auditAction" class="select-field"><option value="">Semua aksi</option></select></div><div class="field"><label>Modul</label><select id="auditModule" class="select-field"><option value="">Semua modul</option></select></div><div class="field"><label>Dari tanggal</label><input id="auditFrom" type="date" class="select-field"></div><div class="field"><label>Sampai tanggal</label><input id="auditTo" type="date" class="select-field"></div></div><div class="report-actions"><button class="btn btn-primary" onclick="loadAudit(1)">Terapkan Filter</button><button class="btn btn-secondary" onclick="exportAuditCsv()">Export CSV</button>${hasAnyRole(['SUPERADMIN'])?'<button class="btn btn-secondary" onclick="runSecurityMaintenanceUI()">Maintenance Security</button>':''}</div></section><div id="auditPanel">${progressivePanelMarkup('auditPanel','Memuat audit...')}</div>`;
   await loadAudit(1,force);
 }
 async function loadAudit(page=1,force=false){
@@ -1028,7 +1038,7 @@ function renderFeaturePlaceholder(title,desc){$('content').innerHTML=`<section c
 async function renderSelection(force=false){
   if(!hasAnyRole(['WALI','SUPERADMIN','ADMIN_PSB','SELEKSI','VERIFIKATOR'])){renderMore();return true}
   state.selectionTab=state.selectionTab||'overview';
-  $('content').innerHTML=`<section class="hero"><h2>Tes</h2><p>${hasAnyRole(['WALI'])?'Lihat jadwal tes, status peserta, dan hasil seleksi calon santri.':'Kelola jadwal tes, peserta, nilai, dan hasil seleksi.'}</p></section><div id="selectionPanel"><div class="selection-empty">Memuat data tes dan seleksi...</div></div>`;
+  $('content').innerHTML=`<section class="hero"><h2>Tes</h2><p>${hasAnyRole(['WALI'])?'Lihat jadwal tes, status peserta, dan hasil seleksi calon santri.':'Kelola jadwal tes, peserta, nilai, dan hasil seleksi.'}</p></section><div id="selectionPanel">${progressivePanelMarkup('selectionPanel','Memuat data tes dan seleksi...')}</div>`;
   try{
     const id=state.selectionRegistrationId||'';
     const cached=!force&&(state.selectionData||(!id?pageDataCached('selection'):null));
@@ -1201,7 +1211,7 @@ async function saveSelectionResultUI(registrationId){const status=$('selResultSt
 async function renderAnnouncements(force=false){
   if(!hasAnyRole(['WALI','SUPERADMIN','ADMIN_PSB','SELEKSI','VERIFIKATOR'])){renderMore();return}
   const isWali=hasAnyRole(['WALI']);
-  $('content').innerHTML=`<section class="hero"><h2>Pengumuman</h2><p>${isWali?'Lihat informasi tes, hasil seleksi, dan tahapan daftar ulang pendaftaran Anda.':'Kelola dan publikasikan hasil seleksi kepada wali santri.'}</p></section><div id="announcementPanel"><div class="announcement-empty">Memuat informasi...</div></div>`;
+  $('content').innerHTML=`<section class="hero"><h2>Pengumuman</h2><p>${isWali?'Lihat informasi tes, hasil seleksi, dan tahapan daftar ulang pendaftaran Anda.':'Kelola dan publikasikan hasil seleksi kepada wali santri.'}</p></section><div id="announcementPanel">${progressivePanelMarkup('announcementPanel','Memuat informasi...')}</div>`;
   const loadPageData=(page,fn)=>force?server(fn,state.token):(pageDataCached(page)||warmPageData(page,()=>server(fn,state.token)));
   try{
     const tasks=[loadPageData('announcement','getAnnouncementPageData')];
@@ -1300,7 +1310,7 @@ async function sendCommunicationUI(){
 }
 
 async function renderNotifications(force=false){
-  $('content').innerHTML=`<section class="hero"><h2>Notifikasi</h2><p>Informasi penting terkait proses PSB akan muncul di sini.</p></section><div id="notificationPanel"><div class="announcement-empty">Memuat notifikasi...</div></div>`;
+  $('content').innerHTML=`<section class="hero"><h2>Notifikasi</h2><p>Informasi penting terkait proses PSB akan muncul di sini.</p></section><div id="notificationPanel">${progressivePanelMarkup('notificationPanel','Memuat notifikasi...')}</div>`;
   try{const r=force?await server('getNotifications',state.token):(pageDataCached('notifications')||await warmPageData('notifications',()=>server('getNotifications',state.token)));if(!r?.success){$('notificationPanel').innerHTML=showMessage(r?.message||'Gagal memuat notifikasi.');return}renderNotificationPanel(r)}catch(e){$('notificationPanel').innerHTML=showMessage('Gagal memuat notifikasi.')}
 }
 function notificationTypeLabel(type){return ({SUCCESS:'Berhasil',WARNING:'Perlu perhatian',INFO:'Informasi',ERROR:'Kesalahan'})[String(type||'INFO').toUpperCase()]||'Informasi'}
@@ -1311,7 +1321,7 @@ async function toggleNotificationPopup(){if($('notificationPopupBackdrop')){clos
 async function openNotificationPopup(force=false){
   if(!state.token)return;
   closeNotificationPopup();
-  document.body.insertAdjacentHTML('beforeend','<div class="notification-popover-backdrop" id="notificationPopupBackdrop" onclick="if(event.target===this)closeNotificationPopup()"><section class="notification-popover" role="dialog" aria-modal="false" aria-labelledby="notificationPopupTitle"><div class="notification-popover-head"><div><b id="notificationPopupTitle">Notifikasi</b><span>Informasi terbaru terkait proses PSB</span></div><button type="button" class="notification-popover-close" aria-label="Tutup notifikasi" onclick="closeNotificationPopup()">×</button></div><div id="notificationPanel"><div class="announcement-empty">Memuat notifikasi...</div></div></section></div>');
+  document.body.insertAdjacentHTML('beforeend','<div class="notification-popover-backdrop" id="notificationPopupBackdrop" onclick="if(event.target===this)closeNotificationPopup()"><section class="notification-popover" role="dialog" aria-modal="false" aria-labelledby="notificationPopupTitle"><div class="notification-popover-head"><div><b id="notificationPopupTitle">Notifikasi</b><span>Informasi terbaru terkait proses PSB</span></div><button type="button" class="notification-popover-close" aria-label="Tutup notifikasi" onclick="closeNotificationPopup()">×</button></div><div id="notificationPanel">${progressivePanelMarkup('notificationPanel','Memuat notifikasi...')}</div></section></div>');
   const button=document.querySelector('.notification-bell-wrap');if(button)button.setAttribute('aria-expanded','true');
   await refreshNotificationPopup(force);
 }
@@ -1328,7 +1338,7 @@ async function renderVerification(force=false){
   if(!hasAnyRole(['SUPERADMIN','ADMIN_PSB','VERIFIKATOR'])){renderMore();return}
   state.verificationSearch=state.verificationSearch||'';
   state.verificationStatus=state.verificationStatus||'';
-  $('content').innerHTML=`<section class="hero"><h2>Verifikasi</h2><p>Periksa data pendaftaran dan dokumen sebelum menetapkan hasil verifikasi.</p></section><div id="verificationPanel"><div class="empty-state">Memuat antrean verifikasi...</div></div>`;
+  $('content').innerHTML=`<section class="hero"><h2>Verifikasi</h2><p>Periksa data pendaftaran dan dokumen sebelum menetapkan hasil verifikasi.</p></section><div id="verificationPanel">${progressivePanelMarkup('verificationPanel','Memuat antrean verifikasi...')}</div>`;
   try{
     const filters={page:1,pageSize:50,search:state.verificationSearch,status:state.verificationStatus};
     const useCache=!force&&!state.verificationSearch&&!state.verificationStatus;
@@ -1411,7 +1421,7 @@ async function finalizeVerificationUI(decision,id){
 
 async function renderRegistrationHub(force=false){
   if(!hasAnyRole(['WALI','SUPERADMIN','ADMIN_PSB'])){renderMore();return;}
-  $('content').innerHTML=`<section class="hero"><h2>Pendaftaran</h2><p>Satu akun wali dapat mengelola beberapa pendaftaran anak.</p></section><div id="registrationPanel"><div class="empty-state">Memuat pendaftaran...</div></div>`;
+  $('content').innerHTML=`<section class="hero"><h2>Pendaftaran</h2><p>Satu akun wali dapat mengelola beberapa pendaftaran anak.</p></section><div id="registrationPanel">${progressivePanelMarkup('registrationPanel','Memuat pendaftaran...')}</div>`;
   if(!force&&state.cache.registration){state.registrationList=state.cache.registration;renderRegistrationList();return;}
   try{const r=await server('getMyRegistrations',state.token);if(!r.success){$('registrationPanel').innerHTML=showMessage(r.message);return}state.registrationList=r.registrations||[];state.cache.registration=state.registrationList;renderRegistrationList();}catch(e){$('registrationPanel').innerHTML=showMessage('Gagal memuat pendaftaran.');}
 }
@@ -1635,7 +1645,7 @@ async function loadApplicantPage(page){
 async function renderDocuments(registrationId,force=false){
   if(!hasAnyRole(['WALI','SUPERADMIN','ADMIN_PSB','VERIFIKATOR'])){renderMore();return;}
   state.documentRegistrationId=registrationId||state.documentRegistrationId||'';
-  $('content').innerHTML=`<section class="hero"><h2>Dokumen Pendaftaran</h2><p>Kelola berkas persyaratan dan simpan file secara terstruktur di Google Drive.</p></section><div id="documentPanel"><div class="empty-state">Memuat daftar pendaftaran...</div></div>`;
+  $('content').innerHTML=`<section class="hero"><h2>Dokumen Pendaftaran</h2><p>Kelola berkas persyaratan dan simpan file secara terstruktur di Google Drive.</p></section><div id="documentPanel">${progressivePanelMarkup('documentPanel','Memuat daftar pendaftaran...')}</div>`;
   try{
     let r=!force&&!hasAnyRole(['WALI'])?state.cache.documents[state.documentRegistrationId]||null:null;
     if(!r){r=await server('getDocumentPageData',state.token,state.documentRegistrationId);if(r?.success)state.cache.documents[state.documentRegistrationId]=r;}
@@ -1771,7 +1781,7 @@ async function saveManualUser(){
 }
 async function renderUserManagementPage(){
  if(!hasAnyRole(['SUPERADMIN'])){renderMore();return;}
- $('content').innerHTML=`<section class="hero"><div style="display:flex;align-items:flex-start;justify-content:space-between;gap:10px"><div><h2>Manajemen Pengguna</h2><p>Kelola akun pengguna dan reset password masing-masing pengguna.</p></div><span class="pill">SUPERADMIN</span></div></section><div id="userManagementPageBody"><div class="empty-state">Memuat daftar pengguna...</div></div>`;
+ $('content').innerHTML=`<section class="hero"><div style="display:flex;align-items:flex-start;justify-content:space-between;gap:10px"><div><h2>Manajemen Pengguna</h2><p>Kelola akun pengguna dan reset password masing-masing pengguna.</p></div><span class="pill">SUPERADMIN</span></div></section><div id="userManagementPageBody">${progressivePanelMarkup('userManagementPageBody','Memuat daftar pengguna...')}</div>`;
  await loadUserManagementPage();
 }
 async function loadUserManagementPage(){
@@ -1814,7 +1824,7 @@ async function openUserManagementModal(){
 function closeUserManagementModal(){$('userManagementModal')?.remove();state.detailLoadingLocks.userManagement=false}
 async function renderReregistration(force=false){
   if(!hasAnyRole(['WALI','SUPERADMIN','ADMIN_PSB','VERIFIKATOR','KEUANGAN'])){renderMore();return;}
-  $('content').innerHTML=`<section class="hero"><h2>Daftar Ulang</h2><p>Lengkapi tahap akhir setelah dinyatakan lulus seleksi.</p></section><div id="reregPanel"><div class="empty-state">Memuat data daftar ulang...</div></div>`;
+  $('content').innerHTML=`<section class="hero"><h2>Daftar Ulang</h2><p>Lengkapi tahap akhir setelah dinyatakan lulus seleksi.</p></section><div id="reregPanel">${progressivePanelMarkup('reregPanel','Memuat data daftar ulang...')}</div>`;
   try{
     const r=force?await server('getReregistrationPageData',state.token):(pageDataCached('reregistration')||await warmPageData('reregistration',()=>server('getReregistrationPageData',state.token)));
     if(!r?.success){$('reregPanel').innerHTML=showMessage(r?.message||'Gagal memuat data daftar ulang.');return;}
@@ -1899,13 +1909,13 @@ async function renderPayments(registrationId,force=false){
   if(!hasAnyRole(['WALI','SUPERADMIN','ADMIN_PSB','KEUANGAN'])){renderMore();return;}
   if(!hasAnyRole(['WALI'])){
     state.paymentQueuePage=Number(state.paymentQueuePage||1);
-    $('content').innerHTML=`<section class="hero"><h2>Antrean Pembayaran</h2><p>Periksa bukti transfer dan status tagihan seluruh pendaftar.</p></section><div id="paymentPanel"><div class="empty-state">Memuat antrean pembayaran...</div></div>`;
+    $('content').innerHTML=`<section class="hero"><h2>Antrean Pembayaran</h2><p>Periksa bukti transfer dan status tagihan seluruh pendaftar.</p></section><div id="paymentPanel">${progressivePanelMarkup('paymentPanel','Memuat antrean pembayaran...')}</div>`;
     try{await loadPaymentQueuePage(force?1:state.paymentQueuePage||1);}
     catch(e){$('paymentPanel').innerHTML=showMessage('Gagal memuat antrean pembayaran.');}
     return;
   }
   state.paymentRegistrationId=String(registrationId||state.paymentRegistrationId||state.registrationList?.[0]?.registrationId||'');
-  $('content').innerHTML=`<section class="hero"><h2>Pembayaran Formulir</h2><p>Unggah bukti pembayaran dan pantau proses verifikasi oleh petugas Keuangan.</p></section><div id="paymentPanel"><div class="empty-state">Memuat data pembayaran...</div></div>`;
+  $('content').innerHTML=`<section class="hero"><h2>Pembayaran Formulir</h2><p>Unggah bukti pembayaran dan pantau proses verifikasi oleh petugas Keuangan.</p></section><div id="paymentPanel">${progressivePanelMarkup('paymentPanel','Memuat data pembayaran...')}</div>`;
   try{
     let r=!force&&state.paymentRegistrationId?state.cache.payments[state.paymentRegistrationId]:null;
     if(!r){r=await server('getPaymentPageData',state.token,state.paymentRegistrationId);if(r?.success&&r.paymentData?.registrationId)state.cache.payments[String(r.paymentData.registrationId)]=r;}
@@ -1997,7 +2007,7 @@ async function createBillUI(){const msg=$('createBillMsg');loading(true,'Membuat
 
 async function renderMasterData(force=false){
   if(!hasAnyRole(['SUPERADMIN','ADMIN_PSB'])){renderMore();return;}
-  $('content').innerHTML=`<section class="hero"><h2>Data</h2><p>Data dasar yang menjadi referensi seluruh workflow PSB.</p></section><div id="masterPanel"><div class="empty-state">Memuat master data...</div></div>`;
+  $('content').innerHTML=`<section class="hero"><h2>Data</h2><p>Data dasar yang menjadi referensi seluruh workflow PSB.</p></section><div id="masterPanel">${progressivePanelMarkup('masterPanel','Memuat master data...')}</div>`;
   try{
     const warmed=!force?pageDataCached('master'):null;
     if(warmed?.success){

@@ -767,3 +767,16 @@ input:focus,select:focus,textarea:focus{background:#fff!important;box-shadow:0 0
 @keyframes applicantSpin{to{transform:rotate(360deg)}}
 @keyframes applicantShimmer{to{background-position:-220% 0}}
 @media(prefers-reduced-motion:reduce){.applicant-load-spinner,.applicant-skeleton-block{animation:none}}
+
+
+/* Progressive loading shared by operational pages */
+.progressive-panel-refresh{display:flex;align-items:center;gap:8px;padding:8px 11px;margin:0 0 10px;border:1px solid #eadff0;border-radius:10px;background:#fbf8fc;color:#6b4775;font-size:11px;font-weight:700}
+.progressive-panel-skeleton{display:grid;gap:12px;padding:12px;border:1px solid #eee7f1;border-radius:12px;background:#fff}
+.progressive-skeleton-kpis{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:9px}
+.progressive-skeleton-kpis i{display:block;height:58px;border-radius:9px}
+.progressive-skeleton-line,.progressive-skeleton-table i,.progressive-skeleton-kpis i{background:linear-gradient(90deg,#eee8f1 20%,#f8f5f9 45%,#eee8f1 70%);background-size:220% 100%;animation:applicantShimmer 1.35s ease-in-out infinite}
+.progressive-skeleton-line{height:11px;width:72%;border-radius:999px}
+.progressive-skeleton-line.wide{width:96%;height:15px}
+.progressive-skeleton-table{display:grid;gap:8px}
+.progressive-skeleton-table i{display:block;height:32px;border-radius:7px}
+@media(prefers-reduced-motion:reduce){.progressive-skeleton-kpis i,.progressive-skeleton-line,.progressive-skeleton-table i{animation:none}}

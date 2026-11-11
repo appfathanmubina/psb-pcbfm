@@ -178,6 +178,8 @@ jobs:
         run: node tests/backend-staff-list-pagination.test.js
       - name: Test applicant progressive rendering and refresh preservation
         run: node tests/applicant-progressive-render.test.js
+      - name: Test operational pages progressive loading
+        run: node tests/operational-pages-progressive-loading.test.js
       - name: Test Wali home cleanup, automatic form billing, and parallel document/payment safeguards
         run: node tests/wali-parallel-payment-flow.test.js
       - name: Test registration NISN field and school type removal safeguards
