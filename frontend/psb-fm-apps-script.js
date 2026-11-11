@@ -293,7 +293,7 @@ function publicSocialMarkup(){
 function publicInlineLoginMarkup(){
   const year=esc(state.config.ACTIVE_YEAR||'2027/2028');
   const remembered=localStorage.getItem('psb_remember_me')==='true';
-  return `<div class="public-login-column"><aside class="public-login-panel" aria-label="Form masuk akun">
+  return `<section class="public-login-column" aria-label="Masuk dan media sosial"><aside class="public-login-panel" aria-label="Form masuk akun">
     <div class="public-login-panel-brand">
       <span class="public-login-eyebrow">PORTAL PENDAFTARAN SANTRI BARU</span>
       <h2>Selamat Datang</h2>
@@ -312,7 +312,7 @@ function publicInlineLoginMarkup(){
       </form>
       <div class="public-login-register"><span class="muted">Belum punya akun?</span> <button type="button" class="link-btn" onclick="renderRegisterWali()">Daftar sebagai Wali</button></div>
     </div>
-  </aside>${publicSocialMarkup()}</div>`;
+  </aside>${publicSocialMarkup()}</section>`;
 }
 function renderPublicHome(message=''){
   syncWhatsAppGroupFab(true);

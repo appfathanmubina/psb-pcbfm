@@ -9,8 +9,13 @@ const styleEnd = appsHtml.indexOf('</style>', styleStart);
 assert.ok(styleStart >= 0 && styleEnd > styleStart, 'Apps Script inline stylesheet must exist');
 const inlineStyle = appsHtml.slice(styleStart + 7, styleEnd);
 const marker = '/* Translucent content surfaces: reduce white card-on-lavender contrast without changing layout. */';
-const pwaBlock = pwaCss.slice(pwaCss.lastIndexOf(marker));
-const appsBlock = inlineStyle.slice(inlineStyle.lastIndexOf(marker));
+const sharedLayoutMarker = '/* One shared desktop card for login and social links; mobile flow stays unchanged. */';
+const pwaStart = pwaCss.lastIndexOf(marker);
+const appsStart = inlineStyle.lastIndexOf(marker);
+const pwaLayoutStart = pwaCss.indexOf(sharedLayoutMarker, pwaStart);
+const appsLayoutStart = inlineStyle.indexOf(sharedLayoutMarker, appsStart);
+const pwaBlock = pwaCss.slice(pwaStart, pwaLayoutStart < 0 ? undefined : pwaLayoutStart);
+const appsBlock = inlineStyle.slice(appsStart, appsLayoutStart < 0 ? undefined : appsLayoutStart);
 
 assert.ok(pwaBlock.startsWith(marker), 'PWA stylesheet must include the final translucent-surface override');
 assert.ok(appsBlock.startsWith(marker), 'Apps Script HTML must include the final translucent-surface override');
@@ -36,8 +41,8 @@ for (const protectedSelector of ['input', 'select', 'textarea', '.modal', '.logi
   assert.ok(!pwaBlock.includes(protectedSelector + ' {'), 'Interactive surface must stay opaque/outside override: ' + protectedSelector);
 }
 assert.ok(!pwaBlock.includes('@media'), 'Surface-only override must not change responsive layout rules');
-assert.ok(fs.readFileSync('frontend/index.html', 'utf8').includes('styles.css?v=32.37.0'), 'PWA HTML must request the refreshed stylesheet');
+assert.ok(fs.readFileSync('frontend/index.html', 'utf8').includes('styles.css?v=32.38.0'), 'PWA HTML must request the refreshed stylesheet');
 const sw = fs.readFileSync('frontend/sw.js', 'utf8');
-assert.ok(sw.includes('styles.css?v=32.37.0'), 'PWA service worker must precache the refreshed stylesheet');
-assert.ok(sw.includes('psb-pwa-shell-v32-58-0'), 'PWA shell cache must be versioned for the visual update');
+assert.ok(sw.includes('styles.css?v=32.38.0'), 'PWA service worker must precache the refreshed stylesheet');
+assert.ok(sw.includes('psb-pwa-shell-v32-59-0'), 'PWA shell cache must be versioned for the visual update');
 console.log('Translucent content surfaces, semantic color preservation, and PWA/Apps Script CSS parity: OK');
