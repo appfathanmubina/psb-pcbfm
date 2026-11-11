@@ -13,7 +13,7 @@ assert.match(sw, new RegExp('PSB PWA ' + workerVersion.replace(/\./g, '\\.') + '
 assert.match(html, /controllerchange/, 'HTML must reload when a new worker takes control');
 assert.match(html, /window\.location\.reload\(\)/, 'A newly activated worker must refresh the open PWA');
 assert.ok(appVersion, 'Application script must have a versioned URL');
-assert.match(html, /styles\.css\?v=32\.31\.0/, 'Stylesheet must have a fresh URL');
+assert.match(html, /styles\.css\?v=32\.32\.0/, 'Stylesheet must have a fresh URL');
 assert.equal(workerAssetVersion, appVersion, 'Service worker must precache the same application version requested by HTML');
 assert.equal(workerCacheVersion, workerVersion.replace(/\./g, '-'), 'Service worker cache namespace must match the registered release');
 assert.match(sw, /new Request\(asset,\{cache:'reload'\}\)/, 'Precache must bypass browser HTTP cache');
