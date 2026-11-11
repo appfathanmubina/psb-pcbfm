@@ -9,8 +9,13 @@ const styleEnd = appsHtml.indexOf('</style>', styleStart);
 assert.ok(styleStart >= 0 && styleEnd > styleStart, 'Apps Script inline stylesheet must exist');
 const inlineStyle = appsHtml.slice(styleStart + 7, styleEnd);
 const marker = '/* Translucent content surfaces: reduce white card-on-lavender contrast without changing layout. */';
-const pwaBlock = pwaCss.slice(pwaCss.lastIndexOf(marker));
-const appsBlock = inlineStyle.slice(inlineStyle.lastIndexOf(marker));
+const sharedLayoutMarker = '/* One shared desktop card for login and social links; mobile flow stays unchanged. */';
+const pwaStart = pwaCss.lastIndexOf(marker);
+const appsStart = inlineStyle.lastIndexOf(marker);
+const pwaLayoutStart = pwaCss.indexOf(sharedLayoutMarker, pwaStart);
+const appsLayoutStart = inlineStyle.indexOf(sharedLayoutMarker, appsStart);
+const pwaBlock = pwaCss.slice(pwaStart, pwaLayoutStart < 0 ? undefined : pwaLayoutStart);
+const appsBlock = inlineStyle.slice(appsStart, appsLayoutStart < 0 ? undefined : appsLayoutStart);
 
 assert.ok(pwaBlock.startsWith(marker), 'PWA stylesheet must include the final translucent-surface override');
 assert.ok(appsBlock.startsWith(marker), 'Apps Script HTML must include the final translucent-surface override');
