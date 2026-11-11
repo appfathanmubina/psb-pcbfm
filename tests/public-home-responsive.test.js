@@ -7,7 +7,9 @@ const app = fs.readFileSync('frontend/app.js', 'utf8');
 const bundle = fs.readFileSync('frontend/psb-fm-apps-script.js', 'utf8');
 const appsScriptHtml = fs.readFileSync('apps-script/Index.html', 'utf8');
 const sw = fs.readFileSync('frontend/sw.js', 'utf8');
-const appsScriptStyle = (appsScriptHtml.match(/<style>([\\s\\S]*?)<\\/style>/) || [])[1] || '';
+const styleStart = appsScriptHtml.indexOf('<style>');
+const styleEnd = appsScriptHtml.indexOf('</style>', styleStart);
+const appsScriptStyle = styleStart >= 0 && styleEnd > styleStart ? appsScriptHtml.slice(styleStart + 7, styleEnd) : '';
 
 assert.match(css, /@media\s*\(min-width:\s*900px\)/, 'Desktop rules must be isolated to wide viewports');
 assert.match(css, /\.public-shell\s*\{[^}]*display:\s*grid;[^}]*grid-template-columns:\s*minmax\(0,1\.6fr\)\s+minmax\(340px,\.82fr\)/s, 'Desktop landing page must use two columns');
