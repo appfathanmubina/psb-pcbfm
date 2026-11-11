@@ -1052,3 +1052,72 @@ input:focus,select:focus,textarea:focus{background:#fff!important;box-shadow:0 0
   }
 }
 
+
+
+/* Translucent content surfaces: reduce white card-on-lavender contrast without changing layout. */
+.card,
+.status-card,
+.progress-card,
+.public-card,
+.public-info,
+.psb-process-card,
+.form-section,
+.registration-item,
+.doc-item,
+.master-item,
+.notification-card,
+.announcement-card,
+.selection-card,
+.analytics-card,
+.report-summary,
+.report-table-wrap,
+.doc-stat,
+.doc-empty,
+.empty-state,
+.announcement-empty,
+.wali-flow-empty {
+  background: transparent !important;
+  border-color: rgba(91, 33, 182, .16) !important;
+  box-shadow: none !important;
+}
+.registration-item + .registration-item,
+.doc-item + .doc-item,
+.master-item + .master-item,
+.notification-card + .notification-card {
+  border-top-color: rgba(91, 33, 182, .12) !important;
+}
+.dashboard-kpi {
+  background: rgba(128, 0, 128, .055) !important;
+  border: 1px solid rgba(128, 0, 128, .20) !important;
+  box-shadow: none !important;
+}
+.dashboard-kpi:nth-child(4n+2) {
+  background: rgba(99, 102, 241, .065) !important;
+  border-color: rgba(99, 102, 241, .20) !important;
+}
+.dashboard-kpi:nth-child(4n+3) {
+  background: rgba(20, 184, 166, .065) !important;
+  border-color: rgba(20, 184, 166, .20) !important;
+}
+.dashboard-kpi:nth-child(4n) {
+  background: rgba(245, 158, 11, .075) !important;
+  border-color: rgba(245, 158, 11, .22) !important;
+}
+.dashboard-task-card,
+.dashboard-schedule-item {
+  background: rgba(128, 0, 128, .055) !important;
+  box-shadow: none !important;
+}
+.dashboard-ops-grid > .dashboard-task-card.dashboard-task-card--payments {
+  background: rgba(99, 102, 241, .065) !important;
+}
+.dashboard-ops-grid > .dashboard-task-card.dashboard-task-card--selection {
+  background: rgba(20, 184, 166, .065) !important;
+}
+.dashboard-ops-grid > .dashboard-task-card.dashboard-task-card--announcement {
+  background: rgba(245, 158, 11, .075) !important;
+}
+.dashboard-ops-grid > .dashboard-task-card.dashboard-task-card--reregistration {
+  background: rgba(244, 63, 94, .065) !important;
+}
+/* Keep form controls, login panels, dialogs, navigation, and floating UI opaque. */

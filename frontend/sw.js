@@ -1,10 +1,10 @@
-// PSB PWA 32.56.0 — improve user-facing error and status notifications.
-const CACHE='psb-pwa-shell-v32-56-0';
+// PSB PWA 32.57.0 — improve user-facing error and status notifications.
+const CACHE='psb-pwa-shell-v32-57-0';
 const ASSETS=[
   './',
   './index.html',
   './manifest.webmanifest?v=32.19.0',
-  './styles.css?v=32.36.0',
+  './styles.css?v=32.37.0',
   './api-bridge.js?v=32.19.0',
   './app.js?v=32.46.0',
   './assets/logo-fathanmubina.svg?v=32.8.0',
