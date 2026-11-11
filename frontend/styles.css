@@ -750,3 +750,20 @@ input:focus,select:focus,textarea:focus{background:#fff!important;box-shadow:0 0
 @media(prefers-reduced-motion:reduce){.psb-toast{animation:none}}
 /* Full-screen account checking overlay: keep the requested PSB purple after all visual refinements. */
 .loading{background:#800080!important}
+
+
+/* Progressive loading for the Admin PSB applicant list. */
+.applicant-load-state{min-height:0;display:flex;align-items:center;gap:8px;color:var(--muted,#756b7d);font-size:11px;font-weight:700}
+.applicant-load-state.is-active{min-height:30px;padding:4px 2px}
+.applicant-load-spinner{width:14px;height:14px;flex:0 0 14px;border:2px solid rgba(128,0,128,.18);border-top-color:#800080;border-radius:50%;animation:applicantSpin .75s linear infinite}
+.applicant-skeleton-table{overflow:hidden}
+.applicant-skeleton-row td{vertical-align:middle}
+.applicant-skeleton-block{display:block;height:10px;margin:5px 0;border-radius:999px;background:linear-gradient(90deg,#eee8f1 20%,#f8f5f9 45%,#eee8f1 70%);background-size:220% 100%;animation:applicantShimmer 1.35s ease-in-out infinite}
+.applicant-skeleton-block.short{width:38px}
+.applicant-skeleton-block.medium{width:min(100px,80%)}
+.applicant-skeleton-block.wide{width:min(150px,95%)}
+.applicant-skeleton-block.action{width:62px;height:27px;border-radius:8px}
+.applicant-load-error{display:flex;align-items:center;justify-content:center;gap:10px;flex-wrap:wrap}
+@keyframes applicantSpin{to{transform:rotate(360deg)}}
+@keyframes applicantShimmer{to{background-position:-220% 0}}
+@media(prefers-reduced-motion:reduce){.applicant-load-spinner,.applicant-skeleton-block{animation:none}}
