@@ -342,11 +342,36 @@ function syncWhatsAppGroupFab(visible){
   document.body.insertAdjacentHTML('beforeend',whatsappGroupButtonMarkup());
 }
 
+function publicInlineLoginMarkup(){
+  const year=esc(state.config.ACTIVE_YEAR||'2027/2028');
+  const remembered=localStorage.getItem('psb_remember_me')==='true';
+  return `<aside class="public-login-panel" aria-label="Form masuk akun">
+    <div class="public-login-panel-brand">
+      <span class="public-login-eyebrow">PORTAL PENDAFTARAN SANTRI BARU</span>
+      <h2>Selamat Datang</h2>
+      <p>Masuk untuk melanjutkan proses pendaftaran dan memantau informasi akun Anda.</p>
+    </div>
+    <div class="public-login-panel-form">
+      <div class="public-login-form-heading">
+        <h3>Masuk ke Akun</h3>
+        <span>Tahun Ajaran ${year}</span>
+      </div>
+      <form id="loginForm" autocomplete="on" onsubmit="submitLogin(event)">
+        <div class="field"><label>Username, No. HP atau Email</label><input id="identifier" name="username" autocomplete="username" inputmode="text" placeholder="Masukkan username, nomor HP, atau email" value="${esc(remembered?localStorage.getItem('psb_remembered_identifier')||'':'')}" required></div>
+        <div class="field"><label>Password</label><div class="input-wrap"><input id="password" name="password" type="password" autocomplete="current-password" placeholder="Masukkan password" required><button class="toggle" type="button" onclick="togglePassword()">Lihat</button></div></div>
+        <label for="rememberMe" class="public-login-remember"><input id="rememberMe" type="checkbox" ${remembered?'checked':''} onchange="if(!this.checked){localStorage.removeItem('psb_remember_me');localStorage.removeItem('psb_remembered_identifier')}"> Ingat saya di perangkat ini</label>
+        <button class="btn btn-primary" id="loginBtn">Masuk</button>
+      </form>
+      <div class="public-login-register"><span class="muted">Belum punya akun?</span> <button type="button" class="link-btn" onclick="renderRegisterWali()">Daftar sebagai Wali</button></div>
+    </div>
+  </aside>`;
+}
 function renderPublicHome(message=''){
   syncWhatsAppGroupFab(true);
   const year=esc(state.config.ACTIVE_YEAR||'2027/2028');
   $('app').innerHTML=`<div class="public-wrap"><div class="public-shell">
     <header class="public-top"><div class="logo">${appLogoMarkup()}</div><div class="public-brand"><h1>PSB Fathan Mubina</h1><p>Pendaftaran Santri Baru · ${year}</p></div><button class="public-login" onclick="openLogin()">Masuk</button></header>
+    <main class="public-main">
     ${message?showMessage(message,'info'):''}
     <section class="public-hero"><h2>PCB FATHAN MUBINA</h2><p>Portal Pendaftaran Santri Baru (PSB) Pesantren Ciawi Bogor Fathan Mubina. Langkah Awal Perjalanan Impian menjadi santri berilmu, berakhlaq dan berprestasi</p></section>
 
@@ -378,6 +403,8 @@ function renderPublicHome(message=''){
         <a class="social-link tiktok" href="https://www.tiktok.com/@pesantrenfathanmubina" target="_blank" rel="noopener noreferrer"><span class="social-icon"><svg viewBox="0 0 24 24"><path d="M14 4v10.2a4.2 4.2 0 1 1-3-4M14 4c1.1 2.4 2.7 3.7 5.5 4"/></svg></span><span>TikTok</span></a>
       </div>
     </section>
+    </main>
+    ${publicInlineLoginMarkup()}
   </div></div>`;
   // Keep gallery image requests off the initial critical path. Images are served
   // directly by GitHub Pages; no Apps Script or Google Drive request is made.
@@ -394,6 +421,7 @@ function renderPublicHome(message=''){
     }
   }
   renderPublicVideoSection();
+  restoreRememberedLogin();
 }
 const PSB_PUBLIC_VIDEOS=[
   {id:'HDrWuSwkbak',title:'Video 1'},
