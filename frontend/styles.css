@@ -1042,14 +1042,20 @@ input:focus,select:focus,textarea:focus{background:#fff!important;box-shadow:0 0
   }
 }
  
-/* Desktop social links sit beneath the inline login; mobile document flow remains unchanged. */
+/* Keep login and social links in one right-column group on desktop; preserve mobile flow. */
+.public-login-column{display:contents}
 @media (min-width: 900px) {
-  .public-social {
-    grid-column: 2;
-    grid-row: auto;
-    align-self: start;
-    margin-top: 0;
+  .public-login-column{
+    grid-area:login;
+    display:grid;
+    align-content:start;
+    gap:14px;
+    min-width:0;
+    position:sticky;
+    top:24px;
   }
+  .public-login-panel{position:static}
+  .public-social{grid-column:auto;grid-row:auto;align-self:stretch;margin-top:0}
 }
 
 
