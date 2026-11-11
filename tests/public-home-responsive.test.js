@@ -23,9 +23,18 @@ assert.match(app, /id="rememberMe"/, 'Inline login must preserve Remember Me');
 assert.match(bundle, /function publicInlineLoginMarkup\(/, 'Apps Script bundle must include inline login');
 assert.match(bundle, /onsubmit="submitLogin\(event\)"/, 'Apps Script bundle must reuse the same authentication handler');
 assert.match(appsScriptHtml, /\.public-login-panel[\s\S]*?display:\s*block/, 'Apps Script HTML must include desktop login styles');
-assert.match(html, /styles\.css\?v=32\.35\.0/, 'HTML must request the refreshed stylesheet');
-assert.match(html, /app\.js\?v=32\.45\.0/, 'HTML must request the refreshed frontend script');
-assert.match(sw, /const CACHE=['"]psb-pwa-shell-v32-55-0['"]/, 'PWA shell cache must be refreshed');
-assert.match(sw, /styles\.css\?v=32\.35\.0/);
-assert.match(sw, /app\.js\?v=32\.45\.0/);
-console.log('PSB desktop inline login and mobile layout safeguards: OK');
+assert.match(html, /styles\.css\?v=32\.36\.0/, 'HTML must request the refreshed stylesheet');
+assert.match(html, /app\.js\?v=32\.46\.0/, 'HTML must request the refreshed frontend script');
+assert.match(sw, /const CACHE=['"]psb-pwa-shell-v32-56-0['"]/, 'PWA shell cache must be refreshed');
+assert.match(sw, /styles\.css\?v=32\.36\.0/);
+assert.match(sw, /app\.js\?v=32\.46\.0/);
+
+assert.match(app, /function publicSocialMarkup\(/, 'PWA public social links must have a reusable markup helper');
+assert.match(bundle, /function publicSocialMarkup\(/, 'Apps Script bundle must include public social links markup');
+assert.ok(app.includes('</main>\n    ${publicInlineLoginMarkup()}\n    ${publicSocialMarkup()}'), 'PWA social links must render after login and outside main content');
+assert.ok(bundle.includes('</main>\n    ${publicInlineLoginMarkup()}\n    ${publicSocialMarkup()}'), 'Apps Script social links must render after login and outside main content');
+assert.match(css, /\.public-social\s*\{\s*grid-column:\s*2;\s*grid-row:\s*auto;/, 'Desktop social links must occupy the right column below login');
+assert.match(appsScriptHtml, /\.public-social\s*\{\s*grid-column:\s*2;\s*grid-row:\s*auto;/, 'Apps Script desktop social links must occupy the right column below login');
+assert.match(appsScriptHtml, /psb-fm-apps-script\.js\?v=20261111-4/, 'Apps Script must request the refreshed social placement bundle');
+
+console.log('PSB desktop inline login, social placement, and mobile layout safeguards: OK');

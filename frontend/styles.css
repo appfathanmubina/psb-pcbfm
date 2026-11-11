@@ -1041,3 +1041,14 @@ input:focus,select:focus,textarea:focus{background:#fff!important;box-shadow:0 0
     margin-right: 0;
   }
 }
+ 
+/* Desktop social links sit beneath the inline login; mobile document flow remains unchanged. */
+@media (min-width: 900px) {
+  .public-social {
+    grid-column: 2;
+    grid-row: auto;
+    align-self: start;
+    margin-top: 0;
+  }
+}
+
