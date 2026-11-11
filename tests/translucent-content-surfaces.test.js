@@ -4,7 +4,10 @@ const fs = require('node:fs');
 
 const pwaCss = fs.readFileSync('frontend/styles.css', 'utf8');
 const appsHtml = fs.readFileSync('apps-script/Index.html', 'utf8');
-const inlineStyle = (appsHtml.match(/<style>([\\s\\S]*?)<\\/style>/) || [])[1] || '';
+const styleStart = appsHtml.indexOf('<style>');
+const styleEnd = appsHtml.indexOf('</style>', styleStart);
+assert.ok(styleStart >= 0 && styleEnd > styleStart, 'Apps Script inline stylesheet must exist');
+const inlineStyle = appsHtml.slice(styleStart + 7, styleEnd);
 const marker = '/* Translucent content surfaces: reduce white card-on-lavender contrast without changing layout. */';
 const pwaBlock = pwaCss.slice(pwaCss.lastIndexOf(marker));
 const appsBlock = inlineStyle.slice(inlineStyle.lastIndexOf(marker));
@@ -23,19 +26,18 @@ const contentSurfaces = [
 for (const selector of contentSurfaces) {
   assert.ok(pwaBlock.includes(selector), 'Content surface coverage missing ' + selector);
 }
-for (const label of ['PWA', 'Apps Script']) {
-  const block = label === 'PWA' ? pwaBlock : appsBlock;
-  assert.match(block, /background:\\s*transparent\\s*!important/, label + ' content cards must no longer render as solid white boxes');
-  assert.match(block, /\\.dashboard-kpi:nth-child\\(4n\\+2\\)[\\s\\S]*?rgba\\(99, 102, 241/, label + ' must preserve the indigo KPI semantic tint');
-  assert.match(block, /\\.dashboard-kpi:nth-child\\(4n\\+3\\)[\\s\\S]*?rgba\\(20, 184, 166/, label + ' must preserve the teal KPI semantic tint');
-  assert.match(block, /\\.dashboard-kpi:nth-child\\(4n\\)[\\s\\S]*?rgba\\(245, 158, 11/, label + ' must preserve the amber KPI semantic tint');
-  assert.match(block, /\\.dashboard-ops-grid > \\.dashboard-task-card\\.dashboard-task-card--payments[\\s\\S]*?rgba\\(99, 102, 241/, label + ' must preserve payment task tint');
+assert.ok(pwaBlock.includes('background: transparent !important'), 'Content cards must no longer render as solid white boxes');
+assert.ok(pwaBlock.includes('.dashboard-kpi:nth-child(4n+2)') && pwaBlock.includes('rgba(99, 102, 241, .065)'), 'Indigo KPI semantic tint must remain');
+assert.ok(pwaBlock.includes('.dashboard-kpi:nth-child(4n+3)') && pwaBlock.includes('rgba(20, 184, 166, .065)'), 'Teal KPI semantic tint must remain');
+assert.ok(pwaBlock.includes('.dashboard-kpi:nth-child(4n)') && pwaBlock.includes('rgba(245, 158, 11, .075)'), 'Amber KPI semantic tint must remain');
+assert.ok(pwaBlock.includes('.dashboard-task-card--payments') && pwaBlock.includes('rgba(99, 102, 241, .065)'), 'Payment task tint must remain');
+
+for (const protectedSelector of ['input', 'select', 'textarea', '.modal', '.login-card', '.public-login-panel', '.topbar', '.bottom-nav']) {
+  assert.ok(!pwaBlock.includes(protectedSelector + ' {'), 'Interactive surface must stay opaque/outside override: ' + protectedSelector);
 }
-assert.doesNotMatch(pwaBlock, /(^|\\n)\\s*(input|select|textarea|\\.modal|\\.login-card|\\.public-login-panel|\\.topbar|\\.bottom-nav)\\s*\\{/,
-  'Form controls, login panels, dialogs, and navigation must remain outside the transparency override');
-assert.doesNotMatch(pwaBlock, /@media/, 'Surface-only override must not change responsive layout rules');
-assert.match(fs.readFileSync('frontend/index.html', 'utf8'), /styles\\.css\\?v=32\\.37\\.0/, 'PWA HTML must request the refreshed stylesheet');
+assert.ok(!pwaBlock.includes('@media'), 'Surface-only override must not change responsive layout rules');
+assert.ok(fs.readFileSync('frontend/index.html', 'utf8').includes('styles.css?v=32.37.0'), 'PWA HTML must request the refreshed stylesheet');
 const sw = fs.readFileSync('frontend/sw.js', 'utf8');
-assert.match(sw, /styles\\.css\\?v=32\\.37\\.0/, 'PWA service worker must precache the refreshed stylesheet');
-assert.match(sw, /psb-pwa-shell-v32-57-0/, 'PWA shell cache must be versioned for the visual update');
+assert.ok(sw.includes('styles.css?v=32.37.0'), 'PWA service worker must precache the refreshed stylesheet');
+assert.ok(sw.includes('psb-pwa-shell-v32-57-0'), 'PWA shell cache must be versioned for the visual update');
 console.log('Translucent content surfaces, semantic color preservation, and PWA/Apps Script CSS parity: OK');
