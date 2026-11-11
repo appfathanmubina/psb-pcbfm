@@ -278,6 +278,18 @@ function syncWhatsAppGroupFab(visible){
   document.body.insertAdjacentHTML('beforeend',whatsappGroupButtonMarkup());
 }
 
+function publicSocialMarkup(){
+  return `<section class="public-social" aria-label="Media Sosial Pesantren">
+      <div class="public-social-title">Media Sosial Pesantren</div>
+      <div class="social-list">
+        <a class="social-link website" href="https://www.fathanmubina.com" target="_blank" rel="noopener noreferrer"><span class="social-icon"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18"/></svg></span><span>Website</span></a>
+        <a class="social-link youtube" href="https://www.youtube.com/@fathanmubinaibs0303" target="_blank" rel="noopener noreferrer"><span class="social-icon"><svg viewBox="0 0 24 24"><rect x="3" y="6" width="18" height="12" rx="3"/><path d="m10 9 5 3-5 3z" fill="currentColor" stroke="none"/></svg></span><span>YouTube</span></a>
+        <a class="social-link instagram" href="https://www.instagram.com/pesantrenfathanmubina" target="_blank" rel="noopener noreferrer"><span class="social-icon"><svg viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="5"/><circle cx="12" cy="12" r="3.5"/><circle cx="17.5" cy="6.5" r="1" fill="currentColor" stroke="none"/></svg></span><span>Instagram</span></a>
+        <a class="social-link facebook" href="https://www.facebook.com/fathanmubina.todays" target="_blank" rel="noopener noreferrer"><span class="social-icon"><svg viewBox="0 0 24 24"><path d="M14 21v-8h3l.5-3H14V8.3c0-1 .3-1.8 1.9-1.8H18V3.7c-.6-.1-1.5-.2-2.5-.2-2.7 0-4.5 1.6-4.5 4.6V10H8v3h3v8z" fill="currentColor" stroke="none"/></svg></span><span>Facebook</span></a>
+        <a class="social-link tiktok" href="https://www.tiktok.com/@pesantrenfathanmubina" target="_blank" rel="noopener noreferrer"><span class="social-icon"><svg viewBox="0 0 24 24"><path d="M14 4v10.2a4.2 4.2 0 1 1-3-4M14 4c1.1 2.4 2.7 3.7 5.5 4"/></svg></span><span>TikTok</span></a>
+      </div>
+    </section>`;
+}
 function publicInlineLoginMarkup(){
   const year=esc(state.config.ACTIVE_YEAR||'2027/2028');
   const remembered=localStorage.getItem('psb_remember_me')==='true';
@@ -336,18 +348,10 @@ function renderPublicHome(message=''){
       </div>
     </section>
 
-    <section class="public-social" aria-label="Media Sosial Pesantren">
-      <div class="public-social-title">Media Sosial Pesantren</div>
-      <div class="social-list">
-        <a class="social-link website" href="https://www.fathanmubina.com" target="_blank" rel="noopener noreferrer"><span class="social-icon"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18"/></svg></span><span>Website</span></a>
-        <a class="social-link youtube" href="https://www.youtube.com/@fathanmubinaibs0303" target="_blank" rel="noopener noreferrer"><span class="social-icon"><svg viewBox="0 0 24 24"><rect x="3" y="6" width="18" height="12" rx="3"/><path d="m10 9 5 3-5 3z" fill="currentColor" stroke="none"/></svg></span><span>YouTube</span></a>
-        <a class="social-link instagram" href="https://www.instagram.com/pesantrenfathanmubina" target="_blank" rel="noopener noreferrer"><span class="social-icon"><svg viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="5"/><circle cx="12" cy="12" r="3.5"/><circle cx="17.5" cy="6.5" r="1" fill="currentColor" stroke="none"/></svg></span><span>Instagram</span></a>
-        <a class="social-link facebook" href="https://www.facebook.com/fathanmubina.todays" target="_blank" rel="noopener noreferrer"><span class="social-icon"><svg viewBox="0 0 24 24"><path d="M14 21v-8h3l.5-3H14V8.3c0-1 .3-1.8 1.9-1.8H18V3.7c-.6-.1-1.5-.2-2.5-.2-2.7 0-4.5 1.6-4.5 4.6V10H8v3h3v8z" fill="currentColor" stroke="none"/></svg></span><span>Facebook</span></a>
-        <a class="social-link tiktok" href="https://www.tiktok.com/@pesantrenfathanmubina" target="_blank" rel="noopener noreferrer"><span class="social-icon"><svg viewBox="0 0 24 24"><path d="M14 4v10.2a4.2 4.2 0 1 1-3-4M14 4c1.1 2.4 2.7 3.7 5.5 4"/></svg></span><span>TikTok</span></a>
-      </div>
-    </section>
+    
     </main>
     ${publicInlineLoginMarkup()}
+    ${publicSocialMarkup()}
   </div></div>`;
   renderPublicVideo(0);
   loadPublicGallery();
