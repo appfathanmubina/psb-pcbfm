@@ -148,6 +148,8 @@ jobs:
         run: node tests/bridge-login-retry-safety.test.js
       - name: Test loading and login critical-path safeguards
         run: node tests/loading-login-performance.test.js
+      - name: Test dashboard card contrast and visual parity
+        run: node tests/dashboard-card-visual-hierarchy.test.js
       - name: Test dashboard performance and final UI safeguards
         run: node tests/dashboard-performance.test.js
       - name: Test dashboard task context and accessible actions
