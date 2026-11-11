@@ -12,6 +12,6 @@ for (const [source, label] of [[pwaCss, 'PWA'], [appsScriptHtml, 'Apps Script']]
   assert.match(source, /body\s*\{[^}]*overflow-y\s*:\s*auto/s,
     label + ' must retain normal vertical page scrolling');
 }
-assert.match(pwaIndex, /styles\.css\?v=32\.32\.0/,
+assert.match(pwaIndex, /styles\.css\?v=32\.33\.0/,
   'PWA stylesheet cache version must change so the fix reaches clients');
 console.log('Mobile pull-to-refresh prevention and normal scrolling safeguards passed.');
