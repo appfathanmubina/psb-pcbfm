@@ -141,6 +141,18 @@ button,input{font:inherit}button{border:0;cursor:pointer}button:disabled{opacity
 .public-login{width:auto;min-height:40px;padding:0 14px;border-radius:13px;font-size:12px;white-space:nowrap;background:#fff;border:1px solid var(--line);color:var(--primary-dark);font-weight:850;box-shadow:var(--shadow)}
 .public-hero{text-align:center;padding:22px 18px;border-radius:22px;background:linear-gradient(135deg,#800080,#A64CA6);color:#fff;box-shadow:0 9px 24px rgba(128,0,128,.16);margin-bottom:14px}
 .public-hero h2{margin:0;font-size:24px;line-height:1.2;font-weight:900}.public-hero p{margin:8px 0 0;font-size:12px;line-height:1.55;opacity:.95}
+/* Shared WhatsApp group entry point across public home, dashboard, and profile. */
+.whatsapp-group-link{display:flex;align-items:center;gap:12px;width:100%;min-width:0;padding:12px 14px;margin:0 0 12px;border:1px solid rgba(128,0,128,.16);border-radius:16px;background:linear-gradient(135deg,#800080,#5b21b6);color:#fff;text-decoration:none;box-shadow:0 7px 18px rgba(91,33,182,.18);transition:transform .16s ease,box-shadow .16s ease}
+.whatsapp-group-link:hover{transform:translateY(-1px);box-shadow:0 10px 22px rgba(91,33,182,.22)}
+.whatsapp-group-link:focus-visible{outline:3px solid #25d366;outline-offset:3px}
+.whatsapp-group-link--public{margin:0 0 16px;padding:14px 16px;border-radius:18px}
+.whatsapp-group-icon{width:42px;height:42px;flex:0 0 42px;display:grid;place-items:center;border-radius:14px;background:#25d366;color:#fff;box-shadow:0 3px 9px rgba(0,0,0,.14)}
+.whatsapp-group-icon svg{width:25px;height:25px;display:block}
+.whatsapp-group-copy{display:grid;gap:3px;min-width:0}
+.whatsapp-group-copy strong{font-size:13px;line-height:1.25;font-weight:900}
+.whatsapp-group-copy small{font-size:10px;line-height:1.4;color:rgba(255,255,255,.88);font-weight:600}
+.whatsapp-group-arrow{margin-left:auto;flex:0 0 auto;font-size:22px;font-weight:800;line-height:1}
+@media(max-width:390px){.whatsapp-group-link{gap:10px;padding:11px 12px}.whatsapp-group-icon{width:38px;height:38px;flex-basis:38px}.whatsapp-group-copy strong{font-size:12px}.whatsapp-group-copy small{font-size:9px}}
 .public-section-title{margin:18px 2px 9px;font-size:14px;font-weight:900;color:#4a4251}
 .public-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}.public-card{min-height:142px;background:#fff;border:1px solid var(--line);border-radius:18px;padding:15px;text-align:left;box-shadow:var(--shadow);display:flex;flex-direction:column}.public-card .icon{margin-bottom:11px}.public-card b{font-size:14px;line-height:1.3}.public-card p{margin:5px 0 0;font-size:11px;line-height:1.45;color:var(--muted)}.public-card span{margin-top:auto;font-size:10px;font-weight:850;color:var(--primary-dark)}
 .public-info{background:#fff;border:1px solid var(--line);border-radius:18px;padding:15px;box-shadow:var(--shadow);margin-top:12px}.public-info b{font-size:13px}.public-info p{margin:5px 0 0;font-size:11px;line-height:1.5;color:var(--muted)}
@@ -692,6 +704,6 @@ input:focus,select:focus,textarea:focus{background:#fff!important;box-shadow:0 0
 <div id="bootProgress" class="boot-progress hidden"><span class="mini-spin"></span><span class="boot-copy" id="bootProgressText">Menyiapkan aplikasi...</span></div>
 <div id="loading" class="loading hidden"><div class="loading-box splash-box"><div class="splash-logo-wrap"><div class="splash-logo" id="splashLogo"></div></div><b id="loadingText">Memuat aplikasi...</b><div class="muted splash-subtitle">Menyiapkan PSB Fathan Mubina</div><div class="splash-progress"><span></span></div></div></div>
 
-<script src="https://appfathanmubina.github.io/psb-pcbfm/psb-fm-apps-script.js?v=20261109-2"></script>
+<script src="https://appfathanmubina.github.io/psb-pcbfm/psb-fm-apps-script.js?v=20261111-1"></script>
 </body>
 </html>
