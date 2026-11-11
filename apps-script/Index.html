@@ -590,36 +590,36 @@ input:focus,select:focus,textarea:focus{background:#fff!important;box-shadow:0 0
   border:1px solid #d8bdf2;border-left:4px solid #7e22ce;
   box-shadow:0 6px 18px rgba(76,29,149,.10);
 }
-.dashboard-task-card:nth-child(5n+2){
+.dashboard-ops-grid > .dashboard-task-card.dashboard-task-card--payments{
   background:linear-gradient(145deg,#eaf0ff 0%,#fff 94%);
   border-color:#c7d2fe;border-left-color:#4f46e5;
 }
-.dashboard-task-card:nth-child(5n+3){
+.dashboard-ops-grid > .dashboard-task-card.dashboard-task-card--selection{
   background:linear-gradient(145deg,#e6f7f2 0%,#fff 94%);
   border-color:#b7e4d6;border-left-color:#0f8a72;
 }
-.dashboard-task-card:nth-child(5n+4){
+.dashboard-ops-grid > .dashboard-task-card.dashboard-task-card--announcement{
   background:linear-gradient(145deg,#fff3df 0%,#fff 94%);
   border-color:#f1d39d;border-left-color:#c47a12;
 }
-.dashboard-task-card:nth-child(5n+5){
+.dashboard-ops-grid > .dashboard-task-card.dashboard-task-card--reregistration{
   background:linear-gradient(145deg,#fff0f3 0%,#fff 94%);
   border-color:#f4c5d0;border-left-color:#be3455;
 }
 .dashboard-task-title{color:#4c1d95}
-.dashboard-task-card:nth-child(5n+2) .dashboard-task-title{color:#3730a3}
-.dashboard-task-card:nth-child(5n+3) .dashboard-task-title{color:#115e59}
-.dashboard-task-card:nth-child(5n+4) .dashboard-task-title{color:#854d0e}
-.dashboard-task-card:nth-child(5n+5) .dashboard-task-title{color:#9f1239}
+.dashboard-ops-grid > .dashboard-task-card.dashboard-task-card--payments .dashboard-task-title{color:#3730a3}
+.dashboard-ops-grid > .dashboard-task-card.dashboard-task-card--selection .dashboard-task-title{color:#115e59}
+.dashboard-ops-grid > .dashboard-task-card.dashboard-task-card--announcement .dashboard-task-title{color:#854d0e}
+.dashboard-ops-grid > .dashboard-task-card.dashboard-task-card--reregistration .dashboard-task-title{color:#9f1239}
 .dashboard-task-sub{color:#655477}
 .dashboard-task-count{
   background:linear-gradient(145deg,#7e22ce,#5b21b6);color:#fff;
   box-shadow:0 4px 10px rgba(91,33,182,.22);
 }
-.dashboard-task-card:nth-child(5n+2) .dashboard-task-count{background:linear-gradient(145deg,#6366f1,#3730a3);box-shadow:0 4px 10px rgba(55,48,163,.2)}
-.dashboard-task-card:nth-child(5n+3) .dashboard-task-count{background:linear-gradient(145deg,#14b8a6,#0f766e);box-shadow:0 4px 10px rgba(15,118,110,.2)}
-.dashboard-task-card:nth-child(5n+4) .dashboard-task-count{background:linear-gradient(145deg,#f59e0b,#b45309);box-shadow:0 4px 10px rgba(180,83,9,.2)}
-.dashboard-task-card:nth-child(5n+5) .dashboard-task-count{background:linear-gradient(145deg,#f472b6,#be3455);box-shadow:0 4px 10px rgba(190,52,85,.2)}
+.dashboard-ops-grid > .dashboard-task-card.dashboard-task-card--payments .dashboard-task-count{background:linear-gradient(145deg,#6366f1,#3730a3);box-shadow:0 4px 10px rgba(55,48,163,.2)}
+.dashboard-ops-grid > .dashboard-task-card.dashboard-task-card--selection .dashboard-task-count{background:linear-gradient(145deg,#14b8a6,#0f766e);box-shadow:0 4px 10px rgba(15,118,110,.2)}
+.dashboard-ops-grid > .dashboard-task-card.dashboard-task-card--announcement .dashboard-task-count{background:linear-gradient(145deg,#f59e0b,#b45309);box-shadow:0 4px 10px rgba(180,83,9,.2)}
+.dashboard-ops-grid > .dashboard-task-card.dashboard-task-card--reregistration .dashboard-task-count{background:linear-gradient(145deg,#f472b6,#be3455);box-shadow:0 4px 10px rgba(190,52,85,.2)}
 .dashboard-task-item{border-top-color:rgba(76,29,149,.13)}
 .dashboard-task-name{color:#30213d}
 .dashboard-task-meta{color:#655477}
@@ -639,6 +639,52 @@ input:focus,select:focus,textarea:focus{background:#fff!important;box-shadow:0 0
 @media(prefers-reduced-motion:reduce){
   .card,.dashboard-kpi,.dashboard-task-card{transition:none}
 }
+
+/* Dashboard readability and semantic operational colors. */
+.dashboard-kpi .kpi-label{font-size:12px;line-height:1.4;color:#62576b}
+.dashboard-kpi .kpi-note{font-size:11px;line-height:1.4;color:#756b7e}
+.dashboard-kpi .kpi-value{font-size:clamp(19px,4.8vw,26px);line-height:1.18;overflow-wrap:anywhere}
+.dashboard-section-head span{font-size:11px;line-height:1.4;color:#655477}
+.dashboard-task-sub{font-size:11px;line-height:1.45;color:#655477}
+.dashboard-task-name{font-size:12px;line-height:1.35;color:#30213d}
+.dashboard-task-meta{font-size:10px;line-height:1.4;color:#655477;white-space:normal;overflow-wrap:anywhere}
+.dashboard-task-empty{font-size:11px;line-height:1.45;color:#655477}
+.dashboard-schedule-item b{font-size:12px;line-height:1.35}
+.dashboard-schedule-item span{font-size:10px;line-height:1.4;color:#665477}
+.dashboard-ops-grid > .dashboard-task-card.dashboard-task-card--verification{
+  background:linear-gradient(145deg,#f3e8ff 0%,#fff 94%);
+  border-color:#d8bdf2;border-left-color:#7e22ce;
+}
+.dashboard-ops-grid > .dashboard-task-card.dashboard-task-card--payments{
+  background:linear-gradient(145deg,#eaf0ff 0%,#fff 94%);
+  border-color:#c7d2fe;border-left-color:#4f46e5;
+}
+.dashboard-ops-grid > .dashboard-task-card.dashboard-task-card--selection{
+  background:linear-gradient(145deg,#e6f7f2 0%,#fff 94%);
+  border-color:#b7e4d6;border-left-color:#0f8a72;
+}
+.dashboard-ops-grid > .dashboard-task-card.dashboard-task-card--announcement{
+  background:linear-gradient(145deg,#fff3df 0%,#fff 94%);
+  border-color:#f1d39d;border-left-color:#c47a12;
+}
+.dashboard-ops-grid > .dashboard-task-card.dashboard-task-card--reregistration{
+  background:linear-gradient(145deg,#fff0f3 0%,#fff 94%);
+  border-color:#f4c5d0;border-left-color:#be3455;
+}
+.dashboard-ops-grid > .dashboard-task-card.dashboard-task-card--verification .dashboard-task-title,
+.dashboard-ops-grid > .dashboard-task-card.dashboard-task-card--verification .dashboard-task-count{color:#fff}
+.dashboard-ops-grid > .dashboard-task-card.dashboard-task-card--payments .dashboard-task-title{color:#3730a3}
+.dashboard-ops-grid > .dashboard-task-card.dashboard-task-card--payments .dashboard-task-count{background:linear-gradient(145deg,#6366f1,#3730a3)}
+.dashboard-ops-grid > .dashboard-task-card.dashboard-task-card--selection .dashboard-task-title{color:#115e59}
+.dashboard-ops-grid > .dashboard-task-card.dashboard-task-card--selection .dashboard-task-count{background:linear-gradient(145deg,#14b8a6,#0f766e)}
+.dashboard-ops-grid > .dashboard-task-card.dashboard-task-card--announcement .dashboard-task-title{color:#854d0e}
+.dashboard-ops-grid > .dashboard-task-card.dashboard-task-card--announcement .dashboard-task-count{background:linear-gradient(145deg,#f59e0b,#b45309)}
+.dashboard-ops-grid > .dashboard-task-card.dashboard-task-card--reregistration .dashboard-task-title{color:#9f1239}
+.dashboard-ops-grid > .dashboard-task-card.dashboard-task-card--reregistration .dashboard-task-count{background:linear-gradient(145deg,#f472b6,#be3455)}
+@media(min-width:760px){
+  .dashboard-kpi .kpi-value{font-size:clamp(22px,2vw,27px)}
+}
+
 </style>
 </head>
 <body>
