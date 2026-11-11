@@ -40,6 +40,8 @@ jobs:
           node -e "JSON.parse(require('fs').readFileSync('appsscript.json', 'utf8'))"
       - name: Validate inline HTML and PWA bridge JavaScript syntax
         run: node tests/html-javascript-syntax.test.js
+      - name: Test WhatsApp group entry points
+        run: node tests/whatsapp-group-entrypoints.test.js
       - name: Test loading popup copy and desktop modal layout
         run: node tests/loading-popup-modal-layout.test.js
       - name: Guard Apps Script HTML Service payload size
