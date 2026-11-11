@@ -1,4 +1,4 @@
-// PSB PWA 32.53.0 — improve user-facing error and status notifications.
+// PSB PWA 32.54.0 — improve user-facing error and status notifications.
 const CACHE='psb-pwa-shell-v32-54-0';
 const ASSETS=[
   './',
