@@ -28,7 +28,7 @@ assert.match(bundle, /onsubmit="submitLogin\(event\)"/, 'Apps Script bundle must
 assert.match(appsScriptHtml, /\.public-login-panel[\s\S]*?display:\s*block/, 'Apps Script HTML must include desktop login styles');
 assert.match(html, /styles\.css\?v=32\.37\.0/, 'HTML must request the refreshed stylesheet');
 assert.match(html, /app\.js\?v=32\.47\.0/, 'HTML must request the refreshed frontend script');
-assert.match(sw, /const CACHE=['"]psb-pwa-shell-v32-58-0['"]/, 'PWA shell cache must be refreshed');
+assert.match(sw, /const CACHE=['"]psb-pwa-shell-v32-59-0['"]/, 'PWA shell cache must be refreshed');
 assert.match(sw, /styles\.css\?v=32\.37\.0/);
 assert.match(sw, /app\.js\?v=32\.47\.0/);
 
@@ -36,7 +36,7 @@ assert.match(app, /function publicSocialMarkup\(/, 'PWA public social links must
 assert.match(bundle, /function publicSocialMarkup\(/, 'Apps Script bundle must include public social links markup');
 assert.ok(app.includes('</main>\n    ${publicInlineLoginMarkup()}'), 'PWA login column must follow the public content');
 assert.ok(bundle.includes('</main>\n    ${publicInlineLoginMarkup()}'), 'Apps Script login column must follow the public content');
-assert.match(app, /<div class="public-login-column"><aside class="public-login-panel"[\s\S]*?<\/aside>\$\{publicSocialMarkup\(\)\}<\/div>/, 'PWA social links must be nested in the login column after the login panel');
+assert.match(app, /<section class="public-login-column" aria-label="Masuk dan media sosial"><aside class="public-login-panel"[\s\S]*?<\/aside>\$\{publicSocialMarkup\(\)\}<\/div>/, 'PWA social links must be nested in the login column after the login panel');
 assert.match(bundle, /<div class="public-login-column"><aside class="public-login-panel"[\s\S]*?<\/aside>\$\{publicSocialMarkup\(\)\}<\/div>/, 'Apps Script social links must be nested in the login column after the login panel');
 assert.match(css, /\.public-login-column\s*\{\s*grid-area:\s*login;/, 'Desktop login and social group must occupy the right column');
 assert.match(css, /\.public-login-column\s*\{\s*display:\s*contents\s*\}/, 'Mobile login/social group must preserve document flow');
@@ -46,4 +46,12 @@ assert.match(appsScriptHtml, /psb-fm-apps-script\.js\?v=20261111-5/, 'Apps Scrip
 const socialLayoutRule = /\/\* Keep login and social links in one right-column group[\s\S]*?^\}/m;
 assert.equal(css.match(socialLayoutRule)?.[0], appsScriptStyle.match(socialLayoutRule)?.[0], 'PWA and Apps Script social-column layout rules must stay identical');
 
-console.log('PSB desktop inline login, social placement, and mobile layout safeguards: OK');
+
+assert.match(css, /\.public-login-column\s*\{[\s\S]*?grid-area:\s*login;[\s\S]*?display:\s*flex;[\s\S]*?border-radius:\s*24px;/, 'Desktop login and social links must share one outer card');
+assert.match(css, /\.public-login-panel\s*\{[\s\S]*?background:\s*transparent;[\s\S]*?box-shadow:\s*none;/, 'Login panel must not render as a separate card inside the shared card');
+assert.match(css, /\.public-social\s*\{[\s\S]*?grid-column:\s*auto;[\s\S]*?border-top:\s*1px solid/, 'Social links must sit below login with a subtle divider inside the shared card');
+assert.match(appsScriptStyle, /\.public-login-column\s*\{[\s\S]*?grid-area:\s*login;[\s\S]*?display:\s*flex;[\s\S]*?border-radius:\s*24px;/, 'Apps Script must use the same shared desktop login/social card');
+assert.match(app, /<section class="public-login-column" aria-label="Masuk dan media sosial"><aside class="public-login-panel"[\s\S]*?<\/aside>\$\{publicSocialMarkup\(\)\}<\/section>/, 'PWA login and social links must share one semantic section');
+assert.match(bundle, /<section class="public-login-column" aria-label="Masuk dan media sosial"><aside class="public-login-panel"[\s\S]*?<\/aside>\$\{publicSocialMarkup\(\)\}<\/section>/, 'Apps Script login and social links must share one semantic section');
+
+console.log('PSB desktop shared login/social card and mobile layout safeguards: OK');
