@@ -777,6 +777,21 @@ input:focus,select:focus,textarea:focus{background:#fff!important;box-shadow:0 0
   .public-login-panel{padding:24px 20px}
 }
 
+
+/* Full-width desktop public landing page; mobile sizing remains untouched. */
+@media (min-width: 900px) {
+  .public-wrap {
+    padding-left: clamp(14px, 1.5vw, 24px);
+    padding-right: clamp(14px, 1.5vw, 24px);
+  }
+  .public-shell {
+    width: 100%;
+    max-width: none;
+    margin-left: 0;
+    margin-right: 0;
+  }
+}
+
 </style>
 </head>
 <body>
