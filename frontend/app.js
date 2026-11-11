@@ -1321,7 +1321,7 @@ async function toggleNotificationPopup(){if($('notificationPopupBackdrop')){clos
 async function openNotificationPopup(force=false){
   if(!state.token)return;
   closeNotificationPopup();
-  document.body.insertAdjacentHTML('beforeend','<div class="notification-popover-backdrop" id="notificationPopupBackdrop" onclick="if(event.target===this)closeNotificationPopup()"><section class="notification-popover" role="dialog" aria-modal="false" aria-labelledby="notificationPopupTitle"><div class="notification-popover-head"><div><b id="notificationPopupTitle">Notifikasi</b><span>Informasi terbaru terkait proses PSB</span></div><button type="button" class="notification-popover-close" aria-label="Tutup notifikasi" onclick="closeNotificationPopup()">×</button></div><div id="notificationPanel">${progressivePanelMarkup('notificationPanel','Memuat notifikasi...')}</div></section></div>');
+  document.body.insertAdjacentHTML('beforeend','<div class="notification-popover-backdrop" id="notificationPopupBackdrop" onclick="if(event.target===this)closeNotificationPopup()"><section class="notification-popover" role="dialog" aria-modal="false" aria-labelledby="notificationPopupTitle"><div class="notification-popover-head"><div><b id="notificationPopupTitle">Notifikasi</b><span>Informasi terbaru terkait proses PSB</span></div><button type="button" class="notification-popover-close" aria-label="Tutup notifikasi" onclick="closeNotificationPopup()">×</button></div><div id="notificationPanel"><div class="announcement-empty">Memuat notifikasi...</div></div></section></div>');
   const button=document.querySelector('.notification-bell-wrap');if(button)button.setAttribute('aria-expanded','true');
   await refreshNotificationPopup(force);
 }
