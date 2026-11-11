@@ -39,7 +39,7 @@ for (const [css, label] of [[pwa, 'PWA'], [apps, 'Apps Script']]) {
     label + ' task metadata must be comfortably readable');
   assert.match(css, /\.dashboard-schedule-item span\{font-size:10px/,
     label + ' schedule details must be comfortably readable');
-  assert.match(css, /\.dashboard-ops-grid\{grid-template-columns:1fr\}/,
+  assert.match(css, /\.dashboard-ops-grid\{[^}]*grid-template-columns:1fr(?:;|\})/,
     label + ' operational cards must remain single-column on mobile');
   assert.match(css, /@media\(min-width:760px\)[^{]*\{\.dashboard-ops-grid\{grid-template-columns:repeat\(2,minmax\(0,1fr\)\)\}/,
     label + ' operational cards must use two columns on wider screens');
