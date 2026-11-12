@@ -139,7 +139,7 @@
 - Workflow validasi memeriksa keberadaan `apps-script/Bridge.html`, `BridgeServer.gs`, `Code.gs`, `SetupDatabase.gs`, dan `Index.html`. Workflow Pages memvalidasi subset source yang dibutuhkan untuk build Pages. Kedua workflow memiliki tanggung jawab berbeda.
 - Pencarian GitHub saat pemeriksaan tidak menemukan PR terbuka.
 - Inventarisasi branch mengembalikan 183 branch termasuk `main`. Daftar ini belum diklasifikasikan berdasarkan status merge/usia; tidak ada branch yang dihapus.
-- GitHub repository metadata mengonfirmasi akses admin untuk pemeriksa, tetapi konektor yang tersedia tidak menyediakan endpoint branch protection/ruleset. Karena itu status proteksi `main` saat addendum ini **belum dapat diverifikasi**; jangan menganggap rekomendasi README sudah diterapkan.
+- GitHub Rulesets API mengembalikan daftar kosong (`[]`), sehingga tidak ada repository ruleset yang terlihat pada pemeriksaan ini. Pembacaan classic branch protection untuk `main` mengembalikan HTTP 403 `Resource not accessible by integration`; akibatnya status classic branch protection **belum dapat dipastikan**. Perlakukan proteksi `main` sebagai belum terbukti dan konfirmasikan dari Settings → Branches oleh pemilik repository.
 
 ### Status CI dan Pages pada baseline
 
