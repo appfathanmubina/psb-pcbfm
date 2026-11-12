@@ -53,7 +53,7 @@
       window.location.reload();
     });
     window.addEventListener('load',function(){
-      navigator.serviceWorker.register('./sw.js?v=32.60.0',{updateViaCache:'none'})
+      navigator.serviceWorker.register('./sw.js?v=32.61.0',{updateViaCache:'none'})
         .then(function(reg){return reg.update().catch(function(e){console.warn('Service worker update:',e);});})
         .catch(function(e){console.warn('Service worker:',e);});
     });
