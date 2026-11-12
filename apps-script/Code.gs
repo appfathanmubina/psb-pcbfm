@@ -18,7 +18,7 @@
  * Existing backend functions remain authoritative for authentication,
  * session validation, role authorization, and business rules.
  */
-const PSB_PWA_BRIDGE_VERSION = '32.6.0';
+const PSB_PWA_BRIDGE_VERSION = '32.19.0';
 
 // Keep configured document limits below the 20 MiB Base64/JSON bridge ceiling.
 const PSB_DOCUMENT_UPLOAD_MAX_SIZE_MB = 14;
