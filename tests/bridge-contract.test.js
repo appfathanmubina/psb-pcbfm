@@ -9,6 +9,16 @@ const apiBridge = fs.readFileSync('frontend/api-bridge.js', 'utf8');
 const bridgeHtml = fs.readFileSync('apps-script/Bridge.html', 'utf8');
 const indexHtml = fs.readFileSync('frontend/index.html', 'utf8');
 const serviceWorker = fs.readFileSync('frontend/sw.js', 'utf8');
+const bridgeClientVersion = apiBridge.match(/const BRIDGE_CLIENT_VERSION = ['"]([^'"]+)['"]/);
+const bridgeHtmlVersion = bridgeHtml.match(/const VERSION = ['"]([^'"]+)['"]/);
+const bridgeBackendVersion = code.match(/const PSB_PWA_BRIDGE_VERSION = ['"]([^'"]+)['"]/);
+assert.ok(bridgeClientVersion && bridgeHtmlVersion && bridgeBackendVersion,
+  'PWA client, Apps Script handshake, and backend bridge versions must be declared');
+assert.equal(bridgeHtmlVersion[1], bridgeClientVersion[1],
+  'Apps Script handshake version must match the PWA bridge client');
+assert.equal(bridgeBackendVersion[1], bridgeClientVersion[1],
+  'Apps Script backend bridge version must match the PWA bridge client');
+
 
 const allowlistMatch = code.match(/const PSB_PWA_BRIDGE_ALLOWED_FUNCTIONS = Object\.freeze\(\[([\s\S]*?)\]\);/);
 assert.ok(allowlistMatch, 'Backend PWA bridge allowlist must exist');
