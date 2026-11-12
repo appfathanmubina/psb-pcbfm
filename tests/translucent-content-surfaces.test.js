@@ -53,5 +53,5 @@ assert.ok(!pwaBlock.includes('@media'), 'Surface-only override must not change r
 assert.ok(fs.readFileSync('frontend/index.html', 'utf8').includes('styles.css?v=32.40.0'), 'PWA HTML must request the refreshed stylesheet');
 const sw = fs.readFileSync('frontend/sw.js', 'utf8');
 assert.ok(sw.includes('styles.css?v=32.40.0'), 'PWA service worker must precache the refreshed stylesheet');
-assert.ok(sw.includes('psb-pwa-shell-v32-60-0'), 'PWA shell cache must be versioned for the visual update');
+assert.ok(sw.includes('psb-pwa-shell-v32-61-0'), 'PWA shell cache must be versioned for the visual update');
 console.log('Translucent content surfaces, semantic color preservation, and PWA/Apps Script CSS parity: OK');
