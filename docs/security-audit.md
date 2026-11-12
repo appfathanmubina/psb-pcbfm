@@ -121,3 +121,57 @@
 7. Setelah rilis, lakukan smoke test login, logout/login ulang, pendaftaran Wali, dan akses data berdasarkan role.
 
 **Kesimpulan:** repository telah melewati pemeriksaan source dan workflow otomatis pada commit yang diperiksa. Aplikasi **belum dapat dinyatakan final produksi** sampai risiko performa, uji transaksi/konkurensi, uji runtime pada lingkungan uji, dan kesamaan source Apps Script produksi dituntaskan.
+
+
+---
+
+## Addendum — baseline repository 12 November 2026
+
+**Baseline commit:** `60cb157fb50d7738e5f32d9cfdb05850fed91e90`  
+**Branch:** `main`  
+**Purpose:** memperbarui interpretasi temuan audit 4 November tanpa menghapus catatan historisnya.
+
+### Pemeriksaan repository dan workflow
+
+- Repository masih Public dan default branch tetap `main`.
+- Workflow validasi berada di `.github/workflows/validate.yml`. Trigger-nya `push` dan `pull_request`; job wajib bernama `structure`. Workflow memeriksa file runtime PWA dan Apps Script, syntax JS/JSON, manifest, kontrak Bridge, autentikasi/sesi, ownership, upload, pembayaran, seleksi, notifikasi, performa, serta regresi UI.
+- Workflow Pages berada di `.github/workflows/pages.yml`. Workflow ini membangun dan menerbitkan `./frontend`; ia bukan mekanisme deployment Apps Script.
+- Workflow validasi memeriksa keberadaan `apps-script/Bridge.html`, `BridgeServer.gs`, `Code.gs`, `SetupDatabase.gs`, dan `Index.html`. Workflow Pages memvalidasi subset source yang dibutuhkan untuk build Pages. Kedua workflow memiliki tanggung jawab berbeda.
+- Pencarian GitHub saat pemeriksaan tidak menemukan PR terbuka.
+- Inventarisasi branch mengembalikan 183 branch termasuk `main`. Daftar ini belum diklasifikasikan berdasarkan status merge/usia; tidak ada branch yang dihapus.
+- GitHub repository metadata mengonfirmasi akses admin untuk pemeriksa, tetapi konektor yang tersedia tidak menyediakan endpoint branch protection/ruleset. Karena itu status proteksi `main` saat addendum ini **belum dapat diverifikasi**; jangan menganggap rekomendasi README sudah diterapkan.
+
+### Status CI dan Pages pada baseline
+
+- Combined commit status untuk SHA baseline mengembalikan daftar status kosong.
+- Wrapper workflow-run yang tersedia hanya mengambil run yang dipicu Pull Request; untuk commit baseline hasilnya kosong.
+- Hasil di atas **tidak membuktikan workflow gagal maupun tidak pernah berjalan**. Status run push dan deployment Pages pada SHA baseline masih perlu diverifikasi melalui tab Actions di GitHub.
+- Link pemeriksaan: `https://github.com/appfathanmubina/psb-pcbfm/actions`.
+
+### Klarifikasi metadata versi Bridge
+
+Pemeriksaan source terbaru memperjelas temuan versi dari audit lama:
+
+- `apps-script/Code.gs` mendefinisikan `PSB_PWA_BRIDGE_VERSION = '32.6.0'`.
+- `apps-script/Bridge.html` mendefinisikan `VERSION = '32.6.0'` dan mengirimkannya pada pesan handshake.
+- `frontend/api-bridge.js` mendefinisikan `BRIDGE_CLIENT_VERSION = '32.19.0'`; nilai ini digunakan sebagai query parameter `v` pada URL bootstrap untuk cache-busting file klien.
+- Nilai versi klien tersebut bukan nomor versi protokol backend yang harus sama dengan `32.6.0`. Source klien yang diperiksa tidak melakukan penolakan handshake berdasarkan kesamaan nilai `version`.
+- Dengan demikian, perbedaan `32.6.0` dan `32.19.0` **bukan bukti ketidakcocokan protokol**. Pernyataan audit 4 November mengenai versi Bridge yang tidak seragam (Bridge.html 32.5.0, client cache key 32.11.0, service worker 32.12.0) adalah catatan historis dan tidak lagi menggambarkan source pada baseline ini.
+- Jangan menyamakan angka versi secara mekanis. Jika versi protokol hendak diubah, lakukan sebagai perubahan kontrak terpisah dengan tes kompatibilitas client/server.
+
+### Batasan pemeriksaan tahap ini
+
+- Tidak ada akses runtime ke project Apps Script, deployment, Spreadsheet, Drive, atau Script Properties produksi.
+- Tidak dilakukan pengujian browser nyata atau verifikasi tampilan PWA yang sudah terpasang.
+- Tidak ada bukti yang cukup untuk menyatakan CI/Pages sukses pada SHA baseline.
+- Branch protection/ruleset belum terkonfirmasi.
+- Daftar 183 branch belum cukup untuk menentukan branch mana yang aman dihapus.
+
+### Tindak lanjut wajib
+
+1. Periksa tab Actions dan pastikan workflow `Validate PSB PWA` serta `Deploy PWA to GitHub Pages` memiliki run yang sukses pada SHA baseline atau commit `main` terbaru.
+2. Periksa Settings → Rules → Rulesets dan/atau Settings → Branches untuk memastikan `main` mewajibkan PR dan status check `structure`, serta melarang force-push dan penghapusan branch.
+3. Klasifikasikan branch lama berdasarkan perbandingan terhadap `main` dan PR terkait sebelum mengusulkan penghapusan.
+4. Lanjutkan audit sinkronisasi source Apps Script dan prosedur pembuktian source yang sedang terpasang pada deployment uji/produksi. Tidak ada sinkronisasi atau deployment yang dilakukan oleh addendum ini.
+
+**Status addendum:** source/workflow statis diperiksa; CI, Pages run, dan branch protection masih menunggu verifikasi langsung di GitHub.
