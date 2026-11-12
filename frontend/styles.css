@@ -1126,6 +1126,19 @@ input:focus,select:focus,textarea:focus{background:#fff!important;box-shadow:0 0
 .dashboard-ops-grid > .dashboard-task-card.dashboard-task-card--reregistration {
   background: rgba(244, 63, 94, .065) !important;
 }
+/* Dashboard surfaces: consistent translucent lavender with semantic accents. */
+.dashboard-section{background:transparent!important;border-color:transparent!important;box-shadow:none!important}
+.dashboard-kpi{background:rgba(128,0,128,.055)!important;border-color:rgba(128,0,128,.20)!important;box-shadow:none!important}
+.dashboard-task-card{background:rgba(128,0,128,.055)!important;border-color:rgba(91,33,182,.18)!important;box-shadow:none!important}
+.dashboard-ops-grid>.dashboard-task-card.dashboard-task-card--verification{background:rgba(128,0,128,.065)!important;border-color:rgba(126,34,206,.24)!important}
+.dashboard-ops-grid>.dashboard-task-card.dashboard-task-card--payments{background:rgba(99,102,241,.075)!important;border-color:rgba(79,70,229,.24)!important}
+.dashboard-ops-grid>.dashboard-task-card.dashboard-task-card--selection{background:rgba(20,184,166,.075)!important;border-color:rgba(15,138,114,.24)!important}
+.dashboard-ops-grid>.dashboard-task-card.dashboard-task-card--announcement{background:rgba(245,158,11,.085)!important;border-color:rgba(196,122,18,.26)!important}
+.dashboard-ops-grid>.dashboard-task-card.dashboard-task-card--reregistration{background:rgba(244,63,94,.075)!important;border-color:rgba(190,52,85,.24)!important}
+.dashboard-schedule-item{background:rgba(128,0,128,.055)!important;border-color:rgba(91,33,182,.18)!important}
+.dashboard-tool{background:rgba(128,0,128,.055)!important;border-color:rgba(91,33,182,.18)!important}
+.dashboard-tool:hover{background:rgba(128,0,128,.095)!important;border-color:rgba(128,0,128,.30)!important}
+.dashboard-tool.primary{background:var(--primary-soft)!important;border-color:#ddd0ff!important;color:var(--primary-dark)!important}
 /* Keep form controls, login panels, dialogs, navigation, and floating UI opaque. */
 
 /* One shared desktop card for login and social links; mobile flow stays unchanged. */
