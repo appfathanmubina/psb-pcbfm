@@ -136,6 +136,8 @@ jobs:
         run: node tests/auth-recovery-security.test.js
       - name: Test Script Properties preservation safeguards
         run: node tests/setup-script-properties.test.js
+      - name: Test database foundation and setup idempotency safeguards
+        run: node tests/database-foundation-safety.test.js
       - name: Test PWA icon metadata and dimensions
         run: node tests/pwa-icon-metadata.test.js
       - name: Test Android and iOS PWA installation experience
