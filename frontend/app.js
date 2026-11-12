@@ -727,6 +727,33 @@ function buildMobileNav(){
   return [...direct,['more','Lainnya','settings']];
 }
 function navButtonsHtml(items,side){return items.map((x,i)=>`<button class="${side?'side-btn':'nav-btn'} ${i===0?'active':''}" id="${side?'side':'nav'}-${x[0]}" onclick="goPage('${x[0]}')"><span class="${side?'side-icon':'nav-icon'}">${ico(x[2])}</span><span>${x[1]}</span></button>`).join('');}
+function closeUserPopup(){
+  const popup=$('userIdentityPopup'),button=$('userIdentityBtn');
+  if(popup)popup.hidden=true;
+  if(button)button.setAttribute('aria-expanded','false');
+}
+function toggleUserPopup(event){
+  event?.stopPropagation();
+  const popup=$('userIdentityPopup'),button=$('userIdentityBtn');
+  if(!popup||!button)return;
+  const willOpen=popup.hidden;
+  popup.hidden=!willOpen;
+  button.setAttribute('aria-expanded',willOpen?'true':'false');
+}
+function openUserProfile(){
+  closeUserPopup();
+  goPage('profile');
+}
+function bindUserPopupDismiss(){
+  if(window.__psbUserPopupDismissBound)return;
+  window.__psbUserPopupDismissBound=true;
+  document.addEventListener('click',event=>{
+    if(!event.target.closest('.user-menu-wrap'))closeUserPopup();
+  });
+  document.addEventListener('keydown',event=>{
+    if(event.key==='Escape')closeUserPopup();
+  });
+}
 function renderApp(options={}){
   document.body.classList.remove('sidebar-collapsed');
   const sideItems=buildRoleNav();
@@ -735,7 +762,8 @@ function renderApp(options={}){
   const roleLabel=String(state.user?.role||'').split(',').map(role=>{const key=role.trim().toUpperCase();return ({SUPERADMIN:'SUPERADMIN',ADMIN_PSB:'ADMIN PSB',VERIFIKATOR:'VERIFIKATOR',SELEKSI:'SELEKSI',KEUANGAN:'KEUANGAN',WALI:'WALI'})[key]||key;}).filter(Boolean).join(' · ')||'PENGGUNA';
   const nav=navButtonsHtml(items,false);
   const side=navButtonsHtml(sideItems,true);
-  $('app').innerHTML=`<aside class="sidebar"><div class="sidebar-nav">${side}</div><div class="sidebar-footer"><button class="side-user side-user-button" onclick="goPage('profile')" title="Buka profil"><div>${ico('user')}</div><div style="min-width:0"><div class="side-user-name">${esc(state.user.name)}</div><div class="side-user-role">${roleLabel}</div></div></button></div></aside><div class="topbar"><div class="brand"><button class="sidebar-toggle" type="button" title="Tampilkan/sembunyikan menu" aria-label="Tampilkan/sembunyikan menu" onclick="toggleSidebar()">${ico('menu')}</button><div class="logo">${appLogoMarkup()}</div><div class="brand-copy"><h1>PSB Fathan Mubina</h1><p>${esc(state.config.ACTIVE_YEAR||'2027/2028')}</p></div><div class="top-actions"><button class="header-action" id="reloadDataBtn" type="button" title="Reload data" aria-label="Reload data" onclick="reloadCurrentData()">${ico('refresh')}</button><button class="header-action notification-bell-wrap" title="Notifikasi" aria-label="Notifikasi" onclick="toggleNotificationPopup()" aria-haspopup="dialog" aria-controls="notificationPopupBackdrop" aria-expanded="false">${ico('bell')}<span id="notificationBadge" class="notification-badge" style="display:none">0</span></button><button class="user-chip" type="button" title="Profil" onclick="goPage('profile')"><span class="user-name">${esc(state.user.name)}</span><span class="user-icon">${ico('user')}</span></button></div></div></div><main class="shell" id="content"></main><nav class="bottom-nav"><div class="nav-inner ${wali?'wali-nav':''}" style="grid-template-columns:repeat(${items.length},minmax(0,1fr))">${nav}</div></nav>`;
+  bindUserPopupDismiss();
+  $('app').innerHTML=`<aside class="sidebar"><div class="sidebar-nav">${side}</div><div class="sidebar-footer"><button class="side-user side-user-button" onclick="goPage('profile')" title="Buka profil"><div>${ico('user')}</div><div style="min-width:0"><div class="side-user-name">${esc(state.user.name)}</div><div class="side-user-role">${roleLabel}</div></div></button></div></aside><div class="topbar"><div class="brand"><button class="sidebar-toggle" type="button" title="Tampilkan/sembunyikan menu" aria-label="Tampilkan/sembunyikan menu" onclick="toggleSidebar()">${ico('menu')}</button><div class="logo">${appLogoMarkup()}</div><div class="brand-copy"><h1>PSB Fathan Mubina</h1><p>${esc(state.config.ACTIVE_YEAR||'2027/2028')}</p></div><div class="top-actions"><button class="header-action" id="reloadDataBtn" type="button" title="Reload data" aria-label="Reload data" onclick="reloadCurrentData()">${ico('refresh')}</button><button class="header-action notification-bell-wrap" title="Notifikasi" aria-label="Notifikasi" onclick="toggleNotificationPopup()" aria-haspopup="dialog" aria-controls="notificationPopupBackdrop" aria-expanded="false">${ico('bell')}<span id="notificationBadge" class="notification-badge" style="display:none">0</span></button><div class="user-menu-wrap"><button class="user-chip" id="userIdentityBtn" type="button" title="Identitas pengguna" aria-label="Tampilkan identitas pengguna" aria-haspopup="true" aria-controls="userIdentityPopup" aria-expanded="false" onclick="toggleUserPopup(event)"><span class="user-name">${esc(state.user.name)}</span><span class="user-icon">${ico('user')}</span></button><section class="user-identity-popup" id="userIdentityPopup" aria-label="Identitas pengguna" hidden><div class="user-identity-head"><span class="user-identity-avatar">${ico('user')}</span><div class="user-identity-primary"><b>${esc(state.user.name||'Pengguna')}</b><span>${esc(roleLabel)}</span></div></div><div class="user-identity-details"><div><span>Nomor HP</span><b>${esc(state.user.phone||'-')}</b></div><div><span>Email</span><b>${esc(state.user.email||'-')}</b></div></div><button class="user-identity-profile" type="button" onclick="openUserProfile()">Lihat Profil Lengkap <span aria-hidden="true">›</span></button></section></div></div></div></div><main class="shell" id="content"></main><nav class="bottom-nav"><div class="nav-inner ${wali?'wali-nav':''}" style="grid-template-columns:repeat(${items.length},minmax(0,1fr))">${nav}</div></nav>`;
   if(options.deferInitialPage!==true)goPage('home');
   updateNotificationBadge();
 }
