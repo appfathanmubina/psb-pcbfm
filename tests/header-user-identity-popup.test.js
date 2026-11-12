@@ -1,0 +1,21 @@
+'use strict';
+const fs=require('node:fs');
+const assert=require('node:assert/strict');
+const app=fs.readFileSync('frontend/app.js','utf8');
+const css=fs.readFileSync('frontend/styles.css','utf8');
+
+assert.match(css,/body\.desktop-device \.topbar\{[^}]*left:0;right:0;width:100%/,'desktop header must span the full viewport');
+assert.match(css,/\.user-identity-popup\{position:absolute;top:calc\(100% \+ 13px\);right:0/,'identity popup must open below the header user control at the right');
+assert.match(css,/\.user-identity-popup\[hidden\]\{display:none!important\}/,'identity popup must stay hidden until opened');
+assert.match(app,/id="userIdentityBtn"[^>]*aria-haspopup="true"[^>]*aria-controls="userIdentityPopup"[^>]*aria-expanded="false"/,'user icon control must expose accessible popup state');
+assert.match(app,/id="userIdentityPopup"[^>]*aria-label="Identitas pengguna"/,'identity popup must have an accessible label');
+assert.match(app,/esc\(state\.user\.name\|\|'Pengguna'\)/,'user name must be HTML escaped');
+assert.match(app,/esc\(roleLabel\)/,'role label must be HTML escaped');
+assert.match(app,/esc\(state\.user\.phone\|\|'-'\)/,'phone must be HTML escaped and tolerate missing values');
+assert.match(app,/esc\(state\.user\.email\|\|'-'\)/,'email must be HTML escaped and tolerate missing values');
+assert.match(app,/function closeUserPopup\(/,'popup must support explicit close');
+assert.match(app,/function toggleUserPopup\(event\)/,'user control must toggle popup');
+assert.match(app,/event\.key==='Escape'/,'Escape must close the popup');
+assert.match(app,/!event\.target\.closest\('\.user-menu-wrap'\)/,'outside click must close the popup');
+assert.match(app,/function openUserProfile\(\)[\s\S]*?goPage\('profile'\)/,'profile action must navigate to the existing profile page');
+console.log('Desktop header and user identity popup safeguards passed.');
