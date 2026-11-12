@@ -26,4 +26,12 @@ assert.match(sw, /if\(url\.origin!==self\.location\.origin\)return/, 'Cross-orig
 assert.match(html, /api-bridge\.js\?v=32\.19\.0/, 'HTML must request the updated upload bridge');
 assert.match(sw, /api-bridge\.js\?v=32\.19\.0/, 'Service worker must precache the updated upload bridge');
 assert.match(bridge, /const BRIDGE_URL = "https:\/\/script\.google\.com\/macros\/s\//, 'Apps Script bridge endpoint must remain unchanged');
+
+const htmlPrecacheAssets = Array.from(html.matchAll(/(?:src|href)="([^"]+\?v=[^"]+)"/g))
+  .map(match => match[1])
+  .filter(asset => !asset.startsWith('./sw.js?'));
+for (const asset of htmlPrecacheAssets) {
+  assert.ok(sw.includes("'" + asset + "'"), 'Service worker must precache the exact versioned HTML asset URL: ' + asset);
+}
+
 console.log('PWA desktop cache refresh safeguards: OK');
